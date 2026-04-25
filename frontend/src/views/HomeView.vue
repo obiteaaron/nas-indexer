@@ -23,9 +23,12 @@
         <router-link to="/files" class="btn btn-primary">查看文件</router-link>
         <router-link to="/search" class="btn btn-secondary">搜索文件</router-link>
         <button class="btn btn-primary" @click="startScan" :disabled="scanning">
-          {{ scanning ? '扫描中...' : '立即扫描' }}
+          {{ scanning ? '扫描中...' : '立即扫描全部' }}
         </button>
       </div>
+      <p class="scan-tip">
+        扫描所有配置路径（可在设置页面单独扫描指定路径）
+      </p>
     </div>
 
     <div class="card" v-if="stats && stats.categories.length">
@@ -107,6 +110,12 @@ export default {
 
 .quick-actions a {
   text-decoration: none;
+}
+
+.scan-tip {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .category-list {

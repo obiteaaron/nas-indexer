@@ -5,10 +5,16 @@
 
       <div class="form-group">
         <label>扫描路径</label>
+        <p class="path-tip">
+          添加扫描路径后，点击"扫描"按钮可单独扫描该路径；首页"立即扫描全部"会扫描所有配置路径
+        </p>
         <div class="path-list">
           <div class="path-item" v-for="(p, i) in config.scanPaths" :key="i">
-            <input class="input" v-model="config.scanPaths[i]">
-            <button class="btn btn-danger btn-small" @click="removePath(i)">删除</button>
+            <input class="input" v-model="config.scanPaths[i]" :disabled="pathScanning === i">
+            <button class="btn btn-primary btn-small" @click="scanPath(i)" :disabled="pathScanning === i || !config.scanPaths[i]">
+              {{ pathScanning === i ? '扫描中...' : '扫描' }}
+            </button>
+            <button class="btn btn-danger btn-small" @click="removePath(i)" :disabled="pathScanning === i">删除</button>
           </div>
           <button class="btn btn-secondary btn-small" @click="addPath">添加路径</button>
         </div>
@@ -58,7 +64,7 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import { getConfig, saveConfig, getStatus } from '../api'
+import { getConfig, saveConfig, getStatus, scanSinglePath } from '../api'
 
 export default {
   name: 'SettingsView',
@@ -71,6 +77,7 @@ export default {
     })
     const status = ref(null)
     const saving = ref(false)
+    const pathScanning = ref(-1)
 
     const excludePatternsStr = computed({
       get: () => config.value.excludePatterns.join(', '),
@@ -123,6 +130,25 @@ export default {
       config.value.scanPaths.splice(index, 1)
     }
 
+    async function scanPath(index) {
+      const path = config.value.scanPaths[index]
+      if (!path) return
+      
+      pathScanning.value = index
+      try {
+        const res = await scanSinglePath(path)
+        if (res.success) {
+          alert('扫描完成：' + res.data.fileCount + ' 个文件')
+          loadStatus()
+        } else {
+          alert('扫描失败：' + res.error)
+        }
+      } catch (err) {
+        alert('扫描失败：' + err.message)
+      }
+      pathScanning.value = -1
+    }
+
     async function save() {
       saving.value = true
       try {
@@ -144,9 +170,9 @@ export default {
     }
 
     return {
-      config, status, saving,
+      config, status, saving, pathScanning,
       excludePatternsStr, whitelistStr, blacklistStr,
-      addPath, removePath, save, reset
+      addPath, removePath, scanPath, save, reset
     }
   }
 }
@@ -170,6 +196,15 @@ export default {
 .form-group .hint {
   display: block;
   margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.path-tip {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 6px;
   color: var(--text-muted);
   font-size: 13px;
 }

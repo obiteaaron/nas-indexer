@@ -24,6 +24,13 @@ export function scanFiles() {
   return request('/scan', { method: 'POST' })
 }
 
+export function scanSinglePath(path) {
+  return request('/scan/path', { 
+    method: 'POST', 
+    body: JSON.stringify({ path }) 
+  })
+}
+
 export function getFiles(params = {}) {
   const query = new URLSearchParams(params).toString()
   return request('/files?' + query)

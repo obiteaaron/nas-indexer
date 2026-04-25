@@ -247,6 +247,42 @@ app.post('/api/scan', async (req, res) => {
   }
 });
 
+app.post('/api/scan/path', async (req, res) => {
+  try {
+    await initDatabase();
+    const { path: scanPath } = req.body;
+    
+    if (!scanPath) {
+      return res.status(400).json({ success: false, error: '请提供扫描路径' });
+    }
+    
+    if (!fs.existsSync(scanPath)) {
+      return res.status(400).json({ success: false, error: '路径不存在' });
+    }
+
+    const config = loadConfig();
+    
+    const result = await performScanWithDatabase(
+      [scanPath],
+      config.excludePatterns || [],
+      config.fileExtensionFilter || { whitelist: [], blacklist: [] }
+    );
+
+    res.json({
+      success: true,
+      message: '扫描完成',
+      data: {
+        scannedPath: scanPath,
+        fileCount: result.results[0]?.fileCount || 0,
+        totalFiles: result.totalFiles,
+        totalSize: formatSize(result.totalSize)
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/statistics', async (req, res) => {
   await initDatabase();
   try {
