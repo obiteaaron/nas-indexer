@@ -141,6 +141,7 @@ function getDefaultConfig() {
 }
 
 let scanJob = null;
+let scanningPaths = new Set();
 
 function scheduleScan(config) {
   if (scanJob) {
@@ -260,25 +261,36 @@ app.post('/api/scan/path', async (req, res) => {
       return res.status(400).json({ success: false, error: '路径不存在' });
     }
 
+    if (scanningPaths.has(scanPath)) {
+      return res.status(409).json({ success: false, error: '该路径正在扫描中，请稍后再试' });
+    }
+
+    scanningPaths.add(scanPath);
+    
     const config = loadConfig();
     
-    const result = await performScanWithDatabase(
-      [scanPath],
-      config.excludePatterns || [],
-      config.fileExtensionFilter || { whitelist: [], blacklist: [] }
-    );
+    try {
+      const result = await performScanWithDatabase(
+        [scanPath],
+        config.excludePatterns || [],
+        config.fileExtensionFilter || { whitelist: [], blacklist: [] }
+      );
 
-    res.json({
-      success: true,
-      message: '扫描完成',
-      data: {
-        scannedPath: scanPath,
-        fileCount: result.results[0]?.fileCount || 0,
-        totalFiles: result.totalFiles,
-        totalSize: formatSize(result.totalSize)
-      }
-    });
+      res.json({
+        success: true,
+        message: '扫描完成',
+        data: {
+          scannedPath: scanPath,
+          fileCount: result.results[0]?.fileCount || 0,
+          totalFiles: result.totalFiles,
+          totalSize: formatSize(result.totalSize)
+        }
+      });
+    } finally {
+      scanningPaths.delete(scanPath);
+    }
   } catch (err) {
+    scanningPaths.delete(req.body.path);
     res.status(500).json({ success: false, error: err.message });
   }
 });

@@ -76,6 +76,19 @@
           <video v-else-if="previewType === 'video'" :src="streamUrl" controls class="preview-video"></video>
           <audio v-else-if="previewType === 'audio'" :src="streamUrl" controls class="preview-audio"></audio>
           <iframe v-else-if="previewType === 'pdf'" :src="streamUrl" class="preview-pdf"></iframe>
+          
+          <div v-else-if="previewType === 'markdown'" class="preview-text preview-markdown" 
+            ref="markdownRef" tabindex="0" @keydown.ctrl.a="selectAllInElement($event)">
+            <div v-if="textLoading" class="loading-text">加载中...</div>
+            <div v-else v-html="renderedMarkdown" class="markdown-body"></div>
+          </div>
+          
+          <div v-else-if="previewType === 'text'" class="preview-text" 
+            ref="textRef" tabindex="0" @keydown.ctrl.a="selectAllInElement($event)">
+            <div v-if="textLoading" class="loading-text">加载中...</div>
+            <pre v-else class="text-content">{{ textContent }}</pre>
+          </div>
+          
           <div v-else class="preview-unknown">
             <p>无法预览此文件类型</p>
             <button class="btn btn-primary" @click="openLocation(previewFile)">打开文件位置</button>
@@ -102,7 +115,8 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
+import { marked } from 'marked'
 import { getFiles, getCategories, openFile, renameFile as apiRename, deleteFile, addFavorite, removeFavorite, getPreview, getStreamUrl } from '../api'
 
 export default {
@@ -123,11 +137,20 @@ export default {
     const previewFile = ref(null)
     const previewType = ref('')
     const streamUrl = ref('')
+    const textContent = ref('')
+    const textLoading = ref(false)
+    const textRef = ref(null)
+    const markdownRef = ref(null)
     
     const renameFile = ref(null)
     const newName = ref('')
 
     const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
+
+    const renderedMarkdown = computed(() => {
+      if (!textContent.value) return ''
+      return marked(textContent.value)
+    })
 
     onMounted(async () => {
       await loadCategories()
@@ -195,15 +218,49 @@ export default {
       previewFile.value = file
       streamUrl.value = getStreamUrl(file.id)
       previewType.value = ''
+      textContent.value = ''
       
       try {
         const res = await getPreview(file.id)
         if (res.success) {
           previewType.value = res.data.previewType
+          
+          if (previewType.value === 'text' || previewType.value === 'markdown') {
+            await loadTextContent(file.id)
+          }
         }
       } catch (err) {
         console.error('获取预览失败:', err)
       }
+    }
+
+    async function loadTextContent(fileId) {
+      textLoading.value = true
+      try {
+        const response = await fetch(getStreamUrl(fileId))
+        textContent.value = await response.text()
+      } catch (err) {
+        console.error('加载文本内容失败:', err)
+        textContent.value = '加载失败'
+      }
+      textLoading.value = false
+      
+      nextTick(() => {
+        const refEl = previewType.value === 'markdown' ? markdownRef.value : textRef.value
+        if (refEl) {
+          refEl.focus()
+        }
+      })
+    }
+
+    function selectAllInElement(event) {
+      event.preventDefault()
+      const el = event.currentTarget
+      const selection = window.getSelection()
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      selection.removeAllRanges()
+      selection.addRange(range)
     }
 
     function showRename(file) {
@@ -273,12 +330,13 @@ export default {
     return {
       files, categories, loading, error,
       category, search, orderBy, orderDir, page, pageSize, total, totalPages,
-      previewFile, previewType, streamUrl,
+      previewFile, previewType, streamUrl, textContent, textLoading, renderedMarkdown,
+      textRef, markdownRef,
       renameFile, newName,
       loadFiles, prevPage, nextPage,
       openLocation, showPreview, showRename, doRename,
       toggleFavorite, confirmDelete,
-      getBadgeClass, formatDate
+      getBadgeClass, formatDate, selectAllInElement
     }
   }
 }
@@ -333,5 +391,74 @@ export default {
 .preview-unknown {
   text-align: center;
   color: var(--text-muted);
+}
+
+.preview-text {
+  width: 100%;
+  max-height: 500px;
+  overflow: auto;
+  text-align: left;
+  user-select: text;
+}
+
+.preview-text:focus {
+  outline: none;
+}
+
+.text-content {
+  margin: 0;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 480px;
+  overflow: auto;
+  user-select: text;
+}
+
+.loading-text {
+  color: var(--text-muted);
+  padding: 20px;
+}
+
+.preview-markdown {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  user-select: text;
+}
+
+.markdown-body {
+  line-height: 1.6;
+  user-select: text;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-body code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.markdown-body pre {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.markdown-body pre code {
+  background: none;
+  padding: 0;
 }
 </style>

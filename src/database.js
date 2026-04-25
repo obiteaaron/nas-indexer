@@ -60,7 +60,8 @@ class Database {
         category TEXT DEFAULT '其他',
         modified_at DATETIME,
         scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        is_favorite INTEGER DEFAULT 0
+        is_favorite INTEGER DEFAULT 0,
+        scan_path TEXT
       )
     `);
 
@@ -95,7 +96,7 @@ class Database {
     fs.writeFileSync(this.dbPath, buffer);
   }
 
-  insertFile(filePath, stat) {
+  insertFile(filePath, stat, scanPath = null) {
     const ext = path.extname(filePath).toLowerCase();
     const name = path.basename(filePath);
     const category = classifyByExtension(ext);
@@ -103,10 +104,9 @@ class Database {
     
     try {
       this.db.run(`
-        INSERT OR REPLACE INTO files (path, name, ext, size, category, modified_at, scanned_at)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
-      `, [filePath, name, ext, stat ? stat.size : 0, category, modifiedAt]);
-      this.save();
+        INSERT OR REPLACE INTO files (path, name, ext, size, category, modified_at, scanned_at, scan_path)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)
+      `, [filePath, name, ext, stat ? stat.size : 0, category, modifiedAt, scanPath]);
       return true;
     } catch (err) {
       console.error('插入文件失败:', err.message);
@@ -114,9 +114,9 @@ class Database {
     }
   }
 
-  insertFilesBatch(files) {
+  insertFilesBatch(files, scanPath = null) {
     for (const file of files) {
-      this.insertFile(file.path, file.stat);
+      this.insertFile(file.path, file.stat, scanPath);
     }
     this.save();
   }
@@ -134,6 +134,26 @@ class Database {
   clearAllFiles() {
     this.db.run('DELETE FROM files');
     this.save();
+  }
+
+  deleteByScanPath(scanPath) {
+    this.db.run('DELETE FROM files WHERE scan_path = ?', [scanPath]);
+    this.save();
+  }
+
+  getScanPaths() {
+    const result = this.db.exec(`
+      SELECT DISTINCT scan_path, COUNT(*) as file_count, MAX(scanned_at) as last_scan
+      FROM files
+      WHERE scan_path IS NOT NULL
+      GROUP BY scan_path
+    `);
+    if (result.length === 0) return [];
+    return result[0].values.map(row => ({
+      path: row[0],
+      fileCount: row[1],
+      lastScan: row[2]
+    }));
   }
 
   getFileById(id) {

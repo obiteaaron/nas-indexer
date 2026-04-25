@@ -5,6 +5,8 @@ const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a'];
 const PDF_EXTENSION = '.pdf';
+const TEXT_EXTENSIONS = ['.txt'];
+const MARKDOWN_EXTENSIONS = ['.md'];
 
 function isVideoFile(ext) {
   return VIDEO_EXTENSIONS.includes(ext.toLowerCase());
@@ -20,6 +22,14 @@ function isAudioFile(ext) {
 
 function isPdfFile(ext) {
   return ext.toLowerCase() === PDF_EXTENSION;
+}
+
+function isTextFile(ext) {
+  return TEXT_EXTENSIONS.includes(ext.toLowerCase());
+}
+
+function isMarkdownFile(ext) {
+  return MARKDOWN_EXTENSIONS.includes(ext.toLowerCase());
 }
 
 function getMimeType(ext) {
@@ -49,7 +59,9 @@ function getMimeType(ext) {
     '.ogg': 'audio/ogg',
     '.wma': 'audio/x-ms-wma',
     '.m4a': 'audio/mp4',
-    '.pdf': 'application/pdf'
+    '.pdf': 'application/pdf',
+    '.txt': 'text/plain',
+    '.md': 'text/markdown'
   };
   return mimeTypes[lowerExt] || 'application/octet-stream';
 }
@@ -124,6 +136,8 @@ function getPreviewType(ext) {
   if (isImageFile(lowerExt)) return 'image';
   if (isAudioFile(lowerExt)) return 'audio';
   if (isPdfFile(lowerExt)) return 'pdf';
+  if (isMarkdownFile(lowerExt)) return 'markdown';
+  if (isTextFile(lowerExt)) return 'text';
   return 'unknown';
 }
 
@@ -137,7 +151,11 @@ module.exports = {
   isImageFile,
   isAudioFile,
   isPdfFile,
+  isTextFile,
+  isMarkdownFile,
   VIDEO_EXTENSIONS,
   IMAGE_EXTENSIONS,
-  AUDIO_EXTENSIONS
+  AUDIO_EXTENSIONS,
+  TEXT_EXTENSIONS,
+  MARKDOWN_EXTENSIONS
 };

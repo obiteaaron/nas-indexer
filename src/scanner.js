@@ -202,14 +202,14 @@ async function performScanWithDatabase(scanPaths, excludePatterns = [], fileExte
   }
 
   console.log(`开始扫描，路径：${scanPaths.join(', ')}`);
-  
-  database.clearAllFiles();
 
   const scanResults = [];
   let totalFiles = 0;
   let totalSize = 0;
 
   for (const scanPath of scanPaths) {
+    database.deleteByScanPath(scanPath);
+
     const files = scanDirectory(scanPath, excludePatterns, fileExtensionFilter);
     const filesWithStats = files.map(filePath => {
       try {
@@ -221,7 +221,7 @@ async function performScanWithDatabase(scanPaths, excludePatterns = [], fileExte
       }
     });
     
-    database.insertFilesBatch(filesWithStats);
+    database.insertFilesBatch(filesWithStats, scanPath);
     scanResults.push({ path: scanPath, files, fileCount: files.length });
     totalFiles += files.length;
     console.log(`  ${scanPath}: ${files.length} 个文件`);
