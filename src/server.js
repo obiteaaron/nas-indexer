@@ -390,6 +390,40 @@ app.get('/api/files', async (req, res) => {
   }
 });
 
+app.get('/api/files/by-tags', async (req, res) => {
+  await initDatabase();
+  try {
+    const { tagIds, matchAll, page, pageSize, orderBy, orderDir } = req.query;
+    if (!tagIds) {
+      return res.status(400).json({ success: false, error: '请提供标签ID' });
+    }
+    const tagIdArray = tagIds.split(',').map(id => parseInt(id.trim()));
+    const result = database.getFilesByTags(tagIdArray, {
+      page: parseInt(page) || 1,
+      pageSize: parseInt(pageSize) || 50,
+      orderBy: orderBy || 'name',
+      orderDir: orderDir || 'ASC',
+      matchAll: matchAll === 'true'
+    });
+    const formattedFiles = result.files.map(f => ({
+      ...f,
+      sizeFormatted: formatSize(f.size || 0)
+    }));
+    res.json({
+      success: true,
+      data: {
+        files: formattedFiles,
+        total: result.total,
+        page: parseInt(page) || 1,
+        pageSize: parseInt(pageSize) || 50,
+        totalPages: Math.ceil(result.total / (parseInt(pageSize) || 50))
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get('/api/files/:id', async (req, res) => {
   await initDatabase();
   try {
@@ -850,45 +884,14 @@ app.post('/api/files/batch/tags', async (req, res) => {
   }
 });
 
-app.get('/api/files/by-tags', async (req, res) => {
-  await initDatabase();
-  try {
-    const { tagIds, matchAll, page, pageSize, orderBy, orderDir } = req.query;
-    if (!tagIds) {
-      return res.status(400).json({ success: false, error: '请提供标签ID' });
-    }
-    const tagIdArray = tagIds.split(',').map(id => parseInt(id.trim()));
-    const result = database.getFilesByTags(tagIdArray, {
-      page: parseInt(page) || 1,
-      pageSize: parseInt(pageSize) || 50,
-      orderBy: orderBy || 'name',
-      orderDir: orderDir || 'ASC',
-      matchAll: matchAll === 'true'
-    });
-    const formattedFiles = result.files.map(f => ({
-      ...f,
-      sizeFormatted: formatSize(f.size || 0)
-    }));
-    res.json({
-      success: true,
-      data: {
-        files: formattedFiles,
-        total: result.total,
-        page: parseInt(page) || 1,
-        pageSize: parseInt(pageSize) || 50,
-        totalPages: Math.ceil(result.total / (parseInt(pageSize) || 50))
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // Static files - serve Vue frontend
 const frontendPath = path.join(PROJECT_ROOT, 'frontend', 'dist');
 if (fs.existsSync(frontendPath)) {
   app.use(express.static(frontendPath));
-  app.get('*', (req, res) => {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
 } else {

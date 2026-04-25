@@ -17,6 +17,21 @@
         </select>
         <input class="input" v-model="search" placeholder="搜索文件..." @keyup.enter="loadFiles" style="width: 200px">
         <button class="btn btn-secondary btn-small" @click="loadFiles">搜索</button>
+        <div class="tag-filter">
+          <button class="btn btn-secondary btn-small" @click="showTagFilter">
+            {{ filterTagIds.length > 0 ? '标签过滤 (' + filterTagIds.length + ')' : '标签过滤' }}
+          </button>
+          <div v-if="filterTags.length > 0" class="filter-tags-display">
+            <TagBadge 
+              v-for="tag in filterTags" 
+              :key="tag.id"
+              :name="tag.name"
+              :color="tag.color"
+              :removable="true"
+              @remove="removeFilterTag(tag.id)"
+            />
+          </div>
+        </div>
         <button 
           v-if="selectedFiles.length > 0" 
           class="btn btn-primary btn-small" 
@@ -106,6 +121,13 @@
       @confirm="handleBatchTagConfirm"
     />
 
+    <TagSelector 
+      :visible="tagFilterVisible" 
+      :selectedIds="filterTagIds"
+      @close="tagFilterVisible = false"
+      @confirm="handleTagFilterConfirm"
+    />
+
     <div class="modal" v-if="previewFile" @click.self="previewFile = null">
       <div class="modal-content modal-large">
         <div class="modal-header">
@@ -142,13 +164,14 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import TagBadge from '../components/TagBadge.vue'
 import TagSelector from '../components/TagSelector.vue'
 import { 
   getFiles, getCategories, openFile, renameFile as apiRename, deleteFile, 
   addFavorite, removeFavorite, getPreview, getStreamUrl,
-  getFileTags, addFileTag, removeFileTag, batchFileTags
+  getFileTags, addFileTag, removeFileTag, batchFileTags,
+  getFilesByTags, getTags
 } from '../api'
 
 export default {
@@ -183,6 +206,13 @@ export default {
     const batchTaggerVisible = ref(false)
     const batchSelectedTagIds = ref([])
 
+    const tagFilterVisible = ref(false)
+    const filterTagIds = ref([])
+    const allTags = ref([])
+    const filterTags = computed(() => {
+      return allTags.value.filter(t => filterTagIds.value.includes(t.id))
+    })
+
     const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
     const isAllSelected = computed(() => {
       return files.value.length > 0 && selectedFiles.value.length === files.value.length
@@ -209,20 +239,38 @@ export default {
       error.value = ''
       selectedFiles.value = []
       try {
-        const res = await getFiles({
-          category: category.value,
-          search: search.value,
-          orderBy: orderBy.value,
-          orderDir: orderDir.value,
-          page: page.value,
-          pageSize: pageSize.value
-        })
-        if (res.success) {
-          files.value = res.data.files
-          total.value = res.data.total
-          await loadFileTagsBatch(res.data.files.map(f => f.id))
+        if (filterTagIds.value.length > 0) {
+          const res = await getFilesByTags({
+            tagIds: filterTagIds.value.join(','),
+            matchAll: 'true',
+            page: page.value,
+            pageSize: pageSize.value,
+            orderBy: orderBy.value,
+            orderDir: orderDir.value
+          })
+          if (res.success) {
+            files.value = res.data.files
+            total.value = res.data.total
+            await loadFileTagsBatch(res.data.files.map(f => f.id))
+          } else {
+            error.value = res.error
+          }
         } else {
-          error.value = res.error
+          const res = await getFiles({
+            category: category.value,
+            search: search.value,
+            orderBy: orderBy.value,
+            orderDir: orderDir.value,
+            page: page.value,
+            pageSize: pageSize.value
+          })
+          if (res.success) {
+            files.value = res.data.files
+            total.value = res.data.total
+            await loadFileTagsBatch(res.data.files.map(f => f.id))
+          } else {
+            error.value = res.error
+          }
         }
       } catch (err) {
         error.value = err.message
@@ -273,6 +321,33 @@ export default {
         selectedFiles.value = []
       } catch (err) {
         alert('批量打标失败: ' + err.message)
+      }
+    }
+
+    async function showTagFilter() {
+      try {
+        const res = await getTags()
+        if (res.success) {
+          allTags.value = res.data
+        }
+      } catch (err) {
+        console.error('加载标签失败:', err)
+      }
+      tagFilterVisible.value = true
+    }
+
+    function handleTagFilterConfirm(tagIds) {
+      filterTagIds.value = tagIds
+      page.value = 1
+      loadFiles()
+    }
+
+    function removeFilterTag(tagId) {
+      const index = filterTagIds.value.indexOf(tagId)
+      if (index > -1) {
+        filterTagIds.value.splice(index, 1)
+        page.value = 1
+        loadFiles()
       }
     }
 
@@ -426,11 +501,13 @@ export default {
       fileTags, selectedFiles, isAllSelected,
       tagSelectorVisible, currentFileTags, currentEditingFile,
       batchTaggerVisible, batchSelectedTagIds,
+      tagFilterVisible, filterTagIds, allTags, filterTags,
       loadFiles, prevPage, nextPage,
       openLocation, showPreview, showRename, doRename,
       toggleFavorite, confirmDelete,
       toggleSelectAll, toggleSelect, showBatchTagger, handleBatchTagConfirm,
       openTagSelector, handleTagConfirm, removeTagFromFile,
+      showTagFilter, handleTagFilterConfirm, removeFilterTag,
       getBadgeClass, formatDate
     }
   }
@@ -497,5 +574,18 @@ tr.selected {
 .preview-unknown {
   text-align: center;
   color: var(--text-muted);
+}
+
+.tag-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-tags-display {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 </style>
