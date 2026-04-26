@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { storage } = require('./storage');
 const { database } = require('./database');
+const { logger } = require('./logger');
 
 /**
  * 检查文件是否应该被包含（基于后缀过滤）
@@ -77,11 +78,11 @@ function scanDirectory(dir, excludePatterns = [], fileExtensionFilter = {}) {
         }
       } catch (err) {
         // 跳过无法访问的文件/目录
-        console.warn(`无法访问：${fullPath} - ${err.message}`);
+        logger.warn('无法访问: %s - %s', fullPath, err.message);
       }
     }
   } catch (err) {
-    console.warn(`无法读取目录：${dir} - ${err.message}`);
+    logger.warn('无法读取目录: %s - %s', dir, err.message);
   }
 
   return results;
@@ -166,7 +167,7 @@ function performScan(scanPaths, outputFile, excludePatterns = [], fileExtensionF
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  console.log(`开始扫描，路径：${scanPaths.join(', ')}`);
+  logger.info('开始扫描，路径: %s', scanPaths.join(', '));
 
   // 初始化 storage
   storage.init(fullPath);
@@ -176,15 +177,15 @@ function performScan(scanPaths, outputFile, excludePatterns = [], fileExtensionF
   for (const scanPath of scanPaths) {
     const files = scanDirectory(scanPath, excludePatterns, fileExtensionFilter);
     scanResults.push({ path: scanPath, files });
-    console.log(`  ${scanPath}: ${files.length} 个文件`);
+    logger.info('  %s: %d 个文件', scanPath, files.length);
   }
 
   // 使用 storage 模块更新数据（包含本地分类）
   const resultData = storage.updateFromScan(scanResults);
 
-  console.log(`扫描完成，结果已保存到：${fullPath}`);
-  console.log(`  总文件数：${resultData.meta.totalFiles}`);
-  console.log(`  总大小：${resultData.meta.totalSize}`);
+  logger.info('扫描完成，结果已保存到: %s', fullPath);
+  logger.info('  总文件数: %d', resultData.meta.totalFiles);
+  logger.info('  总大小: %s', resultData.meta.totalSize);
 
   return {
     success: true,
@@ -201,7 +202,7 @@ async function performScanWithDatabase(scanPaths, excludePatterns = [], fileExte
     await database.init();
   }
 
-  console.log(`开始扫描，路径：${scanPaths.join(', ')}`);
+  logger.info('开始扫描，路径: %s', scanPaths.join(', '));
 
   const scanResults = [];
   let totalFiles = 0;
@@ -224,12 +225,12 @@ async function performScanWithDatabase(scanPaths, excludePatterns = [], fileExte
     database.insertFilesBatch(filesWithStats, scanPath);
     scanResults.push({ path: scanPath, files, fileCount: files.length });
     totalFiles += files.length;
-    console.log(`  ${scanPath}: ${files.length} 个文件`);
+    logger.info('  %s: %d 个文件', scanPath, files.length);
   }
 
-  console.log(`扫描完成，已写入数据库`);
-  console.log(`  总文件数：${totalFiles}`);
-  console.log(`  总大小：${formatSize(totalSize)}`);
+  logger.info('扫描完成，已写入数据库');
+  logger.info('  总文件数: %d', totalFiles);
+  logger.info('  总大小: %s', formatSize(totalSize));
 
   return {
     success: true,

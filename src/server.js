@@ -7,6 +7,7 @@ const { performScanWithDatabase, formatSize } = require('./scanner');
 const { database } = require('./database');
 const { fileOps } = require('./file-ops');
 const { streamFile, serveImage, servePdf, getPreviewType } = require('./stream');
+const { logger } = require('./logger');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,7 +48,7 @@ function ensureStorageDir(config) {
   const storagePath = getStoragePath(config);
   if (!fs.existsSync(storagePath)) {
     fs.mkdirSync(storagePath, { recursive: true });
-    console.log('已创建存储目录:', storagePath);
+    logger.info('已创建存储目录: %s', storagePath);
   }
   return storagePath;
 }
@@ -59,7 +60,7 @@ function loadConfig() {
     const profilesConfigPath = path.join(DEFAULT_STORAGE_PATH, 'config.json');
     if (fs.existsSync(profilesConfigPath)) {
       const config = JSON.parse(fs.readFileSync(profilesConfigPath, 'utf-8'));
-      console.log('从 profiles 目录加载配置:', profilesConfigPath);
+      logger.info('从 profiles 目录加载配置: %s', profilesConfigPath);
       return config;
     }
     
@@ -68,7 +69,7 @@ function loadConfig() {
       const envConfigPath = path.join(envStoragePath, 'config.json');
       if (fs.existsSync(envConfigPath)) {
         const config = JSON.parse(fs.readFileSync(envConfigPath, 'utf-8'));
-        console.log('从环境变量指定路径加载配置:', envConfigPath);
+        logger.info('从环境变量指定路径加载配置: %s', envConfigPath);
         return config;
       }
     }
@@ -77,22 +78,22 @@ function loadConfig() {
     const legacyConfigPath = path.join(userHome, 'nasscanclassllm', 'config.json');
     if (fs.existsSync(legacyConfigPath)) {
       const config = JSON.parse(fs.readFileSync(legacyConfigPath, 'utf-8'));
-      console.log('检测到旧版本配置，正在迁移到 profiles 目录...');
+      logger.info('检测到旧版本配置，正在迁移到 profiles 目录...');
       if (!config.storagePath) {
         config.storagePath = '';
       }
       ensureStorageDir(defaultConfig);
       fs.writeFileSync(profilesConfigPath, JSON.stringify(config, null, 2), 'utf-8');
-      console.log('配置已迁移:', profilesConfigPath);
+      logger.info('配置已迁移: %s', profilesConfigPath);
       return config;
     }
     
     ensureStorageDir(defaultConfig);
     fs.writeFileSync(profilesConfigPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
-    console.log('使用默认配置，已保存到:', profilesConfigPath);
+    logger.info('使用默认配置，已保存到: %s', profilesConfigPath);
     return defaultConfig;
   } catch (err) {
-    console.error('加载配置失败:', err.message);
+    logger.error('加载配置失败: %s', err.message);
     return getDefaultConfig();
   }
 }
@@ -101,7 +102,7 @@ function saveConfig(config) {
   const storagePath = ensureStorageDir(config);
   const configFilePath = getStorageFilePath(config, 'config.json');
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2), 'utf-8');
-  console.log('配置已保存:', configFilePath);
+  logger.info('配置已保存: %s', configFilePath);
   return true;
 }
 
@@ -112,7 +113,7 @@ function getDefaultConfig() {
       return defaultConfig;
     }
   } catch (err) {
-    console.warn('加载默认配置文件失败，使用内置默认值:', err.message);
+    logger.warn('加载默认配置文件失败，使用内置默认值: %s', err.message);
   }
   
   return {
@@ -151,12 +152,12 @@ function scheduleScan(config) {
 
   if (config.scanPaths && config.scanPaths.length > 0) {
     scanJob = cron.schedule(config.scanTime, async () => {
-      console.log(`[${new Date().toLocaleString()}] 定时扫描开始`);
+      logger.info('[%s] 定时扫描开始', new Date().toLocaleString());
       await runScan(config);
     }, {
       timezone: 'Asia/Shanghai'
     });
-    console.log(`定时扫描已设置：${config.scanTime}`);
+    logger.info('定时扫描已设置: %s', config.scanTime);
   }
 }
 
@@ -181,7 +182,7 @@ async function runScan(config) {
 
     return result;
   } catch (err) {
-    console.error('扫描失败:', err.message);
+    logger.error('扫描失败: %s', err.message);
     throw err;
   }
 }
@@ -915,13 +916,13 @@ if (fs.existsSync(frontendPath)) {
 
 const server = app.listen(PORT, async () => {
   await initDatabase();
-  console.log(`\n🚀 NAS Indexer v1.0.2 服务已启动`);
-  console.log(`📍 访问地址：http://localhost:${PORT}`);
-  console.log(`📁 默认存储目录：${DEFAULT_STORAGE_PATH}\n`);
+  logger.info('\n🚀 NAS Indexer v1.0.3 服务已启动');
+  logger.info('📍 访问地址: http://localhost:%d', PORT);
+  logger.info('📁 默认存储目录: %s\n', DEFAULT_STORAGE_PATH);
 
   const config = loadConfig();
   const storagePath = getStoragePath(config);
-  console.log(`📂 当前存储目录：${storagePath}`);
+  logger.info('📂 当前存储目录: %s', storagePath);
   
   scheduleScan(config);
 });

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
 const { database } = require('./database');
+const { logger } = require('./logger');
 
 class FileOperations {
   openInExplorer(filePath) {
@@ -21,7 +22,7 @@ class FileOperations {
     }
 
     exec(command, (err) => {
-      if (err) console.error('打开目录失败:', err.message);
+      if (err) logger.error('打开目录失败: %s', err.message);
     });
 
     return { success: true };

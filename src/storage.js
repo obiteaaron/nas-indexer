@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { logger } = require('./logger');
 
 /**
  * 存储管理模块 - 统一管理 nas_scan.md 文件的读写和数据处理
@@ -300,7 +301,7 @@ class FileStorage {
           const stat = fs.statSync(filePath);
           fileSize = stat.size;
         } catch (err) {
-          console.warn(`无法获取文件大小：${filePath}`);
+          logger.warn('无法获取文件大小: %s', filePath);
         }
 
         const ext = path.extname(filePath).toLowerCase();

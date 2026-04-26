@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const initSqlJs = require('sql.js');
+const { logger } = require('./logger');
 
 const DEFAULT_CATEGORY_RULES = {
   '视频': ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'],
@@ -203,7 +204,7 @@ class Database {
       this.save();
       return true;
     } catch (err) {
-      console.error('插入文件失败:', err.message);
+      logger.error('插入文件失败: %s', err.message);
       return false;
     }
   }
