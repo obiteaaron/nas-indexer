@@ -51,6 +51,62 @@
     </div>
 
     <div class="card">
+      <h3 class="section-title">分类规则（按后缀）</h3>
+      <p class="hint">根据文件后缀自动分类，每个分类对应一组扩展名</p>
+      
+      <div class="category-rules">
+        <div class="category-item" v-for="(extensions, category) in localCategoryRules" :key="category">
+          <div class="category-header">
+            <input class="input category-name" :value="category" @change="updateCategoryName(category, $event)" placeholder="分类名称">
+            <button class="btn btn-danger btn-small" @click="removeCategory(category)">删除分类</button>
+          </div>
+          <div class="extensions-list">
+            <span class="extension-tag" v-for="(ext, i) in extensions" :key="i">
+              {{ ext }}
+              <button class="remove-ext" @click="removeExtension(category, i)">×</button>
+            </span>
+            <input 
+              class="input extension-input" 
+              v-model="newExtensions[category]" 
+              placeholder="添加扩展名，如 .mp4"
+              @keyup.enter="addExtension(category)"
+            >
+            <button class="btn btn-secondary btn-small" @click="addExtension(category)">添加</button>
+          </div>
+        </div>
+        <div class="add-category">
+          <input class="input" v-model="newCategoryName" placeholder="新分类名称">
+          <button class="btn btn-secondary btn-small" @click="addCategory">添加分类</button>
+        </div>
+      </div>
+      
+      <div class="form-actions">
+        <button class="btn btn-primary" @click="applyCategoryRules">应用分类规则</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="section-title">目录分类规则（优先级更高）</h3>
+      <p class="hint">根据文件所在目录路径前缀分类，优先级高于后缀规则</p>
+      
+      <div class="path-rules">
+        <div class="path-rule-item" v-for="(rule, i) in localCategoryPathRules" :key="i">
+          <input class="input path-prefix" v-model="rule.pathPrefix" placeholder="目录路径前缀，如 D:/NAS/Games">
+          <select class="select category-select" v-model="rule.category">
+            <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+            <option value="其他">其他</option>
+          </select>
+          <button class="btn btn-danger btn-small" @click="removePathRule(i)">删除</button>
+        </div>
+        <button class="btn btn-secondary btn-small" @click="addPathRule">添加目录规则</button>
+      </div>
+      
+      <div class="form-actions">
+        <button class="btn btn-primary" @click="applyPathRules">应用目录规则</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h3 class="section-title">状态信息</h3>
       <div class="status-info" v-if="status">
         <p><strong>存储目录：</strong>{{ status.storagePath }}</p>
@@ -63,7 +119,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getConfig, saveConfig, getStatus, scanSinglePath } from '../api'
 
 export default {
@@ -73,11 +129,20 @@ export default {
       scanPaths: [],
       scanTime: '0 2 * * *',
       excludePatterns: [],
-      fileExtensionFilter: { whitelist: [], blacklist: [] }
+      fileExtensionFilter: { whitelist: [], blacklist: [] },
+      categoryRules: {},
+      categoryPathRules: []
     })
     const status = ref(null)
     const saving = ref(false)
     const pathScanning = ref(-1)
+    
+    const localCategoryRules = reactive({})
+    const localCategoryPathRules = ref([])
+    const newExtensions = reactive({})
+    const newCategoryName = ref('')
+    
+    const categories = computed(() => Object.keys(localCategoryRules))
 
     const excludePatternsStr = computed({
       get: () => config.value.excludePatterns.join(', '),
@@ -104,8 +169,14 @@ export default {
         const res = await getConfig()
         config.value = {
           ...res,
-          fileExtensionFilter: res.fileExtensionFilter || { whitelist: [], blacklist: [] }
+          fileExtensionFilter: res.fileExtensionFilter || { whitelist: [], blacklist: [] },
+          categoryRules: res.categoryRules || {},
+          categoryPathRules: res.categoryPathRules || []
         }
+        
+        Object.keys(localCategoryRules).forEach(key => delete localCategoryRules[key])
+        Object.assign(localCategoryRules, config.value.categoryRules)
+        localCategoryPathRules.value = [...config.value.categoryPathRules]
       } catch (err) {
         console.error('获取配置失败:', err)
       }
@@ -169,10 +240,79 @@ export default {
       loadConfig()
     }
 
+    function addCategory() {
+      if (!newCategoryName.value.trim()) return
+      const name = newCategoryName.value.trim()
+      if (localCategoryRules[name]) {
+        alert('分类已存在')
+        return
+      }
+      localCategoryRules[name] = []
+      newExtensions[name] = ''
+      newCategoryName.value = ''
+    }
+
+    function removeCategory(category) {
+      delete localCategoryRules[category]
+      delete newExtensions[category]
+    }
+
+    function updateCategoryName(oldName, event) {
+      const newName = event.target.value.trim()
+      if (!newName || newName === oldName) return
+      if (localCategoryRules[newName]) {
+        alert('分类名称已存在')
+        event.target.value = oldName
+        return
+      }
+      const extensions = localCategoryRules[oldName]
+      delete localCategoryRules[oldName]
+      localCategoryRules[newName] = extensions
+      newExtensions[newName] = newExtensions[oldName] || ''
+      delete newExtensions[oldName]
+    }
+
+    function addExtension(category) {
+      const ext = newExtensions[category]?.trim()
+      if (!ext) return
+      const normalizedExt = ext.startsWith('.') ? ext.toLowerCase() : '.' + ext.toLowerCase()
+      if (localCategoryRules[category].includes(normalizedExt)) {
+        alert('扩展名已存在')
+        return
+      }
+      localCategoryRules[category].push(normalizedExt)
+      newExtensions[category] = ''
+    }
+
+    function removeExtension(category, index) {
+      localCategoryRules[category].splice(index, 1)
+    }
+
+    function addPathRule() {
+      localCategoryPathRules.value.push({ pathPrefix: '', category: '其他' })
+    }
+
+    function removePathRule(index) {
+      localCategoryPathRules.value.splice(index, 1)
+    }
+
+    async function applyCategoryRules() {
+      config.value.categoryRules = { ...localCategoryRules }
+      await save()
+    }
+
+    async function applyPathRules() {
+      config.value.categoryPathRules = [...localCategoryPathRules.value]
+      await save()
+    }
+
     return {
       config, status, saving, pathScanning,
       excludePatternsStr, whitelistStr, blacklistStr,
-      addPath, removePath, scanPath, save, reset
+      addPath, removePath, scanPath, save, reset,
+      localCategoryRules, localCategoryPathRules, newExtensions, newCategoryName, categories,
+      addCategory, removeCategory, updateCategoryName, addExtension, removeExtension,
+      addPathRule, removePathRule, applyCategoryRules, applyPathRules
     }
   }
 }
@@ -237,5 +377,95 @@ export default {
 
 .status-info strong {
   color: var(--text-muted);
+}
+
+.category-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.category-item {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.category-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.category-name {
+  width: 150px;
+}
+
+.extensions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.extension-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.remove-ext {
+  margin-left: 4px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+
+.remove-ext:hover {
+  color: var(--danger);
+}
+
+.extension-input {
+  width: 120px;
+}
+
+.add-category {
+  display: flex;
+  gap: 8px;
+}
+
+.add-category .input {
+  width: 150px;
+}
+
+.path-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.path-rule-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.path-prefix {
+  flex: 1;
+}
+
+.category-select {
+  width: 120px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
 }
 </style>

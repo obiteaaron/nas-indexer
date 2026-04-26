@@ -25,5 +25,13 @@
       ".cache", ".tmp", ".temp", ".swp", ".bak", ".old", ".log",
       ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz", ".tgz"
     ]
-  }
+  },
+  "categoryRules": {
+    "视频": [".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg"],
+    "音频": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".wma", ".m4a", ".ape", ".alac"],
+    "图片": [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico", ".tiff", ".tif"],
+    "文档": [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt"],
+    "字幕": [".srt", ".ass", ".ssa", ".sub", ".vtt"]
+  },
+  "categoryPathRules": []
 }

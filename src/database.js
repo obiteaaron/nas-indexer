@@ -2,6 +2,14 @@ const fs = require('fs');
 const path = require('path');
 const initSqlJs = require('sql.js');
 
+const DEFAULT_CATEGORY_RULES = {
+  '视频': ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'],
+  '音频': ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a', '.ape', '.alac'],
+  '图片': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.tif'],
+  '文档': ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.rtf', '.odt'],
+  '字幕': ['.srt', '.ass', '.ssa', '.sub', '.vtt']
+};
+
 const EXTENSION_CLASS_MAP = {
   '.mp4': '视频', '.mkv': '视频', '.avi': '视频', '.mov': '视频',
   '.wmv': '视频', '.flv': '视频', '.webm': '视频', '.m4v': '视频',
@@ -15,8 +23,31 @@ const EXTENSION_CLASS_MAP = {
   '.srt': '字幕', '.ass': '字幕', '.ssa': '字幕', '.sub': '字幕', '.vtt': '字幕'
 };
 
-function classifyByExtension(ext) {
+function normalizePath(filePath) {
+  return filePath.replace(/\\/g, '/').toLowerCase();
+}
+
+function classifyByPathPrefix(filePath, categoryPathRules) {
+  if (!categoryPathRules || categoryPathRules.length === 0) return null;
+  const normalizedFilePath = normalizePath(filePath);
+  for (const rule of categoryPathRules) {
+    const normalizedPrefix = normalizePath(rule.pathPrefix);
+    if (normalizedFilePath.startsWith(normalizedPrefix)) {
+      return rule.category;
+    }
+  }
+  return null;
+}
+
+function classifyByExtension(ext, categoryRules) {
   const normalizedExt = (ext || '').toLowerCase();
+  if (categoryRules) {
+    for (const [category, extensions] of Object.entries(categoryRules)) {
+      if (extensions.some(e => e.toLowerCase() === normalizedExt)) {
+        return category;
+      }
+    }
+  }
   return EXTENSION_CLASS_MAP[normalizedExt] || '其他';
 }
 
@@ -25,6 +56,22 @@ class Database {
     this.db = null;
     this.dbPath = null;
     this.initialized = false;
+    this.categoryRules = DEFAULT_CATEGORY_RULES;
+    this.categoryPathRules = [];
+  }
+
+  setCategoryRules(rules) {
+    this.categoryRules = rules || DEFAULT_CATEGORY_RULES;
+  }
+
+  setCategoryPathRules(rules) {
+    this.categoryPathRules = rules || [];
+  }
+
+  classifyFile(filePath, ext) {
+    const pathCategory = classifyByPathPrefix(filePath, this.categoryPathRules);
+    if (pathCategory) return pathCategory;
+    return classifyByExtension(ext, this.categoryRules);
   }
 
   async init(dbPath) {
@@ -137,7 +184,7 @@ class Database {
   insertFile(filePath, stat, scanPath = null) {
     const ext = path.extname(filePath).toLowerCase();
     const name = path.basename(filePath);
-    const category = classifyByExtension(ext);
+    const category = this.classifyFile(filePath, ext);
     const modifiedAt = stat ? new Date(stat.mtime).toISOString() : null;
     
     try {
@@ -631,4 +678,11 @@ class Database {
 
 const database = new Database();
 
-module.exports = { database, Database, classifyByExtension, EXTENSION_CLASS_MAP };
+module.exports = { 
+  database, 
+  Database, 
+  classifyByExtension, 
+  classifyByPathPrefix,
+  EXTENSION_CLASS_MAP,
+  DEFAULT_CATEGORY_RULES
+};

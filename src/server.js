@@ -165,6 +165,14 @@ async function runScan(config) {
     ensureStorageDir(config);
     
     await initDatabase();
+    
+    if (config.categoryRules) {
+      database.setCategoryRules(config.categoryRules);
+    }
+    if (config.categoryPathRules) {
+      database.setCategoryPathRules(config.categoryPathRules);
+    }
+    
     const result = await performScanWithDatabase(
       config.scanPaths,
       config.excludePatterns || [],
@@ -249,51 +257,58 @@ app.post('/api/scan', async (req, res) => {
 });
 
 app.post('/api/scan/path', async (req, res) => {
-  try {
-    await initDatabase();
-    const { path: scanPath } = req.body;
-    
-    if (!scanPath) {
-      return res.status(400).json({ success: false, error: '请提供扫描路径' });
-    }
-    
-    if (!fs.existsSync(scanPath)) {
-      return res.status(400).json({ success: false, error: '路径不存在' });
-    }
-
-    if (scanningPaths.has(scanPath)) {
-      return res.status(409).json({ success: false, error: '该路径正在扫描中，请稍后再试' });
-    }
-
-    scanningPaths.add(scanPath);
-    
-    const config = loadConfig();
-    
     try {
-      const result = await performScanWithDatabase(
-        [scanPath],
-        config.excludePatterns || [],
-        config.fileExtensionFilter || { whitelist: [], blacklist: [] }
-      );
+      await initDatabase();
+      const { path: scanPath } = req.body;
+      
+      if (!scanPath) {
+        return res.status(400).json({ success: false, error: '请提供扫描路径' });
+      }
+      
+      if (!fs.existsSync(scanPath)) {
+        return res.status(400).json({ success: false, error: '路径不存在' });
+      }
 
-      res.json({
-        success: true,
-        message: '扫描完成',
-        data: {
-          scannedPath: scanPath,
-          fileCount: result.results[0]?.fileCount || 0,
-          totalFiles: result.totalFiles,
-          totalSize: formatSize(result.totalSize)
-        }
-      });
-    } finally {
-      scanningPaths.delete(scanPath);
+      if (scanningPaths.has(scanPath)) {
+        return res.status(409).json({ success: false, error: '该路径正在扫描中，请稍后再试' });
+      }
+
+      scanningPaths.add(scanPath);
+      
+      const config = loadConfig();
+      
+      if (config.categoryRules) {
+        database.setCategoryRules(config.categoryRules);
+      }
+      if (config.categoryPathRules) {
+        database.setCategoryPathRules(config.categoryPathRules);
+      }
+      
+      try {
+        const result = await performScanWithDatabase(
+          [scanPath],
+          config.excludePatterns || [],
+          config.fileExtensionFilter || { whitelist: [], blacklist: [] }
+        );
+
+        res.json({
+          success: true,
+          message: '扫描完成',
+          data: {
+            scannedPath: scanPath,
+            fileCount: result.results[0]?.fileCount || 0,
+            totalFiles: result.totalFiles,
+            totalSize: formatSize(result.totalSize)
+          }
+        });
+      } finally {
+        scanningPaths.delete(scanPath);
+      }
+    } catch (err) {
+      scanningPaths.delete(req.body.path);
+      res.status(500).json({ success: false, error: err.message });
     }
-  } catch (err) {
-    scanningPaths.delete(req.body.path);
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
+  });
 
 app.get('/api/statistics', async (req, res) => {
   await initDatabase();
