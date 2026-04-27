@@ -916,7 +916,7 @@ if (fs.existsSync(frontendPath)) {
 
 const server = app.listen(PORT, async () => {
   await initDatabase();
-  logger.info('\n🚀 NAS Indexer v1.0.3 服务已启动');
+  logger.info('\n🚀 NAS Indexer v1.0.5 服务已启动');
   logger.info('📍 访问地址: http://localhost:%d', PORT);
   logger.info('📁 默认存储目录: %s\n', DEFAULT_STORAGE_PATH);
 

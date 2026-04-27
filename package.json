@@ -4,8 +4,8 @@
   "description": "NAS 文件索引工具 - 扫描目录生成 Markdown 知识库",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node src/server.js"
+    "start": "node scripts/start.js",
+    "dev": "node scripts/start.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
