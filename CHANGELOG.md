@@ -5,7 +5,7 @@
 ### 新增功能
 
 #### 用户行为追踪与智能推荐系统
-- **行为数据表** - 新增 file_views、user_actions、user_preferences、recommendations、search_history 表
+- **行为数据表** - 新增 ai_file_views、ai_user_actions、ai_user_preferences、ai_recommendations、ai_search_history 表
 - **行为记录 API** - 文件查看/预览行为记录
 - **偏好分析引擎** - 类别/标签/关键词偏好计算
 - **推荐引擎** - 基于偏好的类别推荐 + 标签推荐

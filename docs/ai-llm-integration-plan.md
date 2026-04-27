@@ -2,7 +2,7 @@
 
 > 状态：P0 基础架构已实现（v1.0.5），LLM 增强待实施
 > 创建时间：2025-04-26
-> 最后更新：2025-04-27
+> 最后更新：2026-04-28
 
 本文档记录 NAS Indexer 项目中 AI LLM 的应用场景和实施方案。
 
@@ -41,7 +41,12 @@
                             ↓ 行为数据收集
 ┌─────────────────────────────────────────────────────────┐
 │                    数据存储层                             │
-│  file_views | search_history | user_actions | preferences│
+│  ai_file_views | ai_search_history | ai_user_actions | ai_preferences│
+│                                                         │
+│  📌 ai_search_history 独立定位：                          │
+│     提供搜索历史查询/清空功能，与 ai_user_actions 互补     │
+│     - ai_search_history: 专注搜索词记录与用户交互        │
+│     - ai_user_actions: 记录搜索行为的完整上下文           │
 └─────────────────────────────────────────────────────────┘
                             ↓ 偏好分析引擎
 ┌─────────────────────────────────────────────────────────┐
@@ -57,10 +62,10 @@
 
 ### 2.2 数据库设计（新增表）
 
-#### 文件访问记录表 `file_views`
+#### 文件访问记录表 `ai_file_views`
 
 ```sql
-CREATE TABLE file_views (
+CREATE TABLE ai_file_views (
     id INTEGER PRIMARY KEY,
     file_id INTEGER NOT NULL,
     view_count INTEGER DEFAULT 0,
@@ -71,10 +76,10 @@ CREATE TABLE file_views (
 );
 ```
 
-#### 用户操作日志表 `user_actions`
+#### 用户操作日志表 `ai_user_actions`
 
 ```sql
-CREATE TABLE user_actions (
+CREATE TABLE ai_user_actions (
     id INTEGER PRIMARY KEY,
     action_type TEXT NOT NULL,  -- 'view', 'preview', 'play', 'favorite', 'tag', 'search'
     file_id INTEGER,
@@ -85,10 +90,10 @@ CREATE TABLE user_actions (
 );
 ```
 
-#### 用户偏好画像表 `user_preferences`
+#### 用户偏好画像表 `ai_user_preferences`
 
 ```sql
-CREATE TABLE user_preferences (
+CREATE TABLE ai_user_preferences (
     id INTEGER PRIMARY KEY,
     preference_type TEXT NOT NULL,  -- 'category', 'tag', 'keyword', 'time_pattern'
     preference_key TEXT NOT NULL,   -- 具体值，如'视频'、'科幻'
@@ -99,10 +104,10 @@ CREATE TABLE user_preferences (
 );
 ```
 
-#### 推荐结果缓存表 `recommendations`
+#### 推荐结果缓存表 `ai_recommendations`
 
 ```sql
-CREATE TABLE recommendations (
+CREATE TABLE ai_recommendations (
     id INTEGER PRIMARY KEY,
     rec_type TEXT NOT NULL,         -- 'similar', 'new', 'trending'
     file_id INTEGER NOT NULL,
@@ -113,6 +118,49 @@ CREATE TABLE recommendations (
     FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
 );
 ```
+
+### 2.2.1 搜索历史（独立功能）
+
+#### 搜索历史表 `ai_search_history`
+
+```sql
+CREATE TABLE ai_search_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    query TEXT NOT NULL,           -- 搜索关键词
+    searched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### 功能定位
+
+| 维度 | ai_search_history | ai_user_actions (search) |
+|------|----------------|----------------------|
+| **核心功能** | 提供搜索历史查询、展示、清空 | 记录用户搜索行为的完整上下文 |
+| **数据粒度** | 每次搜索一条记录 | 包含关联文件、标签等详细信息 |
+| **用户交互** | 前端展示历史搜索词供快速重搜 | 后台分析，不直接展示 |
+| **偏好分析** | 提供关键词频率统计 | 提供搜索→点击→查看的完整链路 |
+
+#### 数据流向
+
+```
+用户搜索
+  ├─→ ai_search_history (记录 query + 时间)
+  │     └─→ 前端搜索历史展示
+  │     └─→ 关键词偏好分析 (关键词频率)
+  │
+  └─→ ai_user_actions (记录 action_type='search' + 完整上下文)
+        └─→ 搜索行为分析 (搜索→点击→查看转化率)
+        └─→ 偏好画像生成 (搜索意图理解)
+```
+
+#### API 端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| `GET` | `/api/search/history` | 获取搜索历史 |
+| `DELETE` | `/api/search/history` | 清空搜索历史 |
+
+**特性**：自动记录，无需前端手动调用；支持独立清空，不影响 user_actions 数据。
 
 ### 2.3 功能模块设计
 
