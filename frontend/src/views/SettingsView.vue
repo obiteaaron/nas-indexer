@@ -115,12 +115,37 @@
         <p><strong>总大小：</strong>{{ status.totalSize }}</p>
       </div>
     </div>
+
+    <div class="card">
+      <h3 class="section-title">偏好分析</h3>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="config.trackingConfig.trackingEnabled">
+          启用行为追踪
+        </label>
+        <span class="hint">开启后将记录文件查看、预览、搜索等行为，用于生成个性化推荐</span>
+      </div>
+
+      <div class="form-group" v-if="config.trackingConfig.trackingEnabled">
+        <label>追踪级别</label>
+        <select class="select" v-model="config.trackingConfig.trackingLevel">
+          <option value="minimal">基础（仅搜索记录）</option>
+          <option value="full">完整（查看、预览、搜索、打标）</option>
+        </select>
+        <span class="hint">完整模式将记录更多行为数据，推荐结果更精准</span>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-danger btn-small" @click="clearPreferences">清除偏好数据</button>
+        <span class="clear-tip">清除所有行为记录和推荐结果，不影响文件和标签</span>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getConfig, saveConfig, getStatus, scanSinglePath } from '../api'
+import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData } from '../api'
 
 export default {
   name: 'SettingsView',
@@ -131,7 +156,8 @@ export default {
       excludePatterns: [],
       fileExtensionFilter: { whitelist: [], blacklist: [] },
       categoryRules: {},
-      categoryPathRules: []
+      categoryPathRules: [],
+      trackingConfig: { trackingEnabled: true, trackingLevel: 'full' }
     })
     const status = ref(null)
     const saving = ref(false)
@@ -171,7 +197,8 @@ export default {
           ...res,
           fileExtensionFilter: res.fileExtensionFilter || { whitelist: [], blacklist: [] },
           categoryRules: res.categoryRules || {},
-          categoryPathRules: res.categoryPathRules || []
+          categoryPathRules: res.categoryPathRules || [],
+          trackingConfig: res.trackingConfig || { trackingEnabled: true, trackingLevel: 'full' }
         }
         
         Object.keys(localCategoryRules).forEach(key => delete localCategoryRules[key])
@@ -306,13 +333,28 @@ export default {
       await save()
     }
 
+    async function clearPreferences() {
+      if (!confirm('确定要清除所有偏好数据吗？此操作不可恢复。')) return
+      try {
+        const res = await clearPreferencesData()
+        if (res.success) {
+          alert('偏好数据已清除')
+        } else {
+          alert('清除失败：' + res.error)
+        }
+      } catch (err) {
+        alert('清除失败：' + err.message)
+      }
+    }
+
     return {
       config, status, saving, pathScanning,
       excludePatternsStr, whitelistStr, blacklistStr,
       addPath, removePath, scanPath, save, reset,
       localCategoryRules, localCategoryPathRules, newExtensions, newCategoryName, categories,
       addCategory, removeCategory, updateCategoryName, addExtension, removeExtension,
-      addPathRule, removePathRule, applyCategoryRules, applyPathRules
+      addPathRule, removePathRule, applyCategoryRules, applyPathRules,
+      clearPreferences
     }
   }
 }
@@ -467,5 +509,31 @@ export default {
   border-radius: 4px;
   background: var(--bg);
   color: var(--text);
+}
+
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.clear-tip {
+  margin-left: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 32px;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 </style>

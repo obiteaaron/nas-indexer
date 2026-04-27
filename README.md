@@ -40,6 +40,7 @@
 ### 其他
 - ⏰ **定时扫描** - 支持 Cron 表达式配置自动扫描
 - 📝 **Markdown 输出** - 兼容旧版格式导出
+- 🧠 **行为追踪与推荐** - 记录用户行为，生成个性化推荐
 - 🌙 **暗色主题** - 现代化 UI 设计（待实现）
 
 ## 安装
@@ -152,6 +153,48 @@ CREATE TABLE file_tags (
     tag_id INTEGER NOT NULL,
     UNIQUE(file_id, tag_id)
 );
+
+-- 文件访问记录表
+CREATE TABLE file_views (
+    id INTEGER PRIMARY KEY,
+    file_id INTEGER NOT NULL,
+    view_count INTEGER DEFAULT 0,
+    last_viewed_at DATETIME,
+    preview_count INTEGER DEFAULT 0,
+    play_duration INTEGER DEFAULT 0
+);
+
+-- 用户操作日志表
+CREATE TABLE user_actions (
+    id INTEGER PRIMARY KEY,
+    action_type TEXT NOT NULL,
+    file_id INTEGER,
+    tag_id INTEGER,
+    search_query TEXT,
+    action_data TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 用户偏好画像表
+CREATE TABLE user_preferences (
+    id INTEGER PRIMARY KEY,
+    preference_type TEXT NOT NULL,
+    preference_key TEXT NOT NULL,
+    preference_value REAL,
+    data_source TEXT,
+    last_updated DATETIME
+);
+
+-- 推荐结果缓存表
+CREATE TABLE recommendations (
+    id INTEGER PRIMARY KEY,
+    rec_type TEXT NOT NULL,
+    file_id INTEGER NOT NULL,
+    score REAL,
+    reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME
+);
 ```
 
 ## API 端点
@@ -178,6 +221,14 @@ CREATE TABLE file_tags (
 | `/api/files/:id/tags` | GET/POST/DELETE | 文件标签操作 |
 | `/api/files/batch/tags` | POST | 批量打标 |
 | `/api/files/by-tags` | GET | 按标签筛选文件 |
+| `/api/files/:id/view` | POST | 记录文件查看 |
+| `/api/files/:id/preview` | POST | 记录文件预览 |
+| `/api/files/:id/action` | POST | 记录用户操作 |
+| `/api/files/views` | GET | 获取最近访问记录 |
+| `/api/preferences` | GET | 获取用户偏好画像 |
+| `/api/preferences/clear` | DELETE | 清除偏好数据 |
+| `/api/recommendations` | GET | 获取推荐结果 |
+| `/api/recommendations/generate` | POST | 生成推荐 |
 
 ## Cron 表达式示例
 

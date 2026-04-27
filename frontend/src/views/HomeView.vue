@@ -42,21 +42,55 @@
         </div>
       </div>
     </div>
+
+    <div class="card" v-if="preferences && preferences.categories.length">
+      <h3 class="section-title">你的偏好</h3>
+      <div class="preferences-summary">
+        <div class="pref-item" v-for="pref in preferences.categories.slice(0, 5)" :key="pref.preference_key">
+          <span class="pref-label">{{ pref.preference_key }}</span>
+          <div class="pref-bar">
+            <div class="pref-bar-fill" :style="{ width: (pref.preference_value * 100) + '%' }"></div>
+          </div>
+          <span class="pref-value">{{ (pref.preference_value * 100).toFixed(1) }}%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" v-if="recommendations.length">
+      <h3 class="section-title">为你推荐</h3>
+      <div class="recommendations-grid">
+        <div class="rec-item" v-for="rec in recommendations" :key="rec.id" @click="viewFile(rec.file_id)">
+          <div class="rec-icon" :class="'cat-' + (rec.category || '其他')">{{ getCategoryIcon(rec.category) }}</div>
+          <div class="rec-info">
+            <div class="rec-name" :title="rec.name">{{ rec.name }}</div>
+            <div class="rec-reason">{{ rec.reason }}</div>
+            <div class="rec-meta">{{ rec.sizeFormatted }} · {{ rec.category }}</div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-secondary btn-small" @click="refreshRecommendations" v-if="!recommendations.length || recommendations.length === 0">
+        生成推荐
+      </button>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, onMounted } from 'vue'
-import { getStatistics, scanFiles } from '../api'
+import { getStatistics, scanFiles, getPreferences, getRecommendations, generateRecommendations } from '../api'
 
 export default {
   name: 'HomeView',
   setup() {
     const stats = ref(null)
     const scanning = ref(false)
+    const preferences = ref(null)
+    const recommendations = ref([])
 
     onMounted(async () => {
       loadStats()
+      loadPreferences()
+      loadRecommendations()
     })
 
     async function loadStats() {
@@ -68,6 +102,54 @@ export default {
       } catch (err) {
         console.error('获取统计失败:', err)
       }
+    }
+
+    async function loadPreferences() {
+      try {
+        const res = await getPreferences()
+        if (res.success && res.data.enabled) {
+          preferences.value = res.data
+        }
+      } catch (err) {
+        console.error('获取偏好失败:', err)
+      }
+    }
+
+    async function loadRecommendations() {
+      try {
+        const res = await getRecommendations({ limit: 10 })
+        if (res.success) {
+          recommendations.value = res.data
+          if (res.data.length === 0) {
+            await refreshRecommendations()
+          }
+        }
+      } catch (err) {
+        console.error('获取推荐失败:', err)
+      }
+    }
+
+    async function refreshRecommendations() {
+      try {
+        const res = await generateRecommendations()
+        if (res.success) {
+          recommendations.value = res.data.slice(0, 10)
+        }
+      } catch (err) {
+        console.error('生成推荐失败:', err)
+      }
+    }
+
+    function getCategoryIcon(category) {
+      const icons = {
+        '视频': '🎬', '音频': '🎵', '图片': '🖼️',
+        '文档': '📄', '字幕': '📝', '其他': '📦'
+      }
+      return icons[category] || '📦'
+    }
+
+    function viewFile(fileId) {
+      window.location.hash = '/files'
     }
 
     async function startScan() {
@@ -86,7 +168,7 @@ export default {
       scanning.value = false
     }
 
-    return { stats, scanning, startScan }
+    return { stats, scanning, startScan, preferences, recommendations, getCategoryIcon, viewFile, refreshRecommendations }
   }
 }
 </script>
@@ -148,5 +230,102 @@ export default {
   width: 60px;
   text-align: right;
   color: var(--primary);
+}
+
+.preferences-summary {
+  margin-top: 12px;
+}
+
+.pref-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pref-label {
+  width: 80px;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.pref-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pref-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #a78bfa);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.pref-value {
+  width: 50px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.recommendations-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rec-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rec-item:hover {
+  background: var(--bg-secondary);
+}
+
+.rec-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.rec-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rec-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.rec-reason {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.rec-meta {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

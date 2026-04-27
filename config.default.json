@@ -33,5 +33,9 @@
     "文档": [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt"],
     "字幕": [".srt", ".ass", ".ssa", ".sub", ".vtt"]
   },
-  "categoryPathRules": []
+  "categoryPathRules": [],
+  "trackingConfig": {
+    "trackingEnabled": true,
+    "trackingLevel": "full"
+  }
 }

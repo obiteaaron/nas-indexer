@@ -124,7 +124,7 @@ class Database {
     `);
 
     this.db.run(`
-      CREATE TABLE IF NOT EXISTS search_history (
+      CREATE TABLE IF NOT EXISTS ai_search_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         query TEXT NOT NULL,
         searched_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -171,7 +171,63 @@ class Database {
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_file_tags_file ON file_tags(file_id)`);
     this.db.run(`CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_id)`);
-    
+
+    // 用户行为追踪表
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS ai_file_views (
+        id INTEGER PRIMARY KEY,
+        file_id INTEGER NOT NULL,
+        view_count INTEGER DEFAULT 0,
+        last_viewed_at DATETIME,
+        preview_count INTEGER DEFAULT 0,
+        play_duration INTEGER DEFAULT 0,
+        FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS ai_user_actions (
+        id INTEGER PRIMARY KEY,
+        action_type TEXT NOT NULL,
+        file_id INTEGER,
+        tag_id INTEGER,
+        search_query TEXT,
+        action_data TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS ai_user_preferences (
+        id INTEGER PRIMARY KEY,
+        preference_type TEXT NOT NULL,
+        preference_key TEXT NOT NULL,
+        preference_value REAL,
+        data_source TEXT,
+        last_updated DATETIME,
+        UNIQUE(preference_type, preference_key)
+      )
+    `);
+
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS ai_recommendations (
+        id INTEGER PRIMARY KEY,
+        rec_type TEXT NOT NULL,
+        file_id INTEGER NOT NULL,
+        score REAL,
+        reason TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME,
+        FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+      )
+    `);
+
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_file_views_file ON ai_file_views(file_id)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_user_actions_type ON ai_user_actions(action_type)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_user_actions_created ON ai_user_actions(created_at)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_recommendations_type ON ai_recommendations(rec_type)`);
+    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_recommendations_file ON ai_recommendations(file_id)`);
+
     this.save();
   }
 
@@ -367,13 +423,13 @@ class Database {
   }
 
   addSearchHistory(query) {
-    this.db.run('INSERT INTO search_history (query) VALUES (?)', [query]);
+    this.db.run('INSERT INTO ai_search_history (query) VALUES (?)', [query]);
     this.save();
   }
 
   getSearchHistory(limit = 10) {
     const result = this.db.exec(`
-      SELECT query FROM search_history
+      SELECT query FROM ai_search_history
       ORDER BY searched_at DESC
       LIMIT ?
     `, [limit]);
@@ -382,7 +438,7 @@ class Database {
   }
 
   clearSearchHistory() {
-    this.db.run('DELETE FROM search_history');
+    this.db.run('DELETE FROM ai_search_history');
     this.save();
   }
 
@@ -666,6 +722,324 @@ class Database {
       obj[col] = row[i];
     });
     return obj;
+  }
+
+  // === 行为追踪方法 ===
+
+  recordFileView(fileId, playDuration = 0) {
+    const now = new Date().toISOString();
+    const existing = this.db.exec('SELECT id, view_count FROM ai_file_views WHERE file_id = ?', [fileId]);
+    if (existing.length > 0 && existing[0].values.length > 0) {
+      const row = existing[0].values[0];
+      this.db.run(
+        'UPDATE ai_file_views SET view_count = ?, last_viewed_at = ?, play_duration = play_duration + ? WHERE file_id = ?',
+        [row[1] + 1, now, playDuration, fileId]
+      );
+    } else {
+      this.db.run(
+        'INSERT INTO ai_file_views (file_id, view_count, last_viewed_at, play_duration) VALUES (?, 1, ?, ?)',
+        [fileId, now, playDuration]
+      );
+    }
+    this.recordUserAction('view', { file_id: fileId });
+    this.save();
+  }
+
+  recordFilePreview(fileId, playDuration = 0) {
+    const now = new Date().toISOString();
+    const existing = this.db.exec('SELECT id, preview_count FROM ai_file_views WHERE file_id = ?', [fileId]);
+    if (existing.length > 0 && existing[0].values.length > 0) {
+      const row = existing[0].values[0];
+      this.db.run(
+        'UPDATE ai_file_views SET preview_count = ?, last_viewed_at = ?, play_duration = play_duration + ? WHERE file_id = ?',
+        [row[1] + 1, now, playDuration, fileId]
+      );
+    } else {
+      this.db.run(
+        'INSERT INTO ai_file_views (file_id, view_count, preview_count, last_viewed_at, play_duration) VALUES (?, 1, 1, ?, ?)',
+        [fileId, now, playDuration]
+      );
+    }
+    this.recordUserAction('preview', { file_id: fileId, play_duration: playDuration });
+    this.save();
+  }
+
+  recordUserAction(actionType, data = {}) {
+    const { file_id, tag_id, search_query, ...extraData } = data;
+    const actionData = Object.keys(extraData).length > 0 ? JSON.stringify(extraData) : null;
+    this.db.run(
+      'INSERT INTO ai_user_actions (action_type, file_id, tag_id, search_query, action_data) VALUES (?, ?, ?, ?, ?)',
+      [actionType, file_id || null, tag_id || null, search_query || null, actionData]
+    );
+    this.save();
+  }
+
+  getFileViews(limit = 50) {
+    const sql = `
+      SELECT fv.*, f.name, f.path, f.ext, f.category, f.size
+      FROM ai_file_views fv
+      JOIN files f ON fv.file_id = f.id
+      ORDER BY fv.last_viewed_at DESC
+      LIMIT ?
+    `;
+    const result = this.db.exec(sql, [limit]);
+    if (result.length === 0) return [];
+    return result[0].values.map(row => {
+      const obj = {};
+      result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
+      return obj;
+    });
+  }
+
+  getUserActions(limit = 50) {
+    const result = this.db.exec(
+      'SELECT * FROM ai_user_actions ORDER BY created_at DESC LIMIT ?',
+      [limit]
+    );
+    if (result.length === 0) return [];
+    return result[0].values.map(row => {
+      const obj = {};
+      result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
+      return obj;
+    });
+  }
+
+  // === 偏好分析方法 ===
+
+  calculatePreferences() {
+    this._calculateCategoryPreferences();
+    this._calculateTagPreferences();
+    this._calculateKeywordPreferences();
+    return this.getPreferences();
+  }
+
+  _calculateCategoryPreferences() {
+    const sql = `
+      SELECT f.category,
+             COUNT(DISTINCT fv.file_id) as view_count,
+             COUNT(DISTINCT CASE WHEN f.is_favorite = 1 THEN fv.file_id END) as fav_count,
+             COUNT(DISTINCT ft.file_id) as tag_count
+      FROM ai_file_views fv
+      JOIN files f ON fv.file_id = f.id
+      LEFT JOIN file_tags ft ON ft.file_id = f.id
+      GROUP BY f.category
+    `;
+    const result = this.db.exec(sql);
+    const categoryScores = [];
+    if (result.length > 0) {
+      const columns = result[0].columns;
+      for (const row of result[0].values) {
+        const obj = {};
+        columns.forEach((col, i) => { obj[col] = row[i]; });
+        const totalActions = obj.view_count * 0.3 + obj.fav_count * 0.5 + obj.tag_count * 0.2;
+        categoryScores.push({
+          category: obj.category,
+          score: totalActions,
+          view_count: obj.view_count,
+          fav_count: obj.fav_count,
+          tag_count: obj.tag_count
+        });
+      }
+    }
+
+    const totalScore = categoryScores.reduce((sum, c) => sum + c.score, 0);
+    this.db.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['category']);
+    for (const cat of categoryScores) {
+      this.db.run(
+        'INSERT INTO ai_user_preferences (preference_type, preference_key, preference_value, data_source, last_updated) VALUES (?, ?, ?, ?, ?)',
+        ['category', cat.category, totalScore > 0 ? cat.score / totalScore : 0, 'combined', new Date().toISOString()]
+      );
+    }
+    this.save();
+  }
+
+  _calculateTagPreferences() {
+    const sql = `
+      SELECT t.id, t.name,
+             COUNT(DISTINCT fv.file_id) as viewed_count,
+             COUNT(DISTINCT ua.file_id) as action_count
+      FROM tags t
+      JOIN file_tags ft ON ft.tag_id = t.id
+      LEFT JOIN ai_file_views fv ON fv.file_id = ft.file_id
+      LEFT JOIN ai_user_actions ua ON ua.file_id = ft.file_id AND ua.tag_id = t.id
+      GROUP BY t.id
+    `;
+    const result = this.db.exec(sql);
+    const tagScores = [];
+    if (result.length > 0) {
+      const columns = result[0].columns;
+      for (const row of result[0].values) {
+        const obj = {};
+        columns.forEach((col, i) => { obj[col] = row[i]; });
+        const totalFilesWithTag = this.db.exec('SELECT COUNT(*) FROM file_tags WHERE tag_id = ?', [obj.id]);
+        const totalFiles = totalFilesWithTag.length > 0 ? totalFilesWithTag[0].values[0][0] : 1;
+        const score = (obj.viewed_count || 0) / totalFiles;
+        tagScores.push({ tag_id: obj.id, name: obj.name, score });
+      }
+    }
+
+    this.db.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['tag']);
+    for (const tag of tagScores) {
+      if (tag.score > 0) {
+        this.db.run(
+          'INSERT INTO ai_user_preferences (preference_type, preference_key, preference_value, data_source, last_updated) VALUES (?, ?, ?, ?, ?)',
+          ['tag', tag.name, tag.score, 'views', new Date().toISOString()]
+        );
+      }
+    }
+    this.save();
+  }
+
+  _calculateKeywordPreferences() {
+    const sql = `
+      SELECT search_query, COUNT(*) as query_count
+      FROM ai_user_actions
+      WHERE action_type = 'search' AND search_query IS NOT NULL
+      GROUP BY search_query
+      ORDER BY query_count DESC
+      LIMIT 50
+    `;
+    const result = this.db.exec(sql);
+    const keywordScores = [];
+    if (result.length > 0) {
+      const columns = result[0].columns;
+      const maxCount = result[0].values.length > 0 ? result[0].values[0][1] : 1;
+      for (const row of result[0].values) {
+        keywordScores.push({
+          keyword: row[0],
+          score: row[1] / maxCount
+        });
+      }
+    }
+
+    this.db.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['keyword']);
+    for (const kw of keywordScores) {
+      this.db.run(
+        'INSERT INTO ai_user_preferences (preference_type, preference_key, preference_value, data_source, last_updated) VALUES (?, ?, ?, ?, ?)',
+        ['keyword', kw.keyword, kw.score, 'search', new Date().toISOString()]
+      );
+    }
+    this.save();
+  }
+
+  getPreferences() {
+    const result = this.db.exec(
+      'SELECT * FROM ai_user_preferences ORDER BY preference_value DESC'
+    );
+    if (result.length === 0) return { categories: [], tags: [], keywords: [] };
+    const rows = result[0].values.map(row => {
+      const obj = {};
+      result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
+      return obj;
+    });
+    return {
+      categories: rows.filter(r => r.preference_type === 'category'),
+      tags: rows.filter(r => r.preference_type === 'tag'),
+      keywords: rows.filter(r => r.preference_type === 'keyword')
+    };
+  }
+
+  clearPreferencesData() {
+    this.db.run('DELETE FROM ai_user_preferences');
+    this.db.run('DELETE FROM ai_file_views');
+    this.db.run('DELETE FROM ai_user_actions');
+    this.db.run('DELETE FROM ai_recommendations');
+    this.db.run('DELETE FROM ai_search_history');
+    this.save();
+  }
+
+  // === 推荐引擎方法 ===
+
+  getRecommendations(type = null, limit = 20) {
+    let sql = `
+      SELECT r.*, f.name, f.path, f.ext, f.category, f.size
+      FROM ai_recommendations r
+      JOIN files f ON r.file_id = f.id
+      WHERE r.expires_at IS NULL OR r.expires_at > datetime('now')
+    `;
+    const params = [];
+    if (type) {
+      sql += ' AND r.rec_type = ?';
+      params.push(type);
+    }
+    sql += ' ORDER BY r.score DESC LIMIT ?';
+    params.push(limit);
+
+    const result = this.db.exec(sql, params);
+    if (result.length === 0) return [];
+    return result[0].values.map(row => {
+      const obj = {};
+      result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
+      return obj;
+    });
+  }
+
+  generateRecommendations() {
+    const prefs = this.getPreferences();
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    this.db.run('DELETE FROM ai_recommendations');
+
+    const topCategories = prefs.categories.slice(0, 3).map(c => c.preference_key);
+    const topTags = prefs.tags.slice(0, 5).map(t => t.preference_key);
+
+    if (topCategories.length > 0) {
+      const placeholders = topCategories.map(() => '?').join(',');
+      const sql = `
+        SELECT f.id, f.name, f.category
+        FROM files f
+        LEFT JOIN ai_file_views fv ON fv.file_id = f.id
+        WHERE f.category IN (${placeholders}) AND (fv.file_id IS NULL OR fv.view_count = 0)
+        ORDER BY f.scanned_at DESC
+        LIMIT 20
+      `;
+      const result = this.db.exec(sql, topCategories);
+      if (result.length > 0) {
+        for (const row of result[0].values) {
+          const fileId = row[0];
+          const category = row[2];
+          const score = prefs.categories.find(c => c.preference_key === category)?.preference_value || 0.5;
+          this.db.run(
+            'INSERT INTO ai_recommendations (rec_type, file_id, score, reason, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+            ['category_based', fileId, score, `基于你对「${category}」类别的偏好`, now, expiresAt]
+          );
+        }
+      }
+    }
+
+    if (topTags.length > 0) {
+      const placeholders = topTags.map(() => '?').join(',');
+      const sql = `
+        SELECT DISTINCT f.id, f.name
+        FROM files f
+        JOIN file_tags ft ON ft.file_id = f.id
+        JOIN tags t ON t.id = ft.tag_id
+        LEFT JOIN ai_file_views fv ON fv.file_id = f.id
+        WHERE t.name IN (${placeholders}) AND (fv.file_id IS NULL OR fv.view_count = 0)
+        ORDER BY f.scanned_at DESC
+        LIMIT 20
+      `;
+      const result = this.db.exec(sql, topTags);
+      if (result.length > 0) {
+        for (const row of result[0].values) {
+          const fileId = row[0];
+          const score = 0.7;
+          this.db.run(
+            'INSERT INTO ai_recommendations (rec_type, file_id, score, reason, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+            ['tag_based', fileId, score, `基于你的标签偏好`, now, expiresAt]
+          );
+        }
+      }
+    }
+
+    this.save();
+    return this.getRecommendations(null, 20);
+  }
+
+  clearRecommendations() {
+    this.db.run('DELETE FROM ai_recommendations');
+    this.save();
   }
 
   close() {

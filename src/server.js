@@ -375,6 +375,10 @@ app.get('/api/files', async (req, res) => {
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
     const limit = parseInt(pageSize);
 
+    if (search && search.trim()) {
+      database.addSearchHistory(search.trim());
+    }
+
     const files = database.getFiles({
       category,
       search,
@@ -895,6 +899,135 @@ app.post('/api/files/batch/tags', async (req, res) => {
       return res.status(400).json({ success: false, error: '无效的操作类型' });
     }
     res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 行为追踪 API
+
+app.post('/api/files/:id/view', async (req, res) => {
+  await initDatabase();
+  try {
+    const fileId = parseInt(req.params.id);
+    const file = database.getFileById(fileId);
+    if (!file) {
+      return res.status(404).json({ success: false, error: '文件不存在' });
+    }
+    const { playDuration } = req.body;
+    database.recordFileView(fileId, playDuration || 0);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/files/:id/preview', async (req, res) => {
+  await initDatabase();
+  try {
+    const fileId = parseInt(req.params.id);
+    const file = database.getFileById(fileId);
+    if (!file) {
+      return res.status(404).json({ success: false, error: '文件不存在' });
+    }
+    const { playDuration } = req.body;
+    database.recordFilePreview(fileId, playDuration || 0);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/files/:id/action', async (req, res) => {
+  await initDatabase();
+  try {
+    const fileId = parseInt(req.params.id);
+    const { actionType, tagId, ...extraData } = req.body;
+    if (!actionType) {
+      return res.status(400).json({ success: false, error: '请提供操作类型' });
+    }
+    if (actionType !== 'search') {
+      const file = database.getFileById(fileId);
+      if (!file) {
+        return res.status(404).json({ success: false, error: '文件不存在' });
+      }
+    }
+    database.recordUserAction(actionType, { file_id: fileId || null, tag_id: tagId, ...extraData });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/files/views', async (req, res) => {
+  await initDatabase();
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const views = database.getFileViews(limit);
+    const formatted = views.map(v => ({
+      ...v,
+      sizeFormatted: formatSize(v.size || 0)
+    }));
+    res.json({ success: true, data: formatted });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 偏好分析 API
+
+app.get('/api/preferences', async (req, res) => {
+  await initDatabase();
+  try {
+    const config = loadConfig();
+    const trackingEnabled = config.trackingConfig?.trackingEnabled ?? true;
+    if (!trackingEnabled) {
+      return res.json({ success: true, data: { enabled: false, categories: [], tags: [], keywords: [] } });
+    }
+    const prefs = database.calculatePreferences();
+    res.json({ success: true, data: { enabled: true, ...prefs } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/preferences/clear', async (req, res) => {
+  await initDatabase();
+  try {
+    database.clearPreferencesData();
+    res.json({ success: true, message: '偏好数据已清除' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 推荐 API
+
+app.get('/api/recommendations', async (req, res) => {
+  await initDatabase();
+  try {
+    const type = req.query.type || null;
+    const limit = parseInt(req.query.limit) || 20;
+    const recs = database.getRecommendations(type, limit);
+    const formatted = recs.map(r => ({
+      ...r,
+      sizeFormatted: formatSize(r.size || 0)
+    }));
+    res.json({ success: true, data: formatted });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/recommendations/generate', async (req, res) => {
+  await initDatabase();
+  try {
+    const recs = database.generateRecommendations();
+    const formatted = recs.map(r => ({
+      ...r,
+      sizeFormatted: formatSize(r.size || 0)
+    }));
+    res.json({ success: true, data: formatted, message: '推荐已生成' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

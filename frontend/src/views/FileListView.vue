@@ -171,7 +171,7 @@ import {
   getFiles, getCategories, openFile, renameFile as apiRename, deleteFile, 
   addFavorite, removeFavorite, getPreview, getStreamUrl,
   getFileTags, addFileTag, removeFileTag, batchFileTags,
-  getFilesByTags, getTags
+  getFilesByTags, getTags, recordFilePreview
 } from '../api'
 
 export default {
@@ -382,6 +382,7 @@ export default {
         const res = await getPreview(file.id)
         if (res.success) {
           previewType.value = res.data.previewType
+          recordFilePreview(file.id).catch(() => {})
         }
       } catch (err) {
         console.error('获取预览失败:', err)

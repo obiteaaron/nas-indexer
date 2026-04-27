@@ -34,7 +34,7 @@
           </thead>
           <tbody>
             <tr v-for="file in results" :key="file.id">
-              <td :title="file.name">{{ file.name }}</td>
+              <td><span class="file-name" :title="file.name" @click="showPreview(file)">{{ file.name }}</span></td>
               <td class="path-cell">{{ truncatePath(file.path) }}</td>
               <td>{{ file.sizeFormatted }}</td>
               <td>
@@ -51,12 +51,31 @@
         未找到匹配的文件
       </div>
     </div>
+
+    <div class="modal" v-if="previewFile" @click.self="previewFile = null">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h3 class="modal-title">{{ previewFile.name }}</h3>
+          <span class="modal-close" @click="previewFile = null">&times;</span>
+        </div>
+        <div class="preview-content">
+          <img v-if="previewType === 'image'" :src="streamUrl" class="preview-image">
+          <video v-else-if="previewType === 'video'" :src="streamUrl" controls class="preview-video"></video>
+          <audio v-else-if="previewType === 'audio'" :src="streamUrl" controls class="preview-audio"></audio>
+          <iframe v-else-if="previewType === 'pdf'" :src="streamUrl" class="preview-pdf"></iframe>
+          <div v-else class="preview-unknown">
+            <p>无法预览此文件类型</p>
+            <button class="btn btn-primary" @click="openLocation(previewFile)">打开文件位置</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, onMounted } from 'vue'
-import { getFiles, getCategories, openFile, getSearchHistory, clearSearchHistory } from '../api'
+import { getFiles, getCategories, openFile, getSearchHistory, clearSearchHistory, recordFilePreview, recordUserAction, getPreview, getStreamUrl } from '../api'
 
 export default {
   name: 'SearchView',
@@ -69,6 +88,10 @@ export default {
     const searched = ref(false)
     const history = ref([])
     const categories = ref([])
+    
+    const previewFile = ref(null)
+    const previewType = ref('')
+    const streamUrl = ref('')
 
     onMounted(async () => {
       await loadHistory()
@@ -79,7 +102,7 @@ export default {
       try {
         const res = await getSearchHistory()
         if (res.success) {
-          history.value = res.data
+          history.value = [...new Set(res.data)]
         }
       } catch (err) {
         console.error('获取历史失败:', err)
@@ -113,12 +136,29 @@ export default {
           results.value = res.data.files
           total.value = res.data.total
           loadHistory()
+          recordUserAction(0, 'search', { search_query: query.value }).catch(() => {})
         }
       } catch (err) {
         console.error('搜索失败:', err)
       }
       
       loading.value = false
+    }
+    
+    async function showPreview(file) {
+      previewFile.value = file
+      streamUrl.value = getStreamUrl(file.id)
+      previewType.value = ''
+      
+      try {
+        const res = await getPreview(file.id)
+        if (res.success) {
+          previewType.value = res.data.previewType
+          recordFilePreview(file.id).catch(() => {})
+        }
+      } catch (err) {
+        console.error('获取预览失败:', err)
+      }
     }
 
     async function openLocation(file) {
@@ -157,7 +197,8 @@ export default {
 
     return {
       query, category, results, total, loading, searched, history, categories,
-      doSearch, openLocation, clearHistory,
+      previewFile, previewType, streamUrl,
+      doSearch, openLocation, clearHistory, showPreview,
       truncatePath, getBadgeClass
     }
   }
@@ -206,6 +247,51 @@ export default {
 .no-results {
   text-align: center;
   padding: 48px;
+  color: var(--text-muted);
+}
+
+.file-name {
+  cursor: pointer;
+  color: var(--primary);
+}
+
+.file-name:hover {
+  text-decoration: underline;
+}
+
+.modal-large {
+  max-width: 800px;
+}
+
+.preview-content {
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 500px;
+}
+
+.preview-video {
+  max-width: 100%;
+  max-height: 400px;
+}
+
+.preview-audio {
+  width: 100%;
+}
+
+.preview-pdf {
+  width: 100%;
+  height: 400px;
+  border: none;
+}
+
+.preview-unknown {
+  text-align: center;
   color: var(--text-muted);
 }
 </style>

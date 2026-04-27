@@ -173,3 +173,37 @@ export function getFilesByTags(params) {
   const query = new URLSearchParams(params).toString()
   return request('/files/by-tags?' + query)
 }
+
+export function recordFileView(id, data = {}) {
+  return request('/files/' + id + '/view', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function recordFilePreview(id, data = {}) {
+  return request('/files/' + id + '/preview', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function recordUserAction(id, actionType, data = {}) {
+  return request('/files/' + id + '/action', { method: 'POST', body: JSON.stringify({ actionType, ...data }) })
+}
+
+export function getFileViews(params = {}) {
+  const query = new URLSearchParams(params).toString()
+  return request('/files/views?' + query)
+}
+
+export function getPreferences() {
+  return request('/preferences')
+}
+
+export function clearPreferencesData() {
+  return request('/preferences/clear', { method: 'DELETE' })
+}
+
+export function getRecommendations(params = {}) {
+  const query = new URLSearchParams(params).toString()
+  return request('/recommendations?' + query)
+}
+
+export function generateRecommendations() {
+  return request('/recommendations/generate', { method: 'POST' })
+}
