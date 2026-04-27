@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { storage } = require('./storage');
 const { database } = require('./database');
 const { logger } = require('./logger');
 
@@ -88,115 +87,6 @@ function scanDirectory(dir, excludePatterns = [], fileExtensionFilter = {}) {
   return results;
 }
 
-/**
- * 生成目录树结构的 markdown
- * @param {string} rootPath - 根路径
- * @param {string[]} excludePatterns - 排除模式
- * @returns {string} - markdown 格式字符串
- */
-function generateMarkdownTree(rootPath, excludePatterns = []) {
-  let output = `# NAS 文件索引\n\n`;
-  output += `扫描时间：${new Date().toLocaleString('zh-CN')}\n`;
-  output += `根路径：${rootPath}\n\n`;
-  output += `---\n\n`;
-  output += `## 目录结构\n\n\`\`\`\n`;
-
-  function buildTree(dir, prefix = '') {
-    let result = '';
-
-    try {
-      const items = fs.readdirSync(dir);
-      const filtered = items.filter(item =>
-        !excludePatterns.some(pattern => item.includes(pattern))
-      );
-
-      filtered.forEach((item, index) => {
-        const isLast = index === filtered.length - 1;
-        const icon = isLast ? '└── ' : '├── ';
-        const fullPath = path.join(dir, item);
-
-        result += `${prefix}${icon}${item}\n`;
-
-        try {
-          if (fs.statSync(fullPath).isDirectory()) {
-            result += buildTree(fullPath, prefix + (isLast ? '    ' : '│   '));
-          }
-        } catch (err) {
-          // 忽略无法访问的目录
-        }
-      });
-    } catch (err) {
-      // 忽略无法读取的目录
-    }
-
-    return result;
-  }
-
-  const pathName = path.basename(rootPath) || rootPath;
-  output += `${pathName}/\n`;
-  output += buildTree(rootPath, '│   ');
-  output += `\`\`\`\n\n`;
-
-  return output;
-}
-
-/**
- * 执行扫描并保存结果（使用 storage 模块）
- * @param {string[]} scanPaths - 要扫描的路径列表
- * @param {string} outputFile - 输出文件路径
- * @param {string[]} excludePatterns - 排除模式
- * @param {Object} fileExtensionFilter - 文件扩展名过滤配置
- * @param {string} configDir - 配置目录路径（可选）
- * @returns {Object} - 扫描结果
- */
-function performScan(scanPaths, outputFile, excludePatterns = [], fileExtensionFilter = {}, configDir = null) {
-  let fullPath;
-  
-  if (path.isAbsolute(outputFile)) {
-    fullPath = outputFile;
-  } else if (configDir) {
-    fullPath = path.join(configDir, outputFile);
-  } else {
-    const userHome = process.env.USERPROFILE || process.env.HOME;
-    fullPath = path.join(userHome, outputFile);
-  }
-
-  // 确保输出目录存在
-  const outputDir = path.dirname(fullPath);
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
-
-  logger.info('开始扫描，路径: %s', scanPaths.join(', '));
-
-  // 初始化 storage
-  storage.init(fullPath);
-
-  // 执行扫描，获取文件列表
-  const scanResults = [];
-  for (const scanPath of scanPaths) {
-    const files = scanDirectory(scanPath, excludePatterns, fileExtensionFilter);
-    scanResults.push({ path: scanPath, files });
-    logger.info('  %s: %d 个文件', scanPath, files.length);
-  }
-
-  // 使用 storage 模块更新数据（包含本地分类）
-  const resultData = storage.updateFromScan(scanResults);
-
-  logger.info('扫描完成，结果已保存到: %s', fullPath);
-  logger.info('  总文件数: %d', resultData.meta.totalFiles);
-  logger.info('  总大小: %s', resultData.meta.totalSize);
-
-  return {
-    success: true,
-    timestamp: new Date().toISOString(),
-    results: scanResults,
-    outputFile: fullPath,
-    totalFiles: resultData.meta.totalFiles,
-    totalSize: resultData.meta.totalSize
-  };
-}
-
 async function performScanWithDatabase(scanPaths, excludePatterns = [], fileExtensionFilter = {}) {
   if (!database.initialized) {
     await database.init();
@@ -250,8 +140,6 @@ function formatSize(bytes) {
 
 module.exports = {
   scanDirectory,
-  generateMarkdownTree,
-  performScan,
   performScanWithDatabase,
   shouldIncludeFile,
   formatSize
