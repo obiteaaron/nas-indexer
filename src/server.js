@@ -1035,17 +1035,13 @@ app.post('/api/recommendations/generate', async (req, res) => {
 
 // Static files - serve Vue frontend
 const frontendPath = path.join(PROJECT_ROOT, 'frontend', 'dist');
-if (fs.existsSync(frontendPath)) {
-  app.use(express.static(frontendPath));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api/')) {
-      return next();
-    }
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
-} else {
-  app.use(express.static(path.join(__dirname, '../public')));
-}
+app.use(express.static(frontendPath));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  res.sendFile(path.join(frontendPath, 'index.html'));
+});
 
 const server = app.listen(PORT, async () => {
   await initDatabase();
