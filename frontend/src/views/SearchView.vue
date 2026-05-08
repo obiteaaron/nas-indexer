@@ -46,6 +46,8 @@
             </tr>
           </tbody>
         </table>
+
+        <Pagination v-model="page" :totalPages="totalPages" />
       </div>
       <div v-else-if="searched" class="no-results">
         未找到匹配的文件
@@ -74,11 +76,13 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { getFiles, getCategories, openFile, getSearchHistory, clearSearchHistory, recordFilePreview, recordUserAction, getPreview, getStreamUrl } from '../api'
+import Pagination from '../components/Pagination.vue'
 
 export default {
   name: 'SearchView',
+  components: { Pagination },
   setup() {
     const query = ref('')
     const category = ref('')
@@ -88,6 +92,10 @@ export default {
     const searched = ref(false)
     const history = ref([])
     const categories = ref([])
+    
+    const page = ref(1)
+    const pageSize = ref(100)
+    const totalPages = ref(0)
     
     const previewFile = ref(null)
     const previewType = ref('')
@@ -125,16 +133,19 @@ export default {
       
       loading.value = true
       searched.value = true
+      page.value = 1
       
       try {
         const res = await getFiles({
           search: query.value,
           category: category.value,
-          pageSize: 100
+          page: page.value,
+          pageSize: pageSize.value
         })
         if (res.success) {
           results.value = res.data.files
           total.value = res.data.total
+          totalPages.value = res.data.totalPages
           loadHistory()
           recordUserAction(0, 'search', { search_query: query.value }).catch(() => {})
         }
@@ -144,6 +155,36 @@ export default {
       
       loading.value = false
     }
+
+    async function loadSearchResults() {
+      if (!query.value.trim()) return
+      
+      loading.value = true
+      
+      try {
+        const res = await getFiles({
+          search: query.value,
+          category: category.value,
+          page: page.value,
+          pageSize: pageSize.value
+        })
+        if (res.success) {
+          results.value = res.data.files
+          total.value = res.data.total
+          totalPages.value = res.data.totalPages
+        }
+      } catch (err) {
+        console.error('搜索失败:', err)
+      }
+      
+      loading.value = false
+    }
+
+    watch(page, () => {
+      if (searched.value) {
+        loadSearchResults()
+      }
+    })
     
     async function showPreview(file) {
       previewFile.value = file
@@ -197,6 +238,7 @@ export default {
 
     return {
       query, category, results, total, loading, searched, history, categories,
+      page, pageSize, totalPages,
       previewFile, previewType, streamUrl,
       doSearch, openLocation, clearHistory, showPreview,
       truncatePath, getBadgeClass
@@ -248,6 +290,10 @@ export default {
   text-align: center;
   padding: 48px;
   color: var(--text-muted);
+}
+
+.pagination {
+  margin-top: 16px;
 }
 
 .file-name {

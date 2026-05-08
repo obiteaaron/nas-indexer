@@ -2,21 +2,21 @@
   <div class="files">
     <div class="card">
       <div class="toolbar">
-        <select class="select" v-model="category" @change="loadFiles">
+        <select class="select" v-model="category" @change="resetAndLoad">
           <option value="">全部分类</option>
           <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
         </select>
-        <select class="select" v-model="orderBy" @change="loadFiles">
+        <select class="select" v-model="orderBy" @change="resetAndLoad">
           <option value="name">按名称</option>
           <option value="size">按大小</option>
           <option value="modified_at">按时间</option>
         </select>
-        <select class="select" v-model="orderDir" @change="loadFiles">
+        <select class="select" v-model="orderDir" @change="resetAndLoad">
           <option value="ASC">升序</option>
           <option value="DESC">降序</option>
         </select>
-        <input class="input" v-model="search" placeholder="搜索文件..." @keyup.enter="loadFiles" style="width: 200px">
-        <button class="btn btn-secondary btn-small" @click="loadFiles">搜索</button>
+        <input class="input" v-model="search" placeholder="搜索文件..." @keyup.enter="resetAndLoad" style="width: 200px">
+        <button class="btn btn-secondary btn-small" @click="resetAndLoad">搜索</button>
         <div class="tag-filter">
           <button class="btn btn-secondary btn-small" @click="showTagFilter">
             {{ filterTagIds.length > 0 ? '标签过滤 (' + filterTagIds.length + ')' : '标签过滤' }}
@@ -99,11 +99,7 @@
           </tbody>
         </table>
 
-        <div class="pagination" v-if="totalPages > 1">
-          <button class="btn btn-secondary" @click="prevPage" :disabled="page <= 1">上一页</button>
-          <span>{{ page }} / {{ totalPages }}</span>
-          <button class="btn btn-secondary" @click="nextPage" :disabled="page >= totalPages">下一页</button>
-        </div>
+        <Pagination v-model="page" :totalPages="totalPages" />
       </div>
     </div>
 
@@ -151,6 +147,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import TagBadge from '../components/TagBadge.vue'
 import TagSelector from '../components/TagSelector.vue'
 import FilePreview from '../components/FilePreview.vue'
+import Pagination from '../components/Pagination.vue'
 import { 
   getFiles, getCategories, openFile, renameFile as apiRename, deleteFile, 
   addFavorite, removeFavorite,
@@ -160,7 +157,7 @@ import {
 
 export default {
   name: 'FileListView',
-  components: { TagBadge, TagSelector, FilePreview },
+  components: { TagBadge, TagSelector, FilePreview, Pagination },
   setup() {
     const files = ref([])
     const categories = ref([])
@@ -197,6 +194,10 @@ export default {
     const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
     const isAllSelected = computed(() => {
       return files.value.length > 0 && selectedFiles.value.length === files.value.length
+    })
+
+    watch(page, () => {
+      loadFiles()
     })
 
     onMounted(async () => {
@@ -323,25 +324,16 @@ export default {
       loadFiles()
     }
 
+    function resetAndLoad() {
+      page.value = 1
+      loadFiles()
+    }
+
     function removeFilterTag(tagId) {
       const index = filterTagIds.value.indexOf(tagId)
       if (index > -1) {
         filterTagIds.value.splice(index, 1)
         page.value = 1
-        loadFiles()
-      }
-    }
-
-    function prevPage() {
-      if (page.value > 1) {
-        page.value--
-        loadFiles()
-      }
-    }
-
-    function nextPage() {
-      if (page.value < totalPages.value) {
-        page.value++
         loadFiles()
       }
     }
@@ -472,7 +464,7 @@ export default {
       tagSelectorVisible, currentFileTags, currentEditingFile,
       batchTaggerVisible, batchSelectedTagIds,
       tagFilterVisible, filterTagIds, allTags, filterTags,
-      loadFiles, prevPage, nextPage,
+      loadFiles, resetAndLoad,
       openLocation, showPreview, showRename, doRename,
       toggleFavorite, confirmDelete,
       toggleSelectAll, toggleSelect, showBatchTagger, handleBatchTagConfirm,
