@@ -13,6 +13,7 @@
         </nav>
       </div>
       <div class="header-right">
+        <TaskBar :tasks="tasks" />
         <span class="status" v-if="status">{{ status.totalFiles }} 个文件 | {{ status.totalSize }}</span>
       </div>
     </header>
@@ -23,15 +24,19 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
-import { getStatus } from './api'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { getStatus, getTaskStreamUrl } from './api'
+import TaskBar from './components/TaskBar.vue'
 
 export default {
   name: 'App',
+  components: { TaskBar },
   setup() {
     const status = ref(null)
+    const tasks = ref([])
+    let eventSource = null
 
-    onMounted(async () => {
+    async function loadStatus() {
       try {
         const res = await getStatus()
         if (res.success) {
@@ -40,9 +45,44 @@ export default {
       } catch (err) {
         console.error('获取状态失败:', err)
       }
+    }
+
+    function connectSSE() {
+      if (eventSource) {
+        eventSource.close()
+      }
+
+      eventSource = new EventSource(getTaskStreamUrl())
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (data.type === 'tasks-update') {
+            tasks.value = data.tasks
+          }
+        } catch (err) {
+          console.error('解析 SSE 数据失败:', err)
+        }
+      }
+
+      eventSource.onerror = () => {
+        console.warn('SSE 连接断开，将自动重连')
+      }
+    }
+
+    onMounted(() => {
+      loadStatus()
+      connectSSE()
     })
 
-    return { status }
+    onUnmounted(() => {
+      if (eventSource) {
+        eventSource.close()
+        eventSource = null
+      }
+    })
+
+    return { status, tasks }
   }
 }
 </script>

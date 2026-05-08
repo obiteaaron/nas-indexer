@@ -10,11 +10,11 @@
         </p>
         <div class="path-list">
           <div class="path-item" v-for="(p, i) in config.scanPaths" :key="i">
-            <input class="input" v-model="config.scanPaths[i]" :disabled="pathScanning === i">
-            <button class="btn btn-primary btn-small" @click="scanPath(i)" :disabled="pathScanning === i || !config.scanPaths[i]">
-              {{ pathScanning === i ? '扫描中...' : '扫描' }}
+            <input class="input" v-model="config.scanPaths[i]">
+            <button class="btn btn-primary btn-small" @click="scanPath(i)" :disabled="!config.scanPaths[i]">
+              扫描
             </button>
-            <button class="btn btn-danger btn-small" @click="removePath(i)" :disabled="pathScanning === i">删除</button>
+            <button class="btn btn-danger btn-small" @click="removePath(i)">删除</button>
           </div>
           <button class="btn btn-secondary btn-small" @click="addPath">添加路径</button>
         </div>
@@ -161,7 +161,6 @@ export default {
     })
     const status = ref(null)
     const saving = ref(false)
-    const pathScanning = ref(-1)
     
     const localCategoryRules = reactive({})
     const localCategoryPathRules = ref([])
@@ -232,19 +231,14 @@ export default {
       const path = config.value.scanPaths[index]
       if (!path) return
       
-      pathScanning.value = index
       try {
         const res = await scanSinglePath(path)
-        if (res.success) {
-          alert('扫描完成：' + res.data.fileCount + ' 个文件')
-          loadStatus()
-        } else {
-          alert('扫描失败：' + res.error)
+        if (!res.success) {
+          alert('启动扫描失败：' + res.error)
         }
       } catch (err) {
-        alert('扫描失败：' + err.message)
+        alert('启动扫描失败：' + err.message)
       }
-      pathScanning.value = -1
     }
 
     async function save() {
@@ -348,7 +342,7 @@ export default {
     }
 
     return {
-      config, status, saving, pathScanning,
+      config, status, saving,
       excludePatternsStr, whitelistStr, blacklistStr,
       addPath, removePath, scanPath, save, reset,
       localCategoryRules, localCategoryPathRules, newExtensions, newCategoryName, categories,

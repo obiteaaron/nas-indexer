@@ -207,3 +207,11 @@ export function getRecommendations(params = {}) {
 export function generateRecommendations() {
   return request('/recommendations/generate', { method: 'POST' })
 }
+
+export function getTasks() {
+  return request('/tasks')
+}
+
+export function getTaskStreamUrl() {
+  return API_BASE + '/tasks/stream'
+}

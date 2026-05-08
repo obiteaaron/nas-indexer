@@ -22,8 +22,8 @@
       <div class="quick-actions">
         <router-link to="/files" class="btn btn-primary">查看文件</router-link>
         <router-link to="/search" class="btn btn-secondary">搜索文件</router-link>
-        <button class="btn btn-primary" @click="showScanConfirm = true" :disabled="scanning">
-          {{ scanning ? '扫描中...' : '立即扫描全部' }}
+        <button class="btn btn-primary" @click="showScanConfirm = true">
+          立即扫描全部
         </button>
       </div>
       <p class="scan-tip">
@@ -102,7 +102,6 @@ export default {
   components: { FilePreview },
   setup() {
     const stats = ref(null)
-    const scanning = ref(false)
     const showScanConfirm = ref(false)
     const preferences = ref(null)
     const recommendations = ref([])
@@ -182,22 +181,17 @@ export default {
 
     async function confirmScan() {
       showScanConfirm.value = false
-      scanning.value = true
       try {
         const res = await scanFiles()
-        if (res.success) {
-          alert('扫描完成：' + res.data.totalFiles + ' 个文件')
-          loadStats()
-        } else {
-          alert('扫描失败：' + res.error)
+        if (!res.success) {
+          alert('启动扫描失败：' + res.error)
         }
       } catch (err) {
-        alert('扫描失败：' + err.message)
+        alert('启动扫描失败：' + err.message)
       }
-      scanning.value = false
     }
 
-    return { stats, scanning, showScanConfirm, confirmScan, preferences, recommendations, previewFile, getCategoryIcon, viewFile, refreshRecommendations }
+    return { stats, showScanConfirm, confirmScan, preferences, recommendations, previewFile, getCategoryIcon, viewFile, refreshRecommendations }
   }
 }
 </script>

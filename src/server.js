@@ -8,6 +8,7 @@ const { database } = require('./database');
 const { fileOps } = require('./file-ops');
 const { streamFile, serveImage, servePdf, getPreviewType } = require('./stream');
 const { logger } = require('./logger');
+const { taskManager } = require('./task-manager');
 const trackingRouter = require('./routes/tracking');
 
 const app = express();
@@ -162,7 +163,7 @@ function scheduleScan(config) {
   }
 }
 
-async function runScan(config) {
+async function runScan(config, onProgress = null) {
   try {
     ensureStorageDir(config);
     
@@ -178,7 +179,8 @@ async function runScan(config) {
     const result = await performScanWithDatabase(
       config.scanPaths,
       config.excludePatterns || [],
-      config.fileExtensionFilter || { whitelist: [], blacklist: [] }
+      config.fileExtensionFilter || { whitelist: [], blacklist: [] },
+      onProgress
     );
 
     return result;
@@ -242,17 +244,32 @@ app.post('/api/scan', async (req, res) => {
       return res.status(400).json({ success: false, error: '请先配置扫描路径' });
     }
 
-    const result = await runScan(config);
+    if (taskManager.hasRunningTask('scan')) {
+      return res.status(409).json({ success: false, error: '已有扫描任务正在执行' });
+    }
 
-    res.json({
-      success: true,
-      message: '扫描完成',
-      data: {
-        scannedPaths: result.results.map(r => ({ path: r.path, fileCount: r.fileCount || 0 })),
-        totalFiles: result.totalFiles,
-        totalSize: formatSize(result.totalSize)
+    const task = taskManager.createTask('scan');
+    res.json({ success: true, taskId: task.id });
+
+    // 异步执行扫描
+    (async () => {
+      try {
+        const result = await runScan(config, (progress) => {
+          taskManager.updateTask(task.id, {
+            progress: progress.progress || 0,
+            message: progress.message,
+            currentPath: progress.path
+          });
+        });
+
+        taskManager.completeTask(task.id, {
+          totalFiles: result.totalFiles,
+          totalSize: formatSize(result.totalSize)
+        });
+      } catch (err) {
+        taskManager.failTask(task.id, err.message);
       }
-    });
+    })();
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -285,32 +302,60 @@ app.post('/api/scan/path', async (req, res) => {
       if (config.categoryPathRules) {
         database.setCategoryPathRules(config.categoryPathRules);
       }
-      
-      try {
-        const result = await performScanWithDatabase(
-          [scanPath],
-          config.excludePatterns || [],
-          config.fileExtensionFilter || { whitelist: [], blacklist: [] }
-        );
 
-        res.json({
-          success: true,
-          message: '扫描完成',
-          data: {
-            scannedPath: scanPath,
-            fileCount: result.results[0]?.fileCount || 0,
+      const task = taskManager.createTask('scan-path');
+      res.json({ success: true, taskId: task.id });
+      
+      // 异步执行扫描
+      (async () => {
+        try {
+          const result = await performScanWithDatabase(
+            [scanPath],
+            config.excludePatterns || [],
+            config.fileExtensionFilter || { whitelist: [], blacklist: [] },
+            (progress) => {
+              taskManager.updateTask(task.id, {
+                progress: progress.progress || 0,
+                message: progress.message,
+                currentPath: progress.path
+              });
+            }
+          );
+
+          taskManager.completeTask(task.id, {
             totalFiles: result.totalFiles,
             totalSize: formatSize(result.totalSize)
-          }
-        });
-      } finally {
-        scanningPaths.delete(scanPath);
-      }
+          });
+        } catch (err) {
+          taskManager.failTask(task.id, err.message);
+        } finally {
+          scanningPaths.delete(scanPath);
+        }
+      })();
     } catch (err) {
       scanningPaths.delete(req.body.path);
       res.status(500).json({ success: false, error: err.message });
     }
   });
+
+app.get('/api/tasks', (req, res) => {
+  res.json({ success: true, tasks: taskManager.getActiveTasks() });
+});
+
+app.get('/api/tasks/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  // 立即发送当前任务状态
+  res.write(`data: ${JSON.stringify({ type: 'tasks-update', tasks: taskManager.getActiveTasks() })}\n\n`);
+
+  taskManager.addClient(res);
+  req.on('close', () => {
+    taskManager.removeClient(res);
+  });
+});
 
 app.get('/api/statistics', async (req, res) => {
   await initDatabase();
