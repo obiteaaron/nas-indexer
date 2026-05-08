@@ -109,11 +109,11 @@ export function getCategories() {
 }
 
 export function getSearchHistory() {
-  return request('/search/history')
+  return request('/tracking/search-history')
 }
 
 export function clearSearchHistory() {
-  return request('/search/history', { method: 'DELETE' })
+  return request('/tracking/search-history', { method: 'DELETE' })
 }
 
 export function getTagGroups() {
@@ -174,21 +174,21 @@ export function getFilesByTags(params) {
   return request('/files/by-tags?' + query)
 }
 
-export function recordFileView(id, data = {}) {
-  return request('/files/' + id + '/view', { method: 'POST', body: JSON.stringify(data) })
+export function recordFileView(fileId, data = {}) {
+  return request('/tracking/view', { method: 'POST', body: JSON.stringify({ fileId, ...data }) })
 }
 
-export function recordFilePreview(id, data = {}) {
-  return request('/files/' + id + '/preview', { method: 'POST', body: JSON.stringify(data) })
+export function recordFilePreview(fileId, data = {}) {
+  return request('/tracking/preview', { method: 'POST', body: JSON.stringify({ fileId, ...data }) })
 }
 
-export function recordUserAction(id, actionType, data = {}) {
-  return request('/files/' + id + '/action', { method: 'POST', body: JSON.stringify({ actionType, ...data }) })
+export function recordUserAction(fileId, actionType, data = {}) {
+  return request('/tracking/action', { method: 'POST', body: JSON.stringify({ fileId, actionType, ...data }) })
 }
 
 export function getFileViews(params = {}) {
   const query = new URLSearchParams(params).toString()
-  return request('/files/views?' + query)
+  return request('/tracking/views?' + query)
 }
 
 export function getPreferences() {

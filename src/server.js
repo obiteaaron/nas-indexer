@@ -8,6 +8,7 @@ const { database } = require('./database');
 const { fileOps } = require('./file-ops');
 const { streamFile, serveImage, servePdf, getPreviewType } = require('./stream');
 const { logger } = require('./logger');
+const trackingRouter = require('./routes/tracking');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -664,27 +665,8 @@ app.get('/api/stream/:id', async (req, res) => {
   }
 });
 
-// Search History API
-
-app.get('/api/search/history', async (req, res) => {
-  await initDatabase();
-  try {
-    const history = database.getSearchHistory(10);
-    res.json({ success: true, data: history });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.delete('/api/search/history', async (req, res) => {
-  await initDatabase();
-  try {
-    database.clearSearchHistory();
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
+// Tracking API
+app.use('/api/tracking', trackingRouter);
 
 // Categories API
 
@@ -899,76 +881,6 @@ app.post('/api/files/batch/tags', async (req, res) => {
       return res.status(400).json({ success: false, error: '无效的操作类型' });
     }
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// 行为追踪 API
-
-app.post('/api/files/:id/view', async (req, res) => {
-  await initDatabase();
-  try {
-    const fileId = parseInt(req.params.id);
-    const file = database.getFileById(fileId);
-    if (!file) {
-      return res.status(404).json({ success: false, error: '文件不存在' });
-    }
-    const { playDuration } = req.body;
-    database.recordFileView(fileId, playDuration || 0);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.post('/api/files/:id/preview', async (req, res) => {
-  await initDatabase();
-  try {
-    const fileId = parseInt(req.params.id);
-    const file = database.getFileById(fileId);
-    if (!file) {
-      return res.status(404).json({ success: false, error: '文件不存在' });
-    }
-    const { playDuration } = req.body;
-    database.recordFilePreview(fileId, playDuration || 0);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.post('/api/files/:id/action', async (req, res) => {
-  await initDatabase();
-  try {
-    const fileId = parseInt(req.params.id);
-    const { actionType, tagId, ...extraData } = req.body;
-    if (!actionType) {
-      return res.status(400).json({ success: false, error: '请提供操作类型' });
-    }
-    if (actionType !== 'search') {
-      const file = database.getFileById(fileId);
-      if (!file) {
-        return res.status(404).json({ success: false, error: '文件不存在' });
-      }
-    }
-    database.recordUserAction(actionType, { file_id: fileId || null, tag_id: tagId, ...extraData });
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.get('/api/files/views', async (req, res) => {
-  await initDatabase();
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const views = database.getFileViews(limit);
-    const formatted = views.map(v => ({
-      ...v,
-      sizeFormatted: formatSize(v.size || 0)
-    }));
-    res.json({ success: true, data: formatted });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
