@@ -59,7 +59,7 @@
     <div class="card" v-if="recommendations.length">
       <h3 class="section-title">为你推荐</h3>
       <div class="recommendations-grid">
-        <div class="rec-item" v-for="rec in recommendations" :key="rec.id" @click="viewFile(rec.file_id)">
+        <div class="rec-item" v-for="rec in recommendations" :key="rec.id" @click="viewFile(rec)">
           <div class="rec-icon" :class="'cat-' + (rec.category || '其他')">{{ getCategoryIcon(rec.category) }}</div>
           <div class="rec-info">
             <div class="rec-name" :title="rec.name">{{ rec.name }}</div>
@@ -72,20 +72,25 @@
         生成推荐
       </button>
     </div>
+
+    <FilePreview :visible="!!previewFile" :file="previewFile" @close="previewFile = null" />
   </div>
 </template>
 
 <script>
 import { ref, onMounted } from 'vue'
-import { getStatistics, scanFiles, getPreferences, getRecommendations, generateRecommendations } from '../api'
+import FilePreview from '../components/FilePreview.vue'
+import { getStatistics, scanFiles, getPreferences, getRecommendations, generateRecommendations, getFile } from '../api'
 
 export default {
   name: 'HomeView',
+  components: { FilePreview },
   setup() {
     const stats = ref(null)
     const scanning = ref(false)
     const preferences = ref(null)
     const recommendations = ref([])
+    const previewFile = ref(null)
 
     onMounted(async () => {
       loadStats()
@@ -148,8 +153,15 @@ export default {
       return icons[category] || '📦'
     }
 
-    function viewFile(fileId) {
-      window.location.hash = '/files'
+    async function viewFile(rec) {
+      try {
+        const res = await getFile(rec.file_id)
+        if (res.success) {
+          previewFile.value = res.data
+        }
+      } catch (err) {
+        console.error('获取文件详情失败:', err)
+      }
     }
 
     async function startScan() {
@@ -168,7 +180,7 @@ export default {
       scanning.value = false
     }
 
-    return { stats, scanning, startScan, preferences, recommendations, getCategoryIcon, viewFile, refreshRecommendations }
+    return { stats, scanning, startScan, preferences, recommendations, previewFile, getCategoryIcon, viewFile, refreshRecommendations }
   }
 }
 </script>

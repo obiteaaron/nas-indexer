@@ -128,24 +128,7 @@
       @confirm="handleTagFilterConfirm"
     />
 
-    <div class="modal" v-if="previewFile" @click.self="previewFile = null">
-      <div class="modal-content modal-large">
-        <div class="modal-header">
-          <h3 class="modal-title">{{ previewFile.name }}</h3>
-          <span class="modal-close" @click="previewFile = null">&times;</span>
-        </div>
-        <div class="preview-content">
-          <img v-if="previewType === 'image'" :src="streamUrl" class="preview-image">
-          <video v-else-if="previewType === 'video'" :src="streamUrl" controls class="preview-video"></video>
-          <audio v-else-if="previewType === 'audio'" :src="streamUrl" controls class="preview-audio"></audio>
-          <iframe v-else-if="previewType === 'pdf'" :src="streamUrl" class="preview-pdf"></iframe>
-          <div v-else class="preview-unknown">
-            <p>无法预览此文件类型</p>
-            <button class="btn btn-primary" @click="openLocation(previewFile)">打开文件位置</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <FilePreview :visible="!!previewFile" :file="previewFile" @close="previewFile = null" />
 
     <div class="modal" v-if="renameFile" @click.self="renameFile = null">
       <div class="modal-content">
@@ -167,16 +150,17 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import TagBadge from '../components/TagBadge.vue'
 import TagSelector from '../components/TagSelector.vue'
+import FilePreview from '../components/FilePreview.vue'
 import { 
   getFiles, getCategories, openFile, renameFile as apiRename, deleteFile, 
-  addFavorite, removeFavorite, getPreview, getStreamUrl,
+  addFavorite, removeFavorite,
   getFileTags, addFileTag, removeFileTag, batchFileTags,
-  getFilesByTags, getTags, recordFilePreview
+  getFilesByTags, getTags
 } from '../api'
 
 export default {
   name: 'FileListView',
-  components: { TagBadge, TagSelector },
+  components: { TagBadge, TagSelector, FilePreview },
   setup() {
     const files = ref([])
     const categories = ref([])
@@ -193,9 +177,6 @@ export default {
     const selectedFiles = ref([])
 
     const previewFile = ref(null)
-    const previewType = ref('')
-    const streamUrl = ref('')
-    
     const renameFile = ref(null)
     const newName = ref('')
 
@@ -373,20 +354,8 @@ export default {
       }
     }
 
-    async function showPreview(file) {
+    function showPreview(file) {
       previewFile.value = file
-      streamUrl.value = getStreamUrl(file.id)
-      previewType.value = ''
-      
-      try {
-        const res = await getPreview(file.id)
-        if (res.success) {
-          previewType.value = res.data.previewType
-          recordFilePreview(file.id).catch(() => {})
-        }
-      } catch (err) {
-        console.error('获取预览失败:', err)
-      }
     }
 
     function showRename(file) {
@@ -497,7 +466,7 @@ export default {
     return {
       files, categories, loading, error,
       category, search, orderBy, orderDir, page, pageSize, total, totalPages,
-      previewFile, previewType, streamUrl,
+      previewFile,
       renameFile, newName,
       fileTags, selectedFiles, isAllSelected,
       tagSelectorVisible, currentFileTags, currentEditingFile,
@@ -549,42 +518,6 @@ export default {
 
 tr.selected {
   background-color: var(--primary-light, #e8f4f8);
-}
-
-.modal-large {
-  max-width: 800px;
-}
-
-.preview-content {
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.preview-image {
-  max-width: 100%;
-  max-height: 500px;
-}
-
-.preview-video {
-  max-width: 100%;
-  max-height: 400px;
-}
-
-.preview-audio {
-  width: 100%;
-}
-
-.preview-pdf {
-  width: 100%;
-  height: 400px;
-  border: none;
-}
-
-.preview-unknown {
-  text-align: center;
-  color: var(--text-muted);
 }
 
 .tag-filter {
