@@ -22,7 +22,7 @@
       <div class="quick-actions">
         <router-link to="/files" class="btn btn-primary">查看文件</router-link>
         <router-link to="/search" class="btn btn-secondary">搜索文件</router-link>
-        <button class="btn btn-primary" @click="startScan" :disabled="scanning">
+        <button class="btn btn-primary" @click="showScanConfirm = true" :disabled="scanning">
           {{ scanning ? '扫描中...' : '立即扫描全部' }}
         </button>
       </div>
@@ -74,6 +74,21 @@
     </div>
 
     <FilePreview :visible="!!previewFile" :file="previewFile" @close="previewFile = null" />
+
+    <div class="modal" v-if="showScanConfirm" @click.self="showScanConfirm = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 class="modal-title">确认全部扫描</h3>
+          <span class="modal-close" @click="showScanConfirm = false">&times;</span>
+        </div>
+        <p class="scan-confirm-tip">全部扫描将遍历所有配置目录，耗时较长。</p>
+        <p class="scan-confirm-tip">如果只是单个目录有更新，建议前往<span class="scan-confirm-link" @click="$router.push('/settings'); showScanConfirm = false">设置页面</span>对该目录单独扫描。</p>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="showScanConfirm = false">取消</button>
+          <button class="btn btn-primary" @click="confirmScan">确认扫描</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -88,6 +103,7 @@ export default {
   setup() {
     const stats = ref(null)
     const scanning = ref(false)
+    const showScanConfirm = ref(false)
     const preferences = ref(null)
     const recommendations = ref([])
     const previewFile = ref(null)
@@ -164,7 +180,8 @@ export default {
       }
     }
 
-    async function startScan() {
+    async function confirmScan() {
+      showScanConfirm.value = false
       scanning.value = true
       try {
         const res = await scanFiles()
@@ -180,7 +197,7 @@ export default {
       scanning.value = false
     }
 
-    return { stats, scanning, startScan, preferences, recommendations, previewFile, getCategoryIcon, viewFile, refreshRecommendations }
+    return { stats, scanning, showScanConfirm, confirmScan, preferences, recommendations, previewFile, getCategoryIcon, viewFile, refreshRecommendations }
   }
 }
 </script>
@@ -339,5 +356,22 @@ export default {
 .rec-meta {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.scan-confirm-tip {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.scan-confirm-link {
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.scan-confirm-link:hover {
+  opacity: 0.8;
 }
 </style>
