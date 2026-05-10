@@ -2,7 +2,7 @@
 
 一个完整的 NAS 文件管理系统，支持文件索引、查询、预览和基础文件操作。基于 Vue 3 + SQLite 构建现代化 Web 界面。
 
-**版本: v1.0.6**
+**版本: v1.1.0**
 
 ## 功能特点
 
@@ -89,6 +89,73 @@ npm start
 | 标签管理 | 创建/编辑标签分组和标签 |
 | 设置 | 扫描配置、定时任务 |
 
+## 开发指南
+
+### 开发命令
+
+```bash
+# 启动开发服务（前端热更新 + 后端）
+npm run dev
+
+# 代码检查
+npm run lint
+
+# 自动修复代码风格
+npm run lint:fix
+
+# 格式化代码
+npm run format
+
+# 运行测试
+npm test
+```
+
+### 项目结构
+
+```
+nas-indexer/
+├── src/                    # 后端源码
+│   ├── server.js           # Express 服务入口
+│   ├── database.js         # SQLite 数据库层
+│   ├── scanner.js          # 文件扫描引擎
+│   ├── file-ops.js         # 文件操作模块
+│   ├── stream.js           # 文件流式传输
+│   ├── task-manager.js     # 异步任务管理
+│   ├── logger.js           # 日志系统
+│   ├── utils.js            # 公共工具函数
+│   └── routes/             # API 路由模块
+│       ├── config.js       # 配置管理
+│       ├── scan.js         # 扫描任务
+│       ├── files.js        # 文件操作
+│       ├── tags.js         # 标签管理
+│       ├── preview.js      # 文件预览
+│       ├── stats.js        # 统计信息
+│       ├── recommendations.js # 推荐系统
+│       └── tracking.js     # 行为追踪
+├── frontend/               # Vue 3 前端
+│   ├── src/
+│   │   ├── views/          # 页面组件
+│   │   ├── components/     # 公共组件
+│   │   ├── api/            # API 封装
+│   │   └── router/         # 路由配置
+│   └── dist/               # 构建产物
+├── tests/                  # 测试文件
+├── profiles/               # 运行时数据（gitignore）
+├── config.default.json     # 默认配置模板
+├── roadmap.md              # 项目路线图
+└── todo-list.md            # 功能待办清单
+```
+
+### 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 后端 | Node.js + Express |
+| 数据库 | SQLite (sql.js) |
+| 前端 | Vue 3 + Vite |
+| 日志 | Pino |
+| 测试 | Jest |
+| 代码规范 | ESLint + Prettier |
 
 ## 注意事项
 
@@ -96,3 +163,7 @@ npm start
 - NAS 凭据需在 Windows 系统中预先配置，本应用不管理 NAS 登录认证
 - 文件操作需要确保目标路径可访问
 - 大文件扫描可能耗时，建议使用定时扫描
+
+## 更新日志
+
+详见 [todo-list.md](./todo-list.md)

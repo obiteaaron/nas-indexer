@@ -5,7 +5,7 @@ const path = require('path');
 if (process.platform === 'win32') {
   try {
     execSync('chcp 65001', { stdio: 'ignore' });
-  } catch (e) {}
+  } catch (_e) { /* ignore */ }
 }
 
 // 构建前端

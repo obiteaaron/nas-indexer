@@ -1,11 +1,16 @@
 {
   "name": "nas-indexer",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "NAS 文件索引工具 - 扫描目录生成 Markdown 知识库",
   "main": "src/server.js",
   "scripts": {
     "start": "node scripts/start.js",
-    "dev": "node scripts/start.js"
+    "dev": "node scripts/start.js",
+    "lint": "eslint src/ scripts/ --ext .js",
+    "lint:fix": "eslint src/ scripts/ --ext .js --fix",
+    "format": "prettier --write \"src/**/*.js\" \"scripts/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.js\" \"scripts/**/*.js\"",
+    "test": "jest"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -21,5 +26,10 @@
     "markdown"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.2.0"
+  }
 }

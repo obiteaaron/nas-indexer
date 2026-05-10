@@ -165,12 +165,12 @@ class Database {
       )
     `);
 
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_files_path ON files(path)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_files_category ON files(category)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_files_name ON files(name)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_file_tags_file ON file_tags(file_id)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_id)`);
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_files_path ON files(path)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_files_category ON files(category)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_files_name ON files(name)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_file_tags_file ON file_tags(file_id)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_id)');
 
     // 用户行为追踪表
     this.db.run(`
@@ -222,11 +222,11 @@ class Database {
       )
     `);
 
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_file_views_file ON ai_file_views(file_id)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_user_actions_type ON ai_user_actions(action_type)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_user_actions_created ON ai_user_actions(created_at)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_recommendations_type ON ai_recommendations(rec_type)`);
-    this.db.run(`CREATE INDEX IF NOT EXISTS idx_ai_recommendations_file ON ai_recommendations(file_id)`);
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_file_views_file ON ai_file_views(file_id)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_user_actions_type ON ai_user_actions(action_type)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_user_actions_created ON ai_user_actions(created_at)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_recommendations_type ON ai_recommendations(rec_type)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_recommendations_file ON ai_recommendations(file_id)');
 
     this.save();
   }
@@ -385,7 +385,6 @@ class Database {
 
     if (result.length === 0) return [];
 
-    const columns = result[0].columns;
     return result[0].values.map(row => ({
       category: row[0],
       count: row[1],
@@ -902,7 +901,6 @@ class Database {
     const result = this.db.exec(sql);
     const keywordScores = [];
     if (result.length > 0) {
-      const columns = result[0].columns;
       const maxCount = result[0].values.length > 0 ? result[0].values[0][1] : 1;
       for (const row of result[0].values) {
         keywordScores.push({
@@ -1027,7 +1025,7 @@ class Database {
           const score = 0.7;
           this.db.run(
             'INSERT INTO ai_recommendations (rec_type, file_id, score, reason, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
-            ['tag_based', fileId, score, `基于你的标签偏好`, now, expiresAt]
+            ['tag_based', fileId, score, '基于你的标签偏好', now, expiresAt]
           );
         }
       }
