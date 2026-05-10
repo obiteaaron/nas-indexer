@@ -91,6 +91,12 @@ body {
   background: rgba(59, 130, 246, 0.1);
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .header-right .status {
   color: var(--text-muted);
   font-size: 14px;
