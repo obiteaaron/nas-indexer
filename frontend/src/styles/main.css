@@ -3,11 +3,27 @@
   --primary-dark: #2563eb;
   --bg: #f8fafc;
   --bg-card: #ffffff;
+  --bg-secondary: #f1f5f9;
   --text: #1e293b;
   --text-muted: #64748b;
   --border: #e2e8f0;
   --danger: #ef4444;
   --success: #22c55e;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+  --primary: #60a5fa;
+  --primary-dark: #3b82f6;
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-secondary: #334155;
+  --text: #f1f5f9;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --danger: #f87171;
+  --success: #4ade80;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 * {

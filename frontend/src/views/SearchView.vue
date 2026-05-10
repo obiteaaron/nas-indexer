@@ -17,6 +17,42 @@
           <option value="">全部分类</option>
           <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
         </select>
+        <button class="btn btn-secondary btn-small" @click="showAdvanced = !showAdvanced">
+          {{ showAdvanced ? '收起筛选' : '高级筛选' }}
+        </button>
+      </div>
+
+      <div class="advanced-filters" v-if="showAdvanced">
+        <div class="filter-group">
+          <label>文件大小</label>
+          <div class="filter-row">
+            <input class="input" v-model="minSize" placeholder="最小 (字节)" type="number">
+            <span class="filter-sep">-</span>
+            <input class="input" v-model="maxSize" placeholder="最大 (字节)" type="number">
+          </div>
+          <div class="size-presets">
+            <button class="btn btn-secondary btn-small" @click="minSize = 1048576; maxSize = ''">> 1MB</button>
+            <button class="btn btn-secondary btn-small" @click="minSize = 10485760; maxSize = ''">> 10MB</button>
+            <button class="btn btn-secondary btn-small" @click="minSize = 104857600; maxSize = ''">> 100MB</button>
+            <button class="btn btn-secondary btn-small" @click="minSize = 1073741824; maxSize = ''">> 1GB</button>
+            <button class="btn btn-secondary btn-small" @click="minSize = ''; maxSize = ''">清除</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label>修改时间</label>
+          <div class="filter-row">
+            <input class="input" v-model="modifiedAfter" type="date" placeholder="从">
+            <span class="filter-sep">-</span>
+            <input class="input" v-model="modifiedBefore" type="date" placeholder="到">
+          </div>
+          <div class="size-presets">
+            <button class="btn btn-secondary btn-small" @click="setDateRange(7)">近7天</button>
+            <button class="btn btn-secondary btn-small" @click="setDateRange(30)">近30天</button>
+            <button class="btn btn-secondary btn-small" @click="setDateRange(90)">近90天</button>
+            <button class="btn btn-secondary btn-small" @click="setDateRange(365)">近一年</button>
+            <button class="btn btn-secondary btn-small" @click="modifiedAfter = ''; modifiedBefore = ''">清除</button>
+          </div>
+        </div>
       </div>
 
       <div v-if="loading" class="loading">搜索中...</div>
@@ -100,6 +136,12 @@ export default {
     const previewFile = ref(null)
     const previewType = ref('')
     const streamUrl = ref('')
+    
+    const showAdvanced = ref(false)
+    const minSize = ref('')
+    const maxSize = ref('')
+    const modifiedAfter = ref('')
+    const modifiedBefore = ref('')
 
     onMounted(async () => {
       await loadHistory()
@@ -140,7 +182,11 @@ export default {
           search: query.value,
           category: category.value,
           page: page.value,
-          pageSize: pageSize.value
+          pageSize: pageSize.value,
+          minSize: minSize.value,
+          maxSize: maxSize.value,
+          modifiedAfter: modifiedAfter.value,
+          modifiedBefore: modifiedBefore.value
         })
         if (res.success) {
           results.value = res.data.files
@@ -166,7 +212,11 @@ export default {
           search: query.value,
           category: category.value,
           page: page.value,
-          pageSize: pageSize.value
+          pageSize: pageSize.value,
+          minSize: minSize.value,
+          maxSize: maxSize.value,
+          modifiedAfter: modifiedAfter.value,
+          modifiedBefore: modifiedBefore.value
         })
         if (res.success) {
           results.value = res.data.files
@@ -178,6 +228,13 @@ export default {
       }
       
       loading.value = false
+    }
+
+    function setDateRange(days) {
+      const now = new Date()
+      const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+      modifiedAfter.value = from.toISOString().split('T')[0]
+      modifiedBefore.value = now.toISOString().split('T')[0]
     }
 
     watch(page, () => {
@@ -240,7 +297,8 @@ export default {
       query, category, results, total, loading, searched, history, categories,
       page, pageSize, totalPages,
       previewFile, previewType, streamUrl,
-      doSearch, openLocation, clearHistory, showPreview,
+      showAdvanced, minSize, maxSize, modifiedAfter, modifiedBefore,
+      doSearch, openLocation, clearHistory, showPreview, setDateRange,
       truncatePath, getBadgeClass
     }
   }
@@ -274,6 +332,47 @@ export default {
 
 .filters {
   margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.advanced-filters {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filter-group label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-row .input {
+  flex: 1;
+}
+
+.filter-sep {
+  color: var(--text-muted);
+}
+
+.size-presets {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .result-count {

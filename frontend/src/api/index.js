@@ -31,6 +31,17 @@ export function scanSinglePath(path) {
   })
 }
 
+export function checkPath(path) {
+  return request('/scan/check-path', { 
+    method: 'POST', 
+    body: JSON.stringify({ path }) 
+  })
+}
+
+export function checkAllPaths() {
+  return request('/scan/check-all-paths', { method: 'POST' })
+}
+
 export function getFiles(params = {}) {
   const query = new URLSearchParams(params).toString()
   return request('/files?' + query)

@@ -320,7 +320,7 @@ class Database {
   }
 
   getFiles(options = {}) {
-    const { category, search, orderBy = 'name', orderDir = 'ASC', limit = 100, offset = 0 } = options;
+    const { category, search, orderBy = 'name', orderDir = 'ASC', limit = 100, offset = 0, minSize, maxSize, modifiedAfter, modifiedBefore } = options;
     
     let sql = 'SELECT * FROM files';
     const params = [];
@@ -334,6 +334,26 @@ class Database {
     if (search) {
       conditions.push('(name LIKE ? OR path LIKE ?)');
       params.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (minSize !== undefined && minSize !== null && minSize !== '') {
+      conditions.push('size >= ?');
+      params.push(parseInt(minSize));
+    }
+
+    if (maxSize !== undefined && maxSize !== null && maxSize !== '') {
+      conditions.push('size <= ?');
+      params.push(parseInt(maxSize));
+    }
+
+    if (modifiedAfter) {
+      conditions.push('modified_at >= ?');
+      params.push(modifiedAfter);
+    }
+
+    if (modifiedBefore) {
+      conditions.push('modified_at <= ?');
+      params.push(modifiedBefore);
     }
 
     if (conditions.length > 0) {
@@ -350,7 +370,7 @@ class Database {
   }
 
   getFileCount(options = {}) {
-    const { category, search } = options;
+    const { category, search, minSize, maxSize, modifiedAfter, modifiedBefore } = options;
     
     let sql = 'SELECT COUNT(*) as count FROM files';
     const params = [];
@@ -364,6 +384,26 @@ class Database {
     if (search) {
       conditions.push('(name LIKE ? OR path LIKE ?)');
       params.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (minSize !== undefined && minSize !== null && minSize !== '') {
+      conditions.push('size >= ?');
+      params.push(parseInt(minSize));
+    }
+
+    if (maxSize !== undefined && maxSize !== null && maxSize !== '') {
+      conditions.push('size <= ?');
+      params.push(parseInt(maxSize));
+    }
+
+    if (modifiedAfter) {
+      conditions.push('modified_at >= ?');
+      params.push(modifiedAfter);
+    }
+
+    if (modifiedBefore) {
+      conditions.push('modified_at <= ?');
+      params.push(modifiedBefore);
     }
 
     if (conditions.length > 0) {

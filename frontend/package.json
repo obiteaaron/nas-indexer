@@ -8,7 +8,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "chart.js": "^4.4.0",
     "marked": "^18.0.2",
+    "pinyin-pro": "^3.25.0",
     "vue": "^3.4.0",
     "vue-router": "^4.2.0"
   },

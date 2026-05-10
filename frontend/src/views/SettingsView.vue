@@ -10,6 +10,7 @@
         </p>
         <div class="path-list">
           <div class="path-item" v-for="(p, i) in config.scanPaths" :key="i">
+            <span class="path-status-dot" :class="getPathStatusClass(p)" :title="getPathStatusTitle(p)"></span>
             <input class="input" v-model="config.scanPaths[i]">
             <button class="btn btn-primary btn-small" @click="scanPath(i)" :disabled="!config.scanPaths[i]">
               扫描
@@ -117,6 +118,27 @@
     </div>
 
     <div class="card">
+      <h3 class="section-title">NAS 连接状态</h3>
+      <div class="path-status-actions">
+        <button class="btn btn-primary" @click="checkPathsStatus" :disabled="checkingPaths">
+          {{ checkingPaths ? '检测中...' : '检测所有路径' }}
+        </button>
+      </div>
+      <div class="path-status-list" v-if="pathStatuses.length">
+        <div class="path-status-item" v-for="(ps, i) in pathStatuses" :key="i" :class="{ 'path-error': !ps.isAccessible }">
+          <div class="path-status-header">
+            <span class="path-status-icon">{{ ps.isAccessible ? '✅' : '❌' }}</span>
+            <span class="path-status-path" :title="ps.path">{{ ps.path }}</span>
+          </div>
+          <div class="path-status-details">
+            <span v-if="ps.isAccessible">文件数: {{ ps.fileCount }} | 延迟: {{ ps.latency }}ms</span>
+            <span v-else class="path-error-msg">{{ ps.error }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3 class="section-title">偏好分析</h3>
       <div class="form-group">
         <label class="checkbox-label">
@@ -145,7 +167,7 @@
 
 <script>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData } from '../api'
+import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths } from '../api'
 
 export default {
   name: 'SettingsView',
@@ -161,6 +183,8 @@ export default {
     })
     const status = ref(null)
     const saving = ref(false)
+    const checkingPaths = ref(false)
+    const pathStatuses = ref([])
     
     const localCategoryRules = reactive({})
     const localCategoryPathRules = ref([])
@@ -187,6 +211,7 @@ export default {
     onMounted(async () => {
       await loadConfig()
       await loadStatus()
+      await checkPathsStatus()
     })
 
     async function loadConfig() {
@@ -341,14 +366,44 @@ export default {
       }
     }
 
+    async function checkPathsStatus() {
+      checkingPaths.value = true
+      try {
+        const res = await checkAllPaths()
+        if (res.success) {
+          pathStatuses.value = res.data
+        } else {
+          alert('检测失败：' + res.error)
+        }
+      } catch (err) {
+        alert('检测失败：' + err.message)
+      }
+      checkingPaths.value = false
+    }
+
+    function getPathStatusClass(path) {
+      if (!path) return 'status-unknown'
+      const ps = pathStatuses.value.find(p => p.path === path)
+      if (!ps) return 'status-unknown'
+      return ps.isAccessible ? 'status-ok' : 'status-error'
+    }
+
+    function getPathStatusTitle(path) {
+      if (!path) return '未配置'
+      const ps = pathStatuses.value.find(p => p.path === path)
+      if (!ps) return '未检测'
+      if (ps.isAccessible) return `可达 - 文件数: ${ps.fileCount}, 延迟: ${ps.latency}ms`
+      return `不可达 - ${ps.error}`
+    }
+
     return {
-      config, status, saving,
+      config, status, saving, checkingPaths, pathStatuses,
       excludePatternsStr, whitelistStr, blacklistStr,
       addPath, removePath, scanPath, save, reset,
       localCategoryRules, localCategoryPathRules, newExtensions, newCategoryName, categories,
       addCategory, removeCategory, updateCategoryName, addExtension, removeExtension,
       addPathRule, removePathRule, applyCategoryRules, applyPathRules,
-      clearPreferences
+      clearPreferences, checkPathsStatus, getPathStatusClass, getPathStatusTitle
     }
   }
 }
@@ -394,10 +449,30 @@ export default {
 .path-item {
   display: flex;
   gap: 8px;
+  align-items: center;
 }
 
 .path-item input {
   flex: 1;
+}
+
+.path-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.path-status-dot.status-unknown {
+  background: #9ca3af;
+}
+
+.path-status-dot.status-ok {
+  background: #22c55e;
+}
+
+.path-status-dot.status-error {
+  background: #ef4444;
 }
 
 .form-actions {
@@ -529,5 +604,53 @@ export default {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.path-status-actions {
+  margin-bottom: 16px;
+}
+
+.path-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.path-status-item {
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.path-status-item.path-error {
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.path-status-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.path-status-icon {
+  font-size: 16px;
+}
+
+.path-status-path {
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.path-status-details {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-left: 24px;
+}
+
+.path-error-msg {
+  color: var(--danger);
 }
 </style>

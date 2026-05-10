@@ -9,7 +9,7 @@ const { initDatabase } = require('../utils');
 router.get('/', async (req, res) => {
   await initDatabase();
   try {
-    const { category, search, orderBy, orderDir, page = 1, pageSize = 50 } = req.query;
+    const { category, search, orderBy, orderDir, page = 1, pageSize = 50, minSize, maxSize, modifiedAfter, modifiedBefore } = req.query;
     const offset = (parseInt(page) - 1) * parseInt(pageSize);
     const limit = parseInt(pageSize);
 
@@ -23,10 +23,14 @@ router.get('/', async (req, res) => {
       orderBy: orderBy || 'name',
       orderDir: orderDir || 'ASC',
       limit,
-      offset
+      offset,
+      minSize,
+      maxSize,
+      modifiedAfter,
+      modifiedBefore
     });
 
-    const total = database.getFileCount({ category, search });
+    const total = database.getFileCount({ category, search, minSize, maxSize, modifiedAfter, modifiedBefore });
 
     const formattedFiles = files.map(f => ({
       ...f,

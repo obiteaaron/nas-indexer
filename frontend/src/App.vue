@@ -15,6 +15,9 @@
       <div class="header-right">
         <TaskBar :tasks="tasks" />
         <span class="status" v-if="status">{{ status.totalFiles }} 个文件 | {{ status.totalSize }}</span>
+        <button class="theme-toggle" @click="toggleTheme" :title="isDark ? '切换到浅色模式' : '切换到深色模式'">
+          {{ isDark ? '☀️' : '🌙' }}
+        </button>
       </div>
     </header>
     <main class="main">
@@ -34,6 +37,7 @@ export default {
   setup() {
     const status = ref(null)
     const tasks = ref([])
+    const isDark = ref(false)
     let eventSource = null
 
     async function loadStatus() {
@@ -70,7 +74,27 @@ export default {
       }
     }
 
+    function initTheme() {
+      const savedTheme = localStorage.getItem('theme')
+      if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        isDark.value = true
+        document.documentElement.setAttribute('data-theme', 'dark')
+      }
+    }
+
+    function toggleTheme() {
+      isDark.value = !isDark.value
+      if (isDark.value) {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        localStorage.setItem('theme', 'dark')
+      } else {
+        document.documentElement.removeAttribute('data-theme')
+        localStorage.setItem('theme', 'light')
+      }
+    }
+
     onMounted(() => {
+      initTheme()
       loadStatus()
       connectSSE()
     })
@@ -82,7 +106,24 @@ export default {
       }
     })
 
-    return { status, tasks }
+    return { status, tasks, isDark, toggleTheme }
   }
 }
 </script>
+
+<style scoped>
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.theme-toggle:hover {
+  background: var(--bg);
+}
+</style>

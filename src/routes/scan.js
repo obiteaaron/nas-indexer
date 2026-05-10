@@ -118,6 +118,97 @@ router.post('/path', async (req, res) => {
   }
 });
 
+// 检测路径是否可达
+router.post('/check-path', async (req, res) => {
+  try {
+    const { path: checkPath } = req.body;
+    
+    if (!checkPath) {
+      return res.status(400).json({ success: false, error: '请提供检测路径' });
+    }
+
+    const startTime = Date.now();
+    let isAccessible = false;
+    let fileCount = 0;
+    let error = null;
+
+    try {
+      const stats = fs.statSync(checkPath);
+      isAccessible = true;
+      
+      if (stats.isDirectory()) {
+        const files = fs.readdirSync(checkPath);
+        fileCount = files.length;
+      }
+    } catch (err) {
+      error = err.message;
+      isAccessible = false;
+    }
+
+    const latency = Date.now() - startTime;
+
+    res.json({
+      success: true,
+      data: {
+        path: checkPath,
+        isAccessible,
+        fileCount,
+        latency,
+        error
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 批量检测所有配置路径
+router.post('/check-all-paths', async (req, res) => {
+  try {
+    await initDatabase();
+    const config = loadConfig();
+    const paths = config.scanPaths || [];
+
+    if (paths.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const results = await Promise.all(paths.map(async (scanPath) => {
+      const startTime = Date.now();
+      let isAccessible = false;
+      let fileCount = 0;
+      let error = null;
+
+      try {
+        const stats = fs.statSync(scanPath);
+        isAccessible = true;
+        
+        if (stats.isDirectory()) {
+          const files = fs.readdirSync(scanPath);
+          fileCount = files.length;
+        }
+      } catch (err) {
+        error = err.message;
+        isAccessible = false;
+      }
+
+      const latency = Date.now() - startTime;
+
+      return {
+        path: scanPath,
+        isAccessible,
+        fileCount,
+        latency,
+        error
+      };
+    }));
+
+    res.json({ success: true, data: results });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 获取任务列表
 router.get('/tasks', (req, res) => {
   res.json({ success: true, tasks: taskManager.getActiveTasks() });
