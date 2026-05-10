@@ -220,9 +220,9 @@ export function generateRecommendations() {
 }
 
 export function getTasks() {
-  return request('/tasks')
+  return request('/scan/tasks')
 }
 
 export function getTaskStreamUrl() {
-  return API_BASE + '/tasks/stream'
+  return API_BASE + '/scan/tasks/stream'
 }
