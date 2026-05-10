@@ -116,11 +116,14 @@ export default {
   background: none;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .theme-toggle:hover {

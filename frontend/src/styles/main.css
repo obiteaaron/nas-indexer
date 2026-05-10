@@ -157,6 +157,8 @@ body {
   border-radius: 6px;
   font-size: 14px;
   width: 100%;
+  background: var(--bg-card);
+  color: var(--text);
 }
 
 .input:focus {
@@ -169,7 +171,8 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 14px;
-  background: white;
+  background: var(--bg-card);
+  color: var(--text);
 }
 
 .table {
