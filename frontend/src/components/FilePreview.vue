@@ -75,7 +75,7 @@ export default {
 }
 
 .modal-content {
-  background: var(--bg-primary, #fff);
+  background: var(--bg-card);
   border-radius: 8px;
   padding: 20px;
   max-width: 600px;

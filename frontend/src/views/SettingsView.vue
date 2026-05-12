@@ -162,6 +162,22 @@
         <span class="clear-tip">清除所有行为记录和推荐结果，不影响文件和标签</span>
       </div>
     </div>
+
+    <div class="card">
+      <h3 class="section-title">显示设置</h3>
+      <div class="form-group">
+        <label>缩略图加载大小限制</label>
+        <div class="size-limit-input">
+          <input class="input" type="number" v-model.number="config.thumbnailSizeLimit" min="0" step="1">
+          <span class="size-unit">MB</span>
+        </div>
+        <span class="hint">文件大小超过此限制时不自动加载缩略图，设为 0 表示不限制。默认 5MB</span>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" @click="save">保存显示设置</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -179,7 +195,8 @@ export default {
       fileExtensionFilter: { whitelist: [], blacklist: [] },
       categoryRules: {},
       categoryPathRules: [],
-      trackingConfig: { trackingEnabled: true, trackingLevel: 'full' }
+      trackingConfig: { trackingEnabled: true, trackingLevel: 'full' },
+      thumbnailSizeLimit: 5
     })
     const status = ref(null)
     const saving = ref(false)
@@ -222,7 +239,8 @@ export default {
           fileExtensionFilter: res.fileExtensionFilter || { whitelist: [], blacklist: [] },
           categoryRules: res.categoryRules || {},
           categoryPathRules: res.categoryPathRules || [],
-          trackingConfig: res.trackingConfig || { trackingEnabled: true, trackingLevel: 'full' }
+          trackingConfig: res.trackingConfig || { trackingEnabled: true, trackingLevel: 'full' },
+          thumbnailSizeLimit: res.thumbnailSizeLimit ?? 5
         }
         
         Object.keys(localCategoryRules).forEach(key => delete localCategoryRules[key])
@@ -652,5 +670,20 @@ export default {
 
 .path-error-msg {
   color: var(--danger);
+}
+
+.size-limit-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.size-limit-input .input {
+  width: 120px;
+}
+
+.size-unit {
+  color: var(--text-muted);
+  font-size: 14px;
 }
 </style>

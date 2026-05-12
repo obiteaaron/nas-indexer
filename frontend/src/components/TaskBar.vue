@@ -32,7 +32,7 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 
 export default {
   name: 'TaskBar',
@@ -44,6 +44,7 @@ export default {
   },
   setup(props) {
     const expanded = ref(false)
+    const completedTaskIds = ref(new Set())
 
     const hasRunning = computed(() => props.tasks.some(t => t.status === 'running'))
     const runningCount = computed(() => props.tasks.filter(t => t.status === 'running').length)
@@ -54,11 +55,34 @@ export default {
       failed: '失败'
     }
 
+    onMounted(() => {
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission()
+      }
+    })
+
     watch(() => props.tasks, (newTasks) => {
       if (newTasks.length === 0) {
         expanded.value = false
       }
-    })
+
+      for (const task of newTasks) {
+        if (task.status === 'completed' && !completedTaskIds.value.has(task.id)) {
+          completedTaskIds.value.add(task.id)
+          sendNotification(task)
+        }
+      }
+    }, { deep: true })
+
+    function sendNotification(task) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        const totalFiles = task.result?.totalFiles || 0
+        const totalSize = task.result?.totalSize || ''
+        new Notification('扫描完成', {
+          body: `共扫描 ${totalFiles} 个文件${totalSize ? '，' + totalSize : ''}`
+        })
+      }
+    }
 
     return { expanded, hasRunning, runningCount, statusText }
   }
