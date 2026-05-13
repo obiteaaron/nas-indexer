@@ -1,5 +1,20 @@
 const API_BASE = '/api'
 
+const cache = new Map()
+const CACHE_TTL = 5 * 60 * 1000
+
+function clearCache(pattern) {
+  if (!pattern) {
+    cache.clear()
+    return
+  }
+  for (const key of cache.keys()) {
+    if (key.includes(pattern)) {
+      cache.delete(key)
+    }
+  }
+}
+
 async function request(url, options = {}) {
   const res = await fetch(API_BASE + url, {
     headers: { 'Content-Type': 'application/json' },
@@ -8,11 +23,22 @@ async function request(url, options = {}) {
   return res.json()
 }
 
+async function cachedGet(url) {
+  const cached = cache.get(url)
+  if (cached && Date.now() - cached.time < CACHE_TTL) {
+    return cached.data
+  }
+  const data = await request(url)
+  cache.set(url, { data, time: Date.now() })
+  return data
+}
+
 export function getConfig() {
-  return request('/config')
+  return cachedGet('/config')
 }
 
 export function saveConfig(data) {
+  clearCache('/config')
   return request('/config', { method: 'POST', body: JSON.stringify(data) })
 }
 
@@ -112,11 +138,11 @@ export function getStreamUrl(id) {
 }
 
 export function getStatistics() {
-  return request('/statistics')
+  return cachedGet('/statistics')
 }
 
 export function getCategories() {
-  return request('/categories')
+  return cachedGet('/categories')
 }
 
 export function getSearchHistory() {
@@ -128,35 +154,44 @@ export function clearSearchHistory() {
 }
 
 export function getTagGroups() {
-  return request('/tag-groups')
+  return cachedGet('/tag-groups')
 }
 
 export function createTagGroup(data) {
+  clearCache('/tag-groups')
+  clearCache('/tags')
   return request('/tag-groups', { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function updateTagGroup(id, data) {
+  clearCache('/tag-groups')
+  clearCache('/tags')
   return request('/tag-groups/' + id, { method: 'PUT', body: JSON.stringify(data) })
 }
 
 export function deleteTagGroup(id) {
+  clearCache('/tag-groups')
+  clearCache('/tags')
   return request('/tag-groups/' + id, { method: 'DELETE' })
 }
 
 export function getTags(groupId = null) {
   const query = groupId ? '?groupId=' + groupId : ''
-  return request('/tags' + query)
+  return cachedGet('/tags' + query)
 }
 
 export function createTag(data) {
+  clearCache('/tags')
   return request('/tags', { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function updateTag(id, data) {
+  clearCache('/tags')
   return request('/tags/' + id, { method: 'PUT', body: JSON.stringify(data) })
 }
 
 export function deleteTag(id) {
+  clearCache('/tags')
   return request('/tags/' + id, { method: 'DELETE' })
 }
 
@@ -166,6 +201,10 @@ export function getTagStats() {
 
 export function getFileTags(fileId) {
   return request('/files/' + fileId + '/tags')
+}
+
+export function getFileTagsBatch(fileIds) {
+  return request('/files/batch/tags?fileIds=' + fileIds.join(','))
 }
 
 export function addFileTag(fileId, tagId) {

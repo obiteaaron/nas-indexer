@@ -47,27 +47,31 @@
       <div v-if="loading" class="loading">加载中...</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <div v-else>
-        <table class="table">
-          <thead>
-            <tr>
-              <th style="width: 30px">
-                <input type="checkbox" @change="toggleSelectAll($event)" :checked="isAllSelected">
-              </th>
-              <th style="width: 50px"></th>
-              <th style="width: 30%">文件名</th>
-              <th style="width: 80px">大小</th>
-              <th style="width: 70px">分类</th>
-              <th style="width: 20%">标签</th>
-              <th style="width: 100px">修改时间</th>
-              <th style="width: 230px">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="file in files" :key="file.id" :class="{ selected: selectedFiles.includes(file.id) }">
-              <td>
+        <div class="file-table">
+          <div class="file-table-header">
+            <div class="file-col file-col-check">
+              <input type="checkbox" @change="toggleSelectAll($event)" :checked="isAllSelected">
+            </div>
+            <div class="file-col file-col-thumb"></div>
+            <div class="file-col file-col-name">文件名</div>
+            <div class="file-col file-col-size">大小</div>
+            <div class="file-col file-col-category">分类</div>
+            <div class="file-col file-col-tags">标签</div>
+            <div class="file-col file-col-date">修改时间</div>
+            <div class="file-col file-col-actions">操作</div>
+          </div>
+          <RecycleScroller
+            class="file-table-body"
+            :items="files"
+            :item-size="48"
+            key-field="id"
+            v-slot="{ item: file }"
+          >
+            <div class="file-table-row" :class="{ selected: selectedFiles.includes(file.id) }">
+              <div class="file-col file-col-check">
                 <input type="checkbox" :checked="selectedFiles.includes(file.id)" @change="toggleSelect(file.id)">
-              </td>
-              <td class="thumbnail-cell">
+              </div>
+              <div class="file-col file-col-thumb">
                 <img v-if="isImageFile(file.ext) && shouldLoadThumbnail(file)"
                      :src="getStreamUrl(file.id)"
                      loading="lazy"
@@ -77,18 +81,18 @@
                      @mouseleave="hideHoverPreview"
                      @mousemove="moveHoverPreview($event)" />
                 <span v-else class="file-icon" :class="getFileIconClass(file.ext)"></span>
-              </td>
-              <td>
+              </div>
+              <div class="file-col file-col-name">
                 <span class="file-name" :title="file.name" @click="showPreview(file)">{{ file.name }}</span>
                 <span v-if="isVideoFile(file.ext) && videoMetadata[file.id]" class="video-meta">
                   {{ videoMetadata[file.id].duration }} · {{ videoMetadata[file.id].width }}×{{ videoMetadata[file.id].height }}
                 </span>
-              </td>
-              <td>{{ file.sizeFormatted }}</td>
-              <td>
+              </div>
+              <div class="file-col file-col-size">{{ file.sizeFormatted }}</div>
+              <div class="file-col file-col-category">
                 <span :class="'badge badge-' + getBadgeClass(file.category)">{{ file.category }}</span>
-              </td>
-              <td>
+              </div>
+              <div class="file-col file-col-tags">
                 <div class="file-tags">
                   <TagBadge 
                     v-for="tag in fileTags[file.id] || []" 
@@ -101,9 +105,9 @@
                   />
                   <button class="btn btn-secondary btn-small" @click="openTagSelector(file)">+标签</button>
                 </div>
-              </td>
-              <td>{{ formatDate(file.modified_at) }}</td>
-              <td>
+              </div>
+              <div class="file-col file-col-date">{{ formatDate(file.modified_at) }}</div>
+              <div class="file-col file-col-actions">
                 <div class="actions">
                   <button class="btn btn-secondary btn-small" @click="openLocation(file)">定位</button>
                   <button class="btn btn-secondary btn-small" @click="showRename(file)">重命名</button>
@@ -112,10 +116,10 @@
                   </button>
                   <button class="btn btn-danger btn-small" @click="confirmDelete(file)">删除</button>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+              </div>
+            </div>
+          </RecycleScroller>
+        </div>
 
         <Pagination v-model="page" :totalPages="totalPages" />
       </div>
@@ -178,7 +182,7 @@ import Pagination from '../components/Pagination.vue'
 import { 
   getFiles, getCategories, openFile, renameFile as apiRename, deleteFile, 
   addFavorite, removeFavorite,
-  getFileTags, addFileTag, removeFileTag, batchFileTags,
+  getFileTags, getFileTagsBatch, addFileTag, removeFileTag, batchFileTags,
   getFilesByTags, getTags, getStreamUrl, getConfig
 } from '../api'
 
@@ -308,13 +312,15 @@ export default {
     }
 
     async function loadFileTagsBatch(fileIds) {
-      for (const fileId of fileIds) {
-        try {
-          const res = await getFileTags(fileId)
-          if (res.success) {
-            fileTags.value[fileId] = res.data
-          }
-        } catch (err) {
+      if (fileIds.length === 0) return
+      try {
+        const res = await getFileTagsBatch(fileIds)
+        if (res.success) {
+          Object.assign(fileTags.value, res.data)
+        }
+      } catch (err) {
+        console.error('批量获取标签失败:', err)
+        for (const fileId of fileIds) {
           fileTags.value[fileId] = []
         }
       }
@@ -696,6 +702,98 @@ export default {
 </script>
 
 <style scoped>
+.file-table {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.file-table-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.file-table-body {
+  height: calc(100vh - 280px);
+  min-height: 400px;
+}
+
+.file-table-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-light);
+  height: 48px;
+}
+
+.file-table-row:hover {
+  background: var(--bg-hover);
+}
+
+.file-table-row.selected {
+  background-color: var(--primary-light, #e8f4f8);
+}
+
+.file-col {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.file-col-check {
+  width: 30px;
+  flex-shrink: 0;
+  justify-content: center;
+}
+
+.file-col-thumb {
+  width: 50px;
+  flex-shrink: 0;
+  justify-content: center;
+}
+
+.file-col-name {
+  flex: 1;
+  min-width: 200px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.file-col-size {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.file-col-category {
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.file-col-tags {
+  width: 20%;
+  min-width: 150px;
+  flex-shrink: 0;
+}
+
+.file-col-date {
+  width: 100px;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.file-col-actions {
+  width: 230px;
+  flex-shrink: 0;
+}
+
 .file-name {
   cursor: pointer;
   color: var(--primary);
@@ -703,6 +801,7 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .file-name:hover {
@@ -727,10 +826,6 @@ export default {
   flex-wrap: wrap;
 }
 
-tr.selected {
-  background-color: var(--primary-light, #e8f4f8);
-}
-
 .tag-filter {
   display: flex;
   align-items: center;
@@ -744,25 +839,9 @@ tr.selected {
   flex-wrap: wrap;
 }
 
-.thumbnail-cell {
-  width: 50px;
-  text-align: center;
-  overflow: visible;
-  white-space: normal;
-  text-overflow: initial;
-}
-
-.table td:first-child,
-.table th:first-child {
-  width: 30px;
-  overflow: visible;
-  white-space: normal;
-  text-overflow: initial;
-}
-
 .thumbnail {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   object-fit: cover;
   border-radius: 4px;
   background: var(--bg);
@@ -772,11 +851,11 @@ tr.selected {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 4px;
   background: var(--bg);
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .file-icon::before {
@@ -803,7 +882,8 @@ tr.selected {
   display: block;
   font-size: 11px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 1px;
+  line-height: 1;
 }
 
 .hover-preview {

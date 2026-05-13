@@ -238,7 +238,7 @@ class Database {
     fs.writeFileSync(this.dbPath, buffer);
   }
 
-  insertFile(filePath, stat, scanPath = null) {
+  insertFile(filePath, stat, scanPath = null, saveNow = true) {
     const ext = path.extname(filePath).toLowerCase();
     const name = path.basename(filePath);
     const category = this.classifyFile(filePath, ext);
@@ -257,7 +257,7 @@ class Database {
           VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)
         `, [filePath, name, ext, stat ? stat.size : 0, category, modifiedAt, scanPath]);
       }
-      this.save();
+      if (saveNow) this.save();
       return true;
     } catch (err) {
       logger.error('插入文件失败: %s', err.message);
@@ -267,7 +267,7 @@ class Database {
 
   insertFilesBatch(files, scanPath = null) {
     for (const file of files) {
-      this.insertFile(file.path, file.stat, scanPath);
+      this.insertFile(file.path, file.stat, scanPath, false);
     }
     this.save();
   }
@@ -631,6 +631,39 @@ class Database {
       result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
       return obj;
     });
+  }
+
+  getFileTagsBatch(fileIds) {
+    if (!fileIds || fileIds.length === 0) return {};
+    const placeholders = fileIds.map(() => '?').join(',');
+    const sql = `
+      SELECT ft.file_id, t.*, tg.name as group_name, tg.color as group_color
+      FROM file_tags ft
+      JOIN tags t ON ft.tag_id = t.id
+      LEFT JOIN tag_groups tg ON t.group_id = tg.id
+      WHERE ft.file_id IN (${placeholders})
+      ORDER BY tg.sort_order, t.sort_order, t.id
+    `;
+    const result = this.db.exec(sql, fileIds);
+    const tagsMap = {};
+    for (const fileId of fileIds) {
+      tagsMap[fileId] = [];
+    }
+    if (result.length > 0) {
+      const columns = result[0].columns;
+      const fileIdIdx = columns.indexOf('file_id');
+      for (const row of result[0].values) {
+        const fileId = row[fileIdIdx];
+        const obj = {};
+        columns.forEach((col, i) => {
+          if (col !== 'file_id') obj[col] = row[i];
+        });
+        if (tagsMap[fileId]) {
+          tagsMap[fileId].push(obj);
+        }
+      }
+    }
+    return tagsMap;
   }
 
   getFilesByTag(tagId, options = {}) {

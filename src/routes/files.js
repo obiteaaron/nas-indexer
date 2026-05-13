@@ -268,4 +268,23 @@ router.delete('/favorites/:id', async (req, res) => {
   }
 });
 
+// 批量获取文件标签
+router.get('/batch/tags', async (req, res) => {
+  await initDatabase();
+  try {
+    const { fileIds } = req.query;
+    if (!fileIds) {
+      return res.status(400).json({ success: false, error: '请提供文件ID列表' });
+    }
+    const fileIdArray = fileIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+    if (fileIdArray.length === 0) {
+      return res.status(400).json({ success: false, error: '无效的文件ID' });
+    }
+    const tagsMap = database.getFileTagsBatch(fileIdArray);
+    res.json({ success: true, data: tagsMap });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 module.exports = router;
