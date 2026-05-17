@@ -1,15 +1,36 @@
-const { logger } = require('./logger');
+import { Response } from 'express';
+import { logger } from './logger';
+
+interface Task {
+  id: string;
+  type: string;
+  status: 'running' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  currentPath: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  result: unknown | null;
+  error: string | null;
+}
+
+interface TaskUpdate {
+  status?: 'running' | 'completed' | 'failed';
+  progress?: number;
+  message?: string;
+  currentPath?: string | null;
+  result?: unknown;
+  error?: string;
+}
 
 class TaskManager {
-  constructor() {
-    this.tasks = new Map();
-    this.clients = new Set();
-    this.taskCounter = 0;
-  }
+  private tasks: Map<string, Task> = new Map();
+  private clients: Set<Response> = new Set();
+  private taskCounter: number = 0;
 
-  createTask(type) {
+  createTask(type: string): Task {
     this.taskCounter++;
-    const task = {
+    const task: Task = {
       id: `${type}_${Date.now()}_${this.taskCounter}`,
       type,
       status: 'running',
@@ -27,15 +48,15 @@ class TaskManager {
     return task;
   }
 
-  updateTask(taskId, updates) {
-    const task = this.tasks.get(taskId);
+  updateTask(taskId: string, updates: TaskUpdate): void {
+    const task: Task | undefined = this.tasks.get(taskId);
     if (!task) return;
     Object.assign(task, updates);
     this.broadcast();
   }
 
-  completeTask(taskId, result) {
-    const task = this.tasks.get(taskId);
+  completeTask(taskId: string, result: unknown): void {
+    const task: Task | undefined = this.tasks.get(taskId);
     if (!task) return;
     task.status = 'completed';
     task.progress = 100;
@@ -47,8 +68,8 @@ class TaskManager {
     this.scheduleCleanup(taskId);
   }
 
-  failTask(taskId, error) {
-    const task = this.tasks.get(taskId);
+  failTask(taskId: string, error: string): void {
+    const task: Task | undefined = this.tasks.get(taskId);
     if (!task) return;
     task.status = 'failed';
     task.message = '扫描失败';
@@ -59,15 +80,15 @@ class TaskManager {
     this.scheduleCleanup(taskId);
   }
 
-  getActiveTasks() {
-    const active = [];
+  getActiveTasks(): Task[] {
+    const active: Task[] = [];
     for (const task of this.tasks.values()) {
       active.push({ ...task });
     }
     return active;
   }
 
-  hasRunningTask(type) {
+  hasRunningTask(type: string): boolean {
     for (const task of this.tasks.values()) {
       if (task.type === type && task.status === 'running') {
         return true;
@@ -76,32 +97,32 @@ class TaskManager {
     return false;
   }
 
-  addClient(res) {
+  addClient(res: Response): void {
     this.clients.add(res);
     logger.debug('[TaskManager] SSE 客户端连接, 当前: %d', this.clients.size);
   }
 
-  removeClient(res) {
+  removeClient(res: Response): void {
     this.clients.delete(res);
     logger.debug('[TaskManager] SSE 客户端断开, 当前: %d', this.clients.size);
   }
 
-  broadcast() {
-    const data = JSON.stringify({
+  broadcast(): void {
+    const data: string = JSON.stringify({
       type: 'tasks-update',
       tasks: this.getActiveTasks()
     });
-    const message = `data: ${data}\n\n`;
+    const message: string = `data: ${data}\n\n`;
     for (const client of this.clients) {
       try {
         client.write(message);
-      } catch (err) {
+      } catch {
         this.clients.delete(client);
       }
     }
   }
 
-  scheduleCleanup(taskId) {
+  private scheduleCleanup(taskId: string): void {
     setTimeout(() => {
       this.tasks.delete(taskId);
       this.broadcast();
@@ -110,6 +131,6 @@ class TaskManager {
   }
 }
 
-const taskManager = new TaskManager();
+const taskManager: TaskManager = new TaskManager();
 
-module.exports = { taskManager };
+export { taskManager, TaskManager };

@@ -1,18 +1,42 @@
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
-const { database } = require('./database');
-const { logger } = require('./logger');
+import fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import { database } from './database';
+import { classifyByExtension } from './database';
+import { logger } from './logger';
+import type { FileInfo } from './types';
+
+interface OperationResult {
+  success: boolean;
+  error?: string;
+  path?: string;
+  oldPath?: string;
+  newPath?: string;
+  sourcePath?: string;
+  targetPath?: string;
+  info?: FileInfo;
+  contents?: DirectoryItem[];
+  parentDir?: string;
+}
+
+interface DirectoryItem {
+  name: string;
+  path: string;
+  isDirectory?: boolean;
+  size?: number;
+  modified?: Date;
+  error?: string;
+}
 
 class FileOperations {
-  openInExplorer(filePath) {
-    const platform = process.platform;
-    
+  openInExplorer(filePath: string): OperationResult {
+    const platform: string = process.platform;
+
     if (!fs.existsSync(filePath)) {
       return { success: false, error: '文件不存在' };
     }
 
-    let command;
+    let command: string;
     if (platform === 'win32') {
       command = `explorer /select,"${filePath}"`;
     } else if (platform === 'darwin') {
@@ -28,9 +52,9 @@ class FileOperations {
     return { success: true };
   }
 
-  createFolder(parentPath, folderName) {
-    const newPath = path.join(parentPath, folderName);
-    
+  createFolder(parentPath: string, folderName: string): OperationResult {
+    const newPath: string = path.join(parentPath, folderName);
+
     if (fs.existsSync(newPath)) {
       return { success: false, error: '文件夹已存在' };
     }
@@ -39,17 +63,18 @@ class FileOperations {
       fs.mkdirSync(newPath, { recursive: true });
       return { success: true, path: newPath };
     } catch (err) {
-      return { success: false, error: err.message };
+      const error = err as Error;
+      return { success: false, error: error.message };
     }
   }
 
-  renameFile(oldPath, newName) {
+  renameFile(oldPath: string, newName: string): OperationResult {
     if (!fs.existsSync(oldPath)) {
       return { success: false, error: '文件不存在' };
     }
 
-    const parentDir = path.dirname(oldPath);
-    const newPath = path.join(parentDir, newName);
+    const parentDir: string = path.dirname(oldPath);
+    const newPath: string = path.join(parentDir, newName);
 
     if (fs.existsSync(newPath)) {
       return { success: false, error: '目标名称已存在' };
@@ -57,21 +82,22 @@ class FileOperations {
 
     try {
       fs.renameSync(oldPath, newPath);
-      
+
       const file = database.getFileByPath(oldPath);
       if (file) {
         database.deleteFile(oldPath);
-        const stat = fs.statSync(newPath);
+        const stat: fs.Stats = fs.statSync(newPath);
         database.insertFile(newPath, stat);
       }
 
       return { success: true, oldPath, newPath };
     } catch (err) {
-      return { success: false, error: err.message };
+      const error = err as Error;
+      return { success: false, error: error.message };
     }
   }
 
-  copyFile(sourcePath, targetDir) {
+  copyFile(sourcePath: string, targetDir: string): OperationResult {
     if (!fs.existsSync(sourcePath)) {
       return { success: false, error: '源文件不存在' };
     }
@@ -79,18 +105,18 @@ class FileOperations {
     if (!fs.existsSync(targetDir)) {
       try {
         fs.mkdirSync(targetDir, { recursive: true });
-      } catch (err) {
+      } catch {
         return { success: false, error: '无法创建目标目录' };
       }
     }
 
-    const fileName = path.basename(sourcePath);
-    let targetPath = path.join(targetDir, fileName);
+    const fileName: string = path.basename(sourcePath);
+    let targetPath: string = path.join(targetDir, fileName);
 
     if (fs.existsSync(targetPath)) {
-      const ext = path.extname(fileName);
-      const baseName = path.basename(fileName, ext);
-      let counter = 1;
+      const ext: string = path.extname(fileName);
+      const baseName: string = path.basename(fileName, ext);
+      let counter: number = 1;
       while (fs.existsSync(targetPath)) {
         targetPath = path.join(targetDir, `${baseName}_${counter}${ext}`);
         counter++;
@@ -99,15 +125,16 @@ class FileOperations {
 
     try {
       fs.copyFileSync(sourcePath, targetPath);
-      const stat = fs.statSync(targetPath);
+      const stat: fs.Stats = fs.statSync(targetPath);
       database.insertFile(targetPath, stat);
       return { success: true, sourcePath, targetPath };
     } catch (err) {
-      return { success: false, error: err.message };
+      const error = err as Error;
+      return { success: false, error: error.message };
     }
   }
 
-  moveFile(sourcePath, targetDir) {
+  moveFile(sourcePath: string, targetDir: string): OperationResult {
     if (!fs.existsSync(sourcePath)) {
       return { success: false, error: '源文件不存在' };
     }
@@ -115,13 +142,13 @@ class FileOperations {
     if (!fs.existsSync(targetDir)) {
       try {
         fs.mkdirSync(targetDir, { recursive: true });
-      } catch (err) {
+      } catch {
         return { success: false, error: '无法创建目标目录' };
       }
     }
 
-    const fileName = path.basename(sourcePath);
-    const targetPath = path.join(targetDir, fileName);
+    const fileName: string = path.basename(sourcePath);
+    const targetPath: string = path.join(targetDir, fileName);
 
     if (fs.existsSync(targetPath)) {
       return { success: false, error: '目标位置已存在同名文件' };
@@ -129,30 +156,32 @@ class FileOperations {
 
     try {
       fs.renameSync(sourcePath, targetPath);
-      
+
       database.deleteFile(sourcePath);
-      const stat = fs.statSync(targetPath);
+      const stat: fs.Stats = fs.statSync(targetPath);
       database.insertFile(targetPath, stat);
 
       return { success: true, sourcePath, targetPath };
     } catch (err) {
-      if (err.code === 'EXDEV') {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code === 'EXDEV') {
         try {
           fs.copyFileSync(sourcePath, targetPath);
           fs.unlinkSync(sourcePath);
           database.deleteFile(sourcePath);
-          const stat = fs.statSync(targetPath);
+          const stat: fs.Stats = fs.statSync(targetPath);
           database.insertFile(targetPath, stat);
           return { success: true, sourcePath, targetPath };
         } catch (copyErr) {
-          return { success: false, error: copyErr.message };
+          const copyError = copyErr as Error;
+          return { success: false, error: copyError.message };
         }
       }
-      return { success: false, error: err.message };
+      return { success: false, error: error.message };
     }
   }
 
-  deleteFile(filePath, permanent = false) {
+  deleteFile(filePath: string, permanent: boolean = false): OperationResult {
     if (!fs.existsSync(filePath)) {
       return { success: false, error: '文件不存在' };
     }
@@ -161,54 +190,54 @@ class FileOperations {
       if (permanent) {
         fs.unlinkSync(filePath);
       } else {
-        const trashPath = this.getTrashPath();
+        const trashPath: string = this.getTrashPath();
         if (!fs.existsSync(trashPath)) {
           fs.mkdirSync(trashPath, { recursive: true });
         }
-        
-        const fileName = path.basename(filePath);
-        let targetPath = path.join(trashPath, fileName);
-        let counter = 1;
+
+        const fileName: string = path.basename(filePath);
+        let targetPath: string = path.join(trashPath, fileName);
+        let counter: number = 1;
         while (fs.existsSync(targetPath)) {
-          const ext = path.extname(fileName);
-          const baseName = path.basename(fileName, ext);
+          const ext: string = path.extname(fileName);
+          const baseName: string = path.basename(fileName, ext);
           targetPath = path.join(trashPath, `${baseName}_${counter}${ext}`);
           counter++;
         }
-        
+
         fs.renameSync(filePath, targetPath);
       }
 
       database.deleteFile(filePath);
       return { success: true };
     } catch (err) {
-      return { success: false, error: err.message };
+      const error = err as Error;
+      return { success: false, error: error.message };
     }
   }
 
-  getTrashPath() {
-    const platform = process.platform;
+  getTrashPath(): string {
+    const platform: string = process.platform;
     if (platform === 'win32') {
-      const userHome = process.env.USERPROFILE;
-      return path.join(userHome, '.nas-indexer-trash');
+      const userHome: string | undefined = process.env.USERPROFILE;
+      return path.join(userHome || '', '.nas-indexer-trash');
     } else {
-      const userHome = process.env.HOME;
-      return path.join(userHome, '.nas-indexer-trash');
+      const userHome: string | undefined = process.env.HOME;
+      return path.join(userHome || '', '.nas-indexer-trash');
     }
   }
 
-  getFileInfo(filePath) {
+  getFileInfo(filePath: string): OperationResult {
     if (!fs.existsSync(filePath)) {
       return { success: false, error: '文件不存在' };
     }
 
     try {
-      const stat = fs.statSync(filePath);
-      const ext = path.extname(filePath).toLowerCase();
-      const name = path.basename(filePath);
-      const parentDir = path.dirname(filePath);
-      const { classifyByExtension } = require('./database');
-      const category = classifyByExtension(ext);
+      const stat: fs.Stats = fs.statSync(filePath);
+      const ext: string = path.extname(filePath).toLowerCase();
+      const name: string = path.basename(filePath);
+      const parentDir: string = path.dirname(filePath);
+      const category: string = classifyByExtension(ext);
 
       return {
         success: true,
@@ -228,33 +257,34 @@ class FileOperations {
         }
       };
     } catch (err) {
-      return { success: false, error: err.message };
+      const error = err as Error;
+      return { success: false, error: error.message };
     }
   }
 
-  formatSize(bytes) {
+  formatSize(bytes: number): string {
     if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const units: string[] = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i: number = Math.floor(Math.log(bytes) / Math.log(1024));
     return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + units[i];
   }
 
-  getDirectoryContent(dirPath) {
+  getDirectoryContent(dirPath: string): OperationResult {
     if (!fs.existsSync(dirPath)) {
       return { success: false, error: '目录不存在' };
     }
 
     try {
-      const stat = fs.statSync(dirPath);
+      const stat: fs.Stats = fs.statSync(dirPath);
       if (!stat.isDirectory()) {
         return { success: false, error: '路径不是目录' };
       }
 
-      const items = fs.readdirSync(dirPath);
-      const contents = items.map(item => {
-        const fullPath = path.join(dirPath, item);
+      const items: string[] = fs.readdirSync(dirPath);
+      const contents: DirectoryItem[] = items.map(item => {
+        const fullPath: string = path.join(dirPath, item);
         try {
-          const itemStat = fs.statSync(fullPath);
+          const itemStat: fs.Stats = fs.statSync(fullPath);
           return {
             name: item,
             path: fullPath,
@@ -263,17 +293,19 @@ class FileOperations {
             modified: itemStat.mtime
           };
         } catch (err) {
-          return { name: item, path: fullPath, error: err.message };
+          const error = err as Error;
+          return { name: item, path: fullPath, error: error.message };
         }
       });
 
       return { success: true, contents, parentDir: path.dirname(dirPath) };
     } catch (err) {
-      return { success: false, error: err.message };
+      const error = err as Error;
+      return { success: false, error: error.message };
     }
   }
 }
 
-const fileOps = new FileOperations();
+const fileOps: FileOperations = new FileOperations();
 
-module.exports = { fileOps, FileOperations };
+export { fileOps, FileOperations };

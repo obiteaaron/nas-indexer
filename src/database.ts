@@ -1,9 +1,39 @@
-const fs = require('fs');
-const path = require('path');
-const initSqlJs = require('sql.js');
-const { logger } = require('./logger');
+import fs from 'fs';
+import path from 'path';
+import initSqlJs, { Database as SqlDatabase } from 'sql.js';
+import { logger } from './logger';
+import type {
+  File,
+  FileQueryOptions,
+  TagGroup,
+  Tag,
+  TagWithGroup,
+  TagStats,
+  FileView,
+  UserAction,
+  UserPreference,
+  Preferences,
+  Recommendation,
+  CategoryRule,
+  CategoryPathRule
+} from './types';
 
-const DEFAULT_CATEGORY_RULES = {
+interface QueryResult {
+  columns: string[];
+  values: unknown[][];
+}
+
+interface FileWithStat {
+  path: string;
+  stat: fs.Stats | null;
+}
+
+interface FileStatLike {
+  size?: number;
+  mtime?: Date | string;
+}
+
+const DEFAULT_CATEGORY_RULES: CategoryRule = {
   '视频': ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'],
   '音频': ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a', '.ape', '.alac'],
   '图片': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.ico', '.tiff', '.tif'],
@@ -11,7 +41,7 @@ const DEFAULT_CATEGORY_RULES = {
   '字幕': ['.srt', '.ass', '.ssa', '.sub', '.vtt']
 };
 
-const EXTENSION_CLASS_MAP = {
+const EXTENSION_CLASS_MAP: Record<string, string> = {
   '.mp4': '视频', '.mkv': '视频', '.avi': '视频', '.mov': '视频',
   '.wmv': '视频', '.flv': '视频', '.webm': '视频', '.m4v': '视频',
   '.mpg': '视频', '.mpeg': '视频',
@@ -24,15 +54,15 @@ const EXTENSION_CLASS_MAP = {
   '.srt': '字幕', '.ass': '字幕', '.ssa': '字幕', '.sub': '字幕', '.vtt': '字幕'
 };
 
-function normalizePath(filePath) {
+function normalizePath(filePath: string): string {
   return filePath.replace(/\\/g, '/').toLowerCase();
 }
 
-function classifyByPathPrefix(filePath, categoryPathRules) {
+function classifyByPathPrefix(filePath: string, categoryPathRules: CategoryPathRule[]): string | null {
   if (!categoryPathRules || categoryPathRules.length === 0) return null;
-  const normalizedFilePath = normalizePath(filePath);
+  const normalizedFilePath: string = normalizePath(filePath);
   for (const rule of categoryPathRules) {
-    const normalizedPrefix = normalizePath(rule.pathPrefix);
+    const normalizedPrefix: string = normalizePath(rule.pathPrefix);
     if (normalizedFilePath.startsWith(normalizedPrefix)) {
       return rule.category;
     }
@@ -40,8 +70,8 @@ function classifyByPathPrefix(filePath, categoryPathRules) {
   return null;
 }
 
-function classifyByExtension(ext, categoryRules) {
-  const normalizedExt = (ext || '').toLowerCase();
+function classifyByExtension(ext: string, categoryRules?: CategoryRule | null): string {
+  const normalizedExt: string = (ext || '').toLowerCase();
   if (categoryRules) {
     for (const [category, extensions] of Object.entries(categoryRules)) {
       if (extensions.some(e => e.toLowerCase() === normalizedExt)) {
@@ -53,53 +83,56 @@ function classifyByExtension(ext, categoryRules) {
 }
 
 class Database {
+  public db: SqlDatabase | null = null;
+  private dbPath: string | null = null;
+  public initialized: boolean = false;
+  private categoryRules: CategoryRule;
+  private categoryPathRules: CategoryPathRule[];
+
   constructor() {
-    this.db = null;
-    this.dbPath = null;
-    this.initialized = false;
     this.categoryRules = DEFAULT_CATEGORY_RULES;
     this.categoryPathRules = [];
   }
 
-  setCategoryRules(rules) {
+  setCategoryRules(rules: CategoryRule | null): void {
     this.categoryRules = rules || DEFAULT_CATEGORY_RULES;
   }
 
-  setCategoryPathRules(rules) {
+  setCategoryPathRules(rules: CategoryPathRule[] | null): void {
     this.categoryPathRules = rules || [];
   }
 
-  classifyFile(filePath, ext) {
-    const pathCategory = classifyByPathPrefix(filePath, this.categoryPathRules);
+  classifyFile(filePath: string, ext: string): string {
+    const pathCategory: string | null = classifyByPathPrefix(filePath, this.categoryPathRules);
     if (pathCategory) return pathCategory;
     return classifyByExtension(ext, this.categoryRules);
   }
 
-  async init(dbPath) {
+  async init(dbPath?: string): Promise<this> {
     this.dbPath = dbPath || path.join(__dirname, '../profiles/nas_index.db');
-    
+
     const SQL = await initSqlJs();
-    
-    const dir = path.dirname(this.dbPath);
+
+    const dir: string = path.dirname(this.dbPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
 
     if (fs.existsSync(this.dbPath)) {
-      const buffer = fs.readFileSync(this.dbPath);
+      const buffer: Buffer = fs.readFileSync(this.dbPath);
       this.db = new SQL.Database(buffer);
     } else {
       this.db = new SQL.Database();
     }
-    
+
     this.db.run('PRAGMA foreign_keys = ON');
     this.createTables();
     this.initialized = true;
     return this;
   }
 
-  createTables() {
-    this.db.run(`
+  private createTables(): void {
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS files (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         path TEXT NOT NULL UNIQUE,
@@ -114,7 +147,7 @@ class Database {
       )
     `);
 
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS scan_paths (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         path TEXT NOT NULL,
@@ -123,7 +156,7 @@ class Database {
       )
     `);
 
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS ai_search_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         query TEXT NOT NULL,
@@ -131,7 +164,7 @@ class Database {
       )
     `);
 
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS tag_groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -141,7 +174,7 @@ class Database {
       )
     `);
 
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS tags (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         group_id INTEGER,
@@ -153,7 +186,7 @@ class Database {
       )
     `);
 
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS file_tags (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         file_id INTEGER NOT NULL,
@@ -165,15 +198,14 @@ class Database {
       )
     `);
 
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_files_path ON files(path)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_files_category ON files(category)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_files_name ON files(name)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_file_tags_file ON file_tags(file_id)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_id)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_files_path ON files(path)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_files_category ON files(category)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_files_name ON files(name)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_tags_group ON tags(group_id)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_file_tags_file ON file_tags(file_id)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_file_tags_tag ON file_tags(tag_id)');
 
-    // 用户行为追踪表
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS ai_file_views (
         id INTEGER PRIMARY KEY,
         file_id INTEGER NOT NULL,
@@ -185,7 +217,7 @@ class Database {
       )
     `);
 
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS ai_user_actions (
         id INTEGER PRIMARY KEY,
         action_type TEXT NOT NULL,
@@ -197,7 +229,7 @@ class Database {
       )
     `);
 
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS ai_user_preferences (
         id INTEGER PRIMARY KEY,
         preference_type TEXT NOT NULL,
@@ -209,7 +241,7 @@ class Database {
       )
     `);
 
-    this.db.run(`
+    this.db!.run(`
       CREATE TABLE IF NOT EXISTS ai_recommendations (
         id INTEGER PRIMARY KEY,
         rec_type TEXT NOT NULL,
@@ -222,78 +254,84 @@ class Database {
       )
     `);
 
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_file_views_file ON ai_file_views(file_id)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_user_actions_type ON ai_user_actions(action_type)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_user_actions_created ON ai_user_actions(created_at)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_recommendations_type ON ai_recommendations(rec_type)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_ai_recommendations_file ON ai_recommendations(file_id)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_ai_file_views_file ON ai_file_views(file_id)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_ai_user_actions_type ON ai_user_actions(action_type)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_ai_user_actions_created ON ai_user_actions(created_at)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_ai_recommendations_type ON ai_recommendations(rec_type)');
+    this.db!.run('CREATE INDEX IF NOT EXISTS idx_ai_recommendations_file ON ai_recommendations(file_id)');
 
     this.save();
   }
 
-  save() {
+  save(): void {
     if (!this.db || !this.dbPath) return;
-    const data = this.db.export();
-    const buffer = Buffer.from(data);
+    const data: Uint8Array = this.db.export();
+    const buffer: Buffer = Buffer.from(data);
     fs.writeFileSync(this.dbPath, buffer);
   }
 
-  insertFile(filePath, stat, scanPath = null, saveNow = true) {
-    const ext = path.extname(filePath).toLowerCase();
-    const name = path.basename(filePath);
-    const category = this.classifyFile(filePath, ext);
-    const modifiedAt = stat ? new Date(stat.mtime).toISOString() : null;
-    
+  insertFile(filePath: string, stat: fs.Stats | FileStatLike | null, scanPath?: string | null, saveNow?: boolean): number {
+    const ext: string = path.extname(filePath).toLowerCase();
+    const name: string = path.basename(filePath);
+    const category: string = this.classifyFile(filePath, ext);
+    const fileSize: number = stat ? (stat.size || 0) : 0;
+    const modifiedAt: string | null = stat && stat.mtime ? new Date(stat.mtime).toISOString() : null;
+    const safeScanPath: string | null = scanPath ?? null;
+
     try {
-      const existing = this.getFileByPath(filePath);
+      const existing: File | null = this.getFileByPath(filePath);
       if (existing) {
-        this.db.run(`
+        this.db!.run(`
           UPDATE files SET name = ?, ext = ?, size = ?, category = ?, modified_at = ?, scanned_at = datetime('now', 'localtime'), scan_path = ?
           WHERE id = ?
-        `, [name, ext, stat ? stat.size : 0, category, modifiedAt, scanPath, existing.id]);
+        `, [name, ext, fileSize, category, modifiedAt, safeScanPath, existing.id]);
+        if (saveNow !== false) this.save();
+        return existing.id;
       } else {
-        this.db.run(`
+        this.db!.run(`
           INSERT INTO files (path, name, ext, size, category, modified_at, scanned_at, scan_path)
           VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), ?)
-        `, [filePath, name, ext, stat ? stat.size : 0, category, modifiedAt, scanPath]);
+        `, [filePath, name, ext, fileSize, category, modifiedAt, safeScanPath]);
+        if (saveNow !== false) this.save();
+        const result: QueryResult[] = this.db!.exec('SELECT MAX(id) as id FROM files');
+        return (result[0].values[0][0] as number) || 0;
       }
-      if (saveNow) this.save();
-      return true;
     } catch (err) {
-      logger.error('插入文件失败: %s', err.message);
-      return false;
+      const errorMessage: string = err instanceof Error ? err.message : String(err);
+      logger.error('插入文件失败: %s', errorMessage);
+      return 0;
     }
   }
 
-  insertFilesBatch(files, scanPath = null) {
+  insertFilesBatch(files: FileWithStat[], scanPath?: string | null): void {
     for (const file of files) {
       this.insertFile(file.path, file.stat, scanPath, false);
     }
     this.save();
   }
 
-  deleteFile(filePath) {
-    this.db.run('DELETE FROM files WHERE path = ?', [filePath]);
+  deleteFile(filePath: string): void {
+    this.db!.run('DELETE FROM files WHERE path = ?', [filePath]);
     this.save();
   }
 
-  deleteFileById(id) {
-    this.db.run('DELETE FROM files WHERE id = ?', [id]);
+  deleteFileById(id: number): void {
+    this.db!.run('DELETE FROM files WHERE id = ?', [id]);
     this.save();
   }
 
-  clearAllFiles() {
-    this.db.run('DELETE FROM files');
+  clearAllFiles(): void {
+    this.db!.run('DELETE FROM files');
     this.save();
   }
 
-  deleteByScanPath(scanPath) {
-    this.db.run('DELETE FROM files WHERE scan_path = ?', [scanPath]);
+  deleteByScanPath(scanPath: string): void {
+    this.db!.run('DELETE FROM files WHERE scan_path = ?', [scanPath]);
     this.save();
   }
 
-  getScanPaths() {
-    const result = this.db.exec(`
+  getScanPaths(): { path: string; fileCount: number; lastScan: string }[] {
+    const result: QueryResult[] = this.db!.exec(`
       SELECT DISTINCT scan_path, COUNT(*) as file_count, MAX(scanned_at) as last_scan
       FROM files
       WHERE scan_path IS NOT NULL
@@ -301,30 +339,30 @@ class Database {
     `);
     if (result.length === 0) return [];
     return result[0].values.map(row => ({
-      path: row[0],
-      fileCount: row[1],
-      lastScan: row[2]
+      path: row[0] as string,
+      fileCount: row[1] as number,
+      lastScan: row[2] as string
     }));
   }
 
-  getFileById(id) {
-    const result = this.db.exec('SELECT * FROM files WHERE id = ?', [id]);
+  getFileById(id: number): File | null {
+    const result: QueryResult[] = this.db!.exec('SELECT * FROM files WHERE id = ?', [id]);
     if (result.length === 0 || result[0].values.length === 0) return null;
-    return this.rowToObject(result[0], result[0].values[0]);
+    return this.rowToFile(result[0], result[0].values[0]);
   }
 
-  getFileByPath(filePath) {
-    const result = this.db.exec('SELECT * FROM files WHERE path = ?', [filePath]);
+  getFileByPath(filePath: string): File | null {
+    const result: QueryResult[] = this.db!.exec('SELECT * FROM files WHERE path = ?', [filePath]);
     if (result.length === 0 || result[0].values.length === 0) return null;
-    return this.rowToObject(result[0], result[0].values[0]);
+    return this.rowToFile(result[0], result[0].values[0]);
   }
 
-  getFiles(options = {}) {
+  getFiles(options: FileQueryOptions = {}): File[] {
     const { category, search, orderBy = 'name', orderDir = 'ASC', limit = 100, offset = 0, minSize, maxSize, modifiedAfter, modifiedBefore } = options;
-    
-    let sql = 'SELECT * FROM files';
-    const params = [];
-    const conditions = [];
+
+    let sql: string = 'SELECT * FROM files';
+    const params: unknown[] = [];
+    const conditions: string[] = [];
 
     if (category) {
       conditions.push('category = ?');
@@ -338,12 +376,12 @@ class Database {
 
     if (minSize !== undefined && minSize !== null && minSize !== '') {
       conditions.push('size >= ?');
-      params.push(parseInt(minSize));
+      params.push(parseInt(String(minSize)));
     }
 
     if (maxSize !== undefined && maxSize !== null && maxSize !== '') {
       conditions.push('size <= ?');
-      params.push(parseInt(maxSize));
+      params.push(parseInt(String(maxSize)));
     }
 
     if (modifiedAfter) {
@@ -363,18 +401,18 @@ class Database {
     sql += ` ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
-    const result = this.db.exec(sql, params);
+    const result: QueryResult[] = this.db!.exec(sql, params);
     if (result.length === 0) return [];
 
-    return result[0].values.map(row => this.rowToObject(result[0], row));
+    return result[0].values.map(row => this.rowToFile(result[0], row));
   }
 
-  getFileCount(options = {}) {
+  getFileCount(options: FileQueryOptions = {}): number {
     const { category, search, minSize, maxSize, modifiedAfter, modifiedBefore } = options;
-    
-    let sql = 'SELECT COUNT(*) as count FROM files';
-    const params = [];
-    const conditions = [];
+
+    let sql: string = 'SELECT COUNT(*) as count FROM files';
+    const params: unknown[] = [];
+    const conditions: string[] = [];
 
     if (category) {
       conditions.push('category = ?');
@@ -388,12 +426,12 @@ class Database {
 
     if (minSize !== undefined && minSize !== null && minSize !== '') {
       conditions.push('size >= ?');
-      params.push(parseInt(minSize));
+      params.push(parseInt(String(minSize)));
     }
 
     if (maxSize !== undefined && maxSize !== null && maxSize !== '') {
       conditions.push('size <= ?');
-      params.push(parseInt(maxSize));
+      params.push(parseInt(String(maxSize)));
     }
 
     if (modifiedAfter) {
@@ -410,13 +448,13 @@ class Database {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
 
-    const result = this.db.exec(sql, params);
+    const result: QueryResult[] = this.db!.exec(sql, params);
     if (result.length === 0) return 0;
-    return result[0].values[0][0];
+    return result[0].values[0][0] as number;
   }
 
-  getStatistics() {
-    const result = this.db.exec(`
+  getStatistics(): { category: string; count: number; totalSize: number }[] {
+    const result: QueryResult[] = this.db!.exec(`
       SELECT category, COUNT(*) as count, SUM(size) as totalSize
       FROM files
       GROUP BY category
@@ -426,151 +464,151 @@ class Database {
     if (result.length === 0) return [];
 
     return result[0].values.map(row => ({
-      category: row[0],
-      count: row[1],
-      totalSize: row[2]
+      category: row[0] as string,
+      count: row[1] as number,
+      totalSize: row[2] as number
     }));
   }
 
-  getTotalStats() {
-    const result = this.db.exec(`
+  getTotalStats(): { totalFiles: number; totalSize: number } {
+    const result: QueryResult[] = this.db!.exec(`
       SELECT COUNT(*) as totalFiles, SUM(size) as totalSize
       FROM files
     `);
 
     if (result.length === 0) return { totalFiles: 0, totalSize: 0 };
     return {
-      totalFiles: result[0].values[0][0] || 0,
-      totalSize: result[0].values[0][1] || 0
+      totalFiles: result[0].values[0][0] as number || 0,
+      totalSize: result[0].values[0][1] as number || 0
     };
   }
 
-  addFavorite(id) {
-    this.db.run('UPDATE files SET is_favorite = 1 WHERE id = ?', [id]);
+  addFavorite(id: number): void {
+    this.db!.run('UPDATE files SET is_favorite = 1 WHERE id = ?', [id]);
     this.save();
   }
 
-  removeFavorite(id) {
-    this.db.run('UPDATE files SET is_favorite = 0 WHERE id = ?', [id]);
+  removeFavorite(id: number): void {
+    this.db!.run('UPDATE files SET is_favorite = 0 WHERE id = ?', [id]);
     this.save();
   }
 
-  getFavorites() {
-    const result = this.db.exec('SELECT * FROM files WHERE is_favorite = 1 ORDER BY scanned_at DESC');
+  getFavorites(): File[] {
+    const result: QueryResult[] = this.db!.exec('SELECT * FROM files WHERE is_favorite = 1 ORDER BY scanned_at DESC');
     if (result.length === 0) return [];
-    return result[0].values.map(row => this.rowToObject(result[0], row));
+    return result[0].values.map(row => this.rowToFile(result[0], row));
   }
 
-  addSearchHistory(query) {
-    this.db.run('INSERT INTO ai_search_history (query) VALUES (?)', [query]);
+  addSearchHistory(query: string): void {
+    this.db!.run('INSERT INTO ai_search_history (query) VALUES (?)', [query]);
     this.save();
   }
 
-  getSearchHistory(limit = 10) {
-    const result = this.db.exec(`
+  getSearchHistory(limit: number = 10): string[] {
+    const result: QueryResult[] = this.db!.exec(`
       SELECT query FROM ai_search_history
       ORDER BY searched_at DESC
       LIMIT ?
     `, [limit]);
     if (result.length === 0) return [];
-    return result[0].values.map(row => row[0]);
+    return result[0].values.map(row => row[0] as string);
   }
 
-  clearSearchHistory() {
-    this.db.run('DELETE FROM ai_search_history');
+  clearSearchHistory(): void {
+    this.db!.run('DELETE FROM ai_search_history');
     this.save();
   }
 
-  createTagGroup(name, color = '#6366f1', sortOrder = 0) {
-    this.db.run(
+  createTagGroup(name: string, color: string = '#6366f1', sortOrder: number = 0): number {
+    this.db!.run(
       'INSERT INTO tag_groups (name, color, sort_order) VALUES (?, ?, ?)',
       [name, color, sortOrder]
     );
     this.save();
-    const result = this.db.exec('SELECT MAX(id) as id FROM tag_groups');
-    return result[0].values[0][0] || 0;
+    const result: QueryResult[] = this.db!.exec('SELECT MAX(id) as id FROM tag_groups');
+    return (result[0].values[0][0] as number) || 0;
   }
 
-  getTagGroups() {
-    const result = this.db.exec('SELECT * FROM tag_groups ORDER BY sort_order, id');
+  getTagGroups(): TagGroup[] {
+    const result: QueryResult[] = this.db!.exec('SELECT * FROM tag_groups ORDER BY sort_order, id');
     if (result.length === 0) return [];
-    return result[0].values.map(row => this.rowToObject(result[0], row));
+    return result[0].values.map(row => this.rowToTagGroup(result[0], row));
   }
 
-  getTagGroupById(id) {
-    const result = this.db.exec('SELECT * FROM tag_groups WHERE id = ?', [id]);
+  getTagGroupById(id: number): TagGroup | null {
+    const result: QueryResult[] = this.db!.exec('SELECT * FROM tag_groups WHERE id = ?', [id]);
     if (result.length === 0 || result[0].values.length === 0) return null;
-    return this.rowToObject(result[0], result[0].values[0]);
+    return this.rowToTagGroup(result[0], result[0].values[0]);
   }
 
-  updateTagGroup(id, data) {
-    const fields = [];
-    const params = [];
+  updateTagGroup(id: number, data: Partial<TagGroup>): boolean {
+    const fields: string[] = [];
+    const params: unknown[] = [];
     if (data.name !== undefined) { fields.push('name = ?'); params.push(data.name); }
     if (data.color !== undefined) { fields.push('color = ?'); params.push(data.color); }
     if (data.sort_order !== undefined) { fields.push('sort_order = ?'); params.push(data.sort_order); }
     if (fields.length === 0) return false;
     params.push(id);
-    this.db.run(`UPDATE tag_groups SET ${fields.join(', ')} WHERE id = ?`, params);
+    this.db!.run(`UPDATE tag_groups SET ${fields.join(', ')} WHERE id = ?`, params);
     this.save();
     return true;
   }
 
-  deleteTagGroup(id) {
-    this.db.run('UPDATE tags SET group_id = NULL WHERE group_id = ?', [id]);
-    this.db.run('DELETE FROM tag_groups WHERE id = ?', [id]);
+  deleteTagGroup(id: number): boolean {
+    this.db!.run('UPDATE tags SET group_id = NULL WHERE group_id = ?', [id]);
+    this.db!.run('DELETE FROM tag_groups WHERE id = ?', [id]);
     this.save();
     return true;
   }
 
-  createTag(name, groupId = null, color = '#6366f1', sortOrder = 0) {
-    this.db.run(
+  createTag(name: string, groupId: number | null = null, color: string = '#6366f1', sortOrder: number = 0): number {
+    this.db!.run(
       'INSERT INTO tags (name, group_id, color, sort_order) VALUES (?, ?, ?, ?)',
       [name, groupId, color, sortOrder]
     );
     this.save();
-    const result = this.db.exec('SELECT MAX(id) as id FROM tags');
-    return result[0].values[0][0] || 0;
+    const result: QueryResult[] = this.db!.exec('SELECT MAX(id) as id FROM tags');
+    return (result[0].values[0][0] as number) || 0;
   }
 
-  getTags(groupId = null) {
-    let sql = 'SELECT * FROM tags';
-    const params = [];
+  getTags(groupId: number | null = null): Tag[] {
+    let sql: string = 'SELECT * FROM tags';
+    const params: unknown[] = [];
     if (groupId !== null) {
       sql += ' WHERE group_id = ?';
       params.push(groupId);
     }
     sql += ' ORDER BY sort_order, id';
-    const result = this.db.exec(sql, params);
+    const result: QueryResult[] = this.db!.exec(sql, params);
     if (result.length === 0) return [];
-    return result[0].values.map(row => this.rowToObject(result[0], row));
+    return result[0].values.map(row => this.rowToTag(result[0], row));
   }
 
-  getAllTagsWithGroup() {
-    const sql = `
+  getAllTagsWithGroup(): TagWithGroup[] {
+    const sql: string = `
       SELECT t.*, tg.name as group_name, tg.color as group_color
       FROM tags t
       LEFT JOIN tag_groups tg ON t.group_id = tg.id
       ORDER BY tg.sort_order, t.sort_order, t.id
     `;
-    const result = this.db.exec(sql);
+    const result: QueryResult[] = this.db!.exec(sql);
     if (result.length === 0) return [];
     return result[0].values.map(row => {
-      const obj = {};
+      const obj: Record<string, unknown> = {};
       result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
-      return obj;
+      return obj as unknown as TagWithGroup;
     });
   }
 
-  getTagById(id) {
-    const result = this.db.exec('SELECT * FROM tags WHERE id = ?', [id]);
+  getTagById(id: number): Tag | null {
+    const result: QueryResult[] = this.db!.exec('SELECT * FROM tags WHERE id = ?', [id]);
     if (result.length === 0 || result[0].values.length === 0) return null;
-    return this.rowToObject(result[0], result[0].values[0]);
+    return this.rowToTag(result[0], result[0].values[0]);
   }
 
-  updateTag(id, data) {
-    const fields = [];
-    const params = [];
+  updateTag(id: number, data: Partial<Tag> & { groupId?: number }): boolean {
+    const fields: string[] = [];
+    const params: unknown[] = [];
     if (data.name !== undefined) { fields.push('name = ?'); params.push(data.name); }
     const groupId = data.group_id !== undefined ? data.group_id : data.groupId;
     if (groupId !== undefined) { fields.push('group_id = ?'); params.push(groupId); }
@@ -578,45 +616,45 @@ class Database {
     if (data.sort_order !== undefined) { fields.push('sort_order = ?'); params.push(data.sort_order); }
     if (fields.length === 0) return false;
     params.push(id);
-    this.db.run(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?`, params);
+    this.db!.run(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?`, params);
     this.save();
     return true;
   }
 
-  deleteTag(id) {
-    this.db.run('DELETE FROM file_tags WHERE tag_id = ?', [id]);
-    this.db.run('DELETE FROM tags WHERE id = ?', [id]);
+  deleteTag(id: number): boolean {
+    this.db!.run('DELETE FROM file_tags WHERE tag_id = ?', [id]);
+    this.db!.run('DELETE FROM tags WHERE id = ?', [id]);
     this.save();
     return true;
   }
 
-  addFileTag(fileId, tagId) {
+  addFileTag(fileId: number, tagId: number): boolean {
     try {
-      this.db.run(
+      this.db!.run(
         'INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)',
         [fileId, tagId]
       );
       this.save();
       return true;
-    } catch (err) {
+    } catch {
       return false;
     }
   }
 
-  removeFileTag(fileId, tagId) {
-    this.db.run('DELETE FROM file_tags WHERE file_id = ? AND tag_id = ?', [fileId, tagId]);
+  removeFileTag(fileId: number, tagId: number): boolean {
+    this.db!.run('DELETE FROM file_tags WHERE file_id = ? AND tag_id = ?', [fileId, tagId]);
     this.save();
     return true;
   }
 
-  removeFileTags(fileId) {
-    this.db.run('DELETE FROM file_tags WHERE file_id = ?', [fileId]);
+  removeFileTags(fileId: number): boolean {
+    this.db!.run('DELETE FROM file_tags WHERE file_id = ?', [fileId]);
     this.save();
     return true;
   }
 
-  getFileTags(fileId) {
-    const sql = `
+  getFileTags(fileId: number): TagWithGroup[] {
+    const sql: string = `
       SELECT t.*, tg.name as group_name, tg.color as group_color
       FROM file_tags ft
       JOIN tags t ON ft.tag_id = t.id
@@ -624,19 +662,19 @@ class Database {
       WHERE ft.file_id = ?
       ORDER BY tg.sort_order, t.sort_order, t.id
     `;
-    const result = this.db.exec(sql, [fileId]);
+    const result: QueryResult[] = this.db!.exec(sql, [fileId]);
     if (result.length === 0) return [];
     return result[0].values.map(row => {
-      const obj = {};
+      const obj: Record<string, unknown> = {};
       result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
-      return obj;
+      return obj as unknown as TagWithGroup;
     });
   }
 
-  getFileTagsBatch(fileIds) {
+  getFileTagsBatch(fileIds: number[]): Record<number, TagWithGroup[]> {
     if (!fileIds || fileIds.length === 0) return {};
-    const placeholders = fileIds.map(() => '?').join(',');
-    const sql = `
+    const placeholders: string = fileIds.map(() => '?').join(',');
+    const sql: string = `
       SELECT ft.file_id, t.*, tg.name as group_name, tg.color as group_color
       FROM file_tags ft
       JOIN tags t ON ft.tag_id = t.id
@@ -644,69 +682,69 @@ class Database {
       WHERE ft.file_id IN (${placeholders})
       ORDER BY tg.sort_order, t.sort_order, t.id
     `;
-    const result = this.db.exec(sql, fileIds);
-    const tagsMap = {};
+    const result: QueryResult[] = this.db!.exec(sql, fileIds);
+    const tagsMap: Record<number, TagWithGroup[]> = {};
     for (const fileId of fileIds) {
       tagsMap[fileId] = [];
     }
     if (result.length > 0) {
-      const columns = result[0].columns;
-      const fileIdIdx = columns.indexOf('file_id');
+      const columns: string[] = result[0].columns;
+      const fileIdIdx: number = columns.indexOf('file_id');
       for (const row of result[0].values) {
-        const fileId = row[fileIdIdx];
-        const obj = {};
+        const fileId: number = row[fileIdIdx] as number;
+        const obj: Record<string, unknown> = {};
         columns.forEach((col, i) => {
           if (col !== 'file_id') obj[col] = row[i];
         });
         if (tagsMap[fileId]) {
-          tagsMap[fileId].push(obj);
+          tagsMap[fileId].push(obj as unknown as TagWithGroup);
         }
       }
     }
     return tagsMap;
   }
 
-  getFilesByTag(tagId, options = {}) {
+  getFilesByTag(tagId: number, options: { page?: number; pageSize?: number; orderBy?: string; orderDir?: string } = {}): { files: File[]; total: number } {
     const { page = 1, pageSize = 50, orderBy = 'name', orderDir = 'ASC' } = options;
-    const offset = (page - 1) * pageSize;
-    
-    const countSql = 'SELECT COUNT(*) as count FROM file_tags WHERE tag_id = ?';
-    const countResult = this.db.exec(countSql, [tagId]);
-    const total = countResult.length > 0 ? countResult[0].values[0][0] : 0;
+    const offset: number = (page - 1) * pageSize;
 
-    const sql = `
+    const countSql: string = 'SELECT COUNT(*) as count FROM file_tags WHERE tag_id = ?';
+    const countResult: QueryResult[] = this.db!.exec(countSql, [tagId]);
+    const total: number = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0;
+
+    const sql: string = `
       SELECT f.* FROM files f
       JOIN file_tags ft ON f.id = ft.file_id
       WHERE ft.tag_id = ?
       ORDER BY f.${orderBy} ${orderDir}
       LIMIT ? OFFSET ?
     `;
-    const result = this.db.exec(sql, [tagId, pageSize, offset]);
+    const result: QueryResult[] = this.db!.exec(sql, [tagId, pageSize, offset]);
     if (result.length === 0) return { files: [], total };
-    
+
     return {
-      files: result[0].values.map(row => this.rowToObject(result[0], row)),
+      files: result[0].values.map(row => this.rowToFile(result[0], row)),
       total
     };
   }
 
-  getFilesByTags(tagIds, options = {}) {
+  getFilesByTags(tagIds: number[], options: { page?: number; pageSize?: number; orderBy?: string; orderDir?: string; matchAll?: boolean } = {}): { files: File[]; total: number } {
     const { page = 1, pageSize = 50, orderBy = 'name', orderDir = 'ASC', matchAll = false } = options;
-    const offset = (page - 1) * pageSize;
-    const placeholders = tagIds.map(() => '?').join(',');
+    const offset: number = (page - 1) * pageSize;
+    const placeholders: string = tagIds.map(() => '?').join(',');
 
     if (matchAll) {
-      const countSql = `
+      const countSql: string = `
         SELECT COUNT(DISTINCT f.id) as count FROM files f
         WHERE f.id IN (
           SELECT file_id FROM file_tags WHERE tag_id IN (${placeholders})
           GROUP BY file_id HAVING COUNT(DISTINCT tag_id) = ?
         )
       `;
-      const countResult = this.db.exec(countSql, [...tagIds, tagIds.length]);
-      const total = countResult.length > 0 ? countResult[0].values[0][0] : 0;
+      const countResult: QueryResult[] = this.db!.exec(countSql, [...tagIds, tagIds.length]);
+      const total: number = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0;
 
-      const sql = `
+      const sql: string = `
         SELECT f.* FROM files f
         WHERE f.id IN (
           SELECT file_id FROM file_tags WHERE tag_id IN (${placeholders})
@@ -715,41 +753,41 @@ class Database {
         ORDER BY f.${orderBy} ${orderDir}
         LIMIT ? OFFSET ?
       `;
-      const result = this.db.exec(sql, [...tagIds, tagIds.length, pageSize, offset]);
+      const result: QueryResult[] = this.db!.exec(sql, [...tagIds, tagIds.length, pageSize, offset]);
       if (result.length === 0) return { files: [], total };
       return {
-        files: result[0].values.map(row => this.rowToObject(result[0], row)),
+        files: result[0].values.map(row => this.rowToFile(result[0], row)),
         total
       };
     } else {
-      const countSql = `
+      const countSql: string = `
         SELECT COUNT(DISTINCT f.id) as count FROM files f
         JOIN file_tags ft ON f.id = ft.file_id
         WHERE ft.tag_id IN (${placeholders})
       `;
-      const countResult = this.db.exec(countSql, tagIds);
-      const total = countResult.length > 0 ? countResult[0].values[0][0] : 0;
+      const countResult: QueryResult[] = this.db!.exec(countSql, tagIds);
+      const total: number = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0;
 
-      const sql = `
+      const sql: string = `
         SELECT DISTINCT f.* FROM files f
         JOIN file_tags ft ON f.id = ft.file_id
         WHERE ft.tag_id IN (${placeholders})
         ORDER BY f.${orderBy} ${orderDir}
         LIMIT ? OFFSET ?
       `;
-      const result = this.db.exec(sql, [...tagIds, pageSize, offset]);
+      const result: QueryResult[] = this.db!.exec(sql, [...tagIds, pageSize, offset]);
       if (result.length === 0) return { files: [], total };
       return {
-        files: result[0].values.map(row => this.rowToObject(result[0], row)),
+        files: result[0].values.map(row => this.rowToFile(result[0], row)),
         total
       };
     }
   }
 
-  batchAddFileTags(fileIds, tagIds) {
+  batchAddFileTags(fileIds: number[], tagIds: number[]): boolean {
     for (const fileId of fileIds) {
       for (const tagId of tagIds) {
-        this.db.run(
+        this.db!.run(
           'INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)',
           [fileId, tagId]
         );
@@ -759,10 +797,10 @@ class Database {
     return true;
   }
 
-  batchRemoveFileTags(fileIds, tagIds) {
-    const filePlaceholders = fileIds.map(() => '?').join(',');
-    const tagPlaceholders = tagIds.map(() => '?').join(',');
-    this.db.run(
+  batchRemoveFileTags(fileIds: number[], tagIds: number[]): boolean {
+    const filePlaceholders: string = fileIds.map(() => '?').join(',');
+    const tagPlaceholders: string = tagIds.map(() => '?').join(',');
+    this.db!.run(
       `DELETE FROM file_tags WHERE file_id IN (${filePlaceholders}) AND tag_id IN (${tagPlaceholders})`,
       [...fileIds, ...tagIds]
     );
@@ -770,8 +808,8 @@ class Database {
     return true;
   }
 
-  getTagStats() {
-    const sql = `
+  getTagStats(): TagStats[] {
+    const sql: string = `
       SELECT t.id, t.group_id, t.name, t.color, tg.name as group_name, COUNT(ft.file_id) as file_count
       FROM tags t
       LEFT JOIN tag_groups tg ON t.group_id = tg.id
@@ -779,36 +817,52 @@ class Database {
       GROUP BY t.id
       ORDER BY tg.sort_order, t.sort_order, t.id
     `;
-    const result = this.db.exec(sql);
+    const result: QueryResult[] = this.db!.exec(sql);
     if (result.length === 0) return [];
     return result[0].values.map(row => {
-      const obj = {};
+      const obj: Record<string, unknown> = {};
       result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
-      return obj;
+      return obj as unknown as TagStats;
     });
   }
 
-  rowToObject(resultMeta, row) {
-    const obj = {};
+  private rowToFile(resultMeta: QueryResult, row: unknown[]): File {
+    const obj: Record<string, unknown> = {};
     resultMeta.columns.forEach((col, i) => {
       obj[col] = row[i];
     });
-    return obj;
+    return obj as unknown as File;
+  }
+
+  private rowToTagGroup(resultMeta: QueryResult, row: unknown[]): TagGroup {
+    const obj: Record<string, unknown> = {};
+    resultMeta.columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj as unknown as TagGroup;
+  }
+
+  private rowToTag(resultMeta: QueryResult, row: unknown[]): Tag {
+    const obj: Record<string, unknown> = {};
+    resultMeta.columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj as unknown as Tag;
   }
 
   // === 行为追踪方法 ===
 
-  recordFileView(fileId, playDuration = 0) {
-    const now = new Date().toISOString();
-    const existing = this.db.exec('SELECT id, view_count FROM ai_file_views WHERE file_id = ?', [fileId]);
+  recordFileView(fileId: number, playDuration: number = 0): void {
+    const now: string = new Date().toISOString();
+    const existing: QueryResult[] = this.db!.exec('SELECT id, view_count FROM ai_file_views WHERE file_id = ?', [fileId]);
     if (existing.length > 0 && existing[0].values.length > 0) {
-      const row = existing[0].values[0];
-      this.db.run(
+      const row: unknown[] = existing[0].values[0];
+      this.db!.run(
         'UPDATE ai_file_views SET view_count = ?, last_viewed_at = ?, play_duration = play_duration + ? WHERE file_id = ?',
-        [row[1] + 1, now, playDuration, fileId]
+        [(row[1] as number) + 1, now, playDuration, fileId]
       );
     } else {
-      this.db.run(
+      this.db!.run(
         'INSERT INTO ai_file_views (file_id, view_count, last_viewed_at, play_duration) VALUES (?, 1, ?, ?)',
         [fileId, now, playDuration]
       );
@@ -817,17 +871,17 @@ class Database {
     this.save();
   }
 
-  recordFilePreview(fileId, playDuration = 0) {
-    const now = new Date().toISOString();
-    const existing = this.db.exec('SELECT id, preview_count FROM ai_file_views WHERE file_id = ?', [fileId]);
+  recordFilePreview(fileId: number, playDuration: number = 0): void {
+    const now: string = new Date().toISOString();
+    const existing: QueryResult[] = this.db!.exec('SELECT id, preview_count FROM ai_file_views WHERE file_id = ?', [fileId]);
     if (existing.length > 0 && existing[0].values.length > 0) {
-      const row = existing[0].values[0];
-      this.db.run(
+      const row: unknown[] = existing[0].values[0];
+      this.db!.run(
         'UPDATE ai_file_views SET preview_count = ?, last_viewed_at = ?, play_duration = play_duration + ? WHERE file_id = ?',
-        [row[1] + 1, now, playDuration, fileId]
+        [(row[1] as number) + 1, now, playDuration, fileId]
       );
     } else {
-      this.db.run(
+      this.db!.run(
         'INSERT INTO ai_file_views (file_id, view_count, preview_count, last_viewed_at, play_duration) VALUES (?, 1, 1, ?, ?)',
         [fileId, now, playDuration]
       );
@@ -836,57 +890,57 @@ class Database {
     this.save();
   }
 
-  recordUserAction(actionType, data = {}) {
+  recordUserAction(actionType: string, data: { file_id?: number; tag_id?: number; search_query?: string; play_duration?: number } = {}): void {
     const { file_id, tag_id, search_query, ...extraData } = data;
-    const actionData = Object.keys(extraData).length > 0 ? JSON.stringify(extraData) : null;
-    this.db.run(
+    const actionData: string | null = Object.keys(extraData).length > 0 ? JSON.stringify(extraData) : null;
+    this.db!.run(
       'INSERT INTO ai_user_actions (action_type, file_id, tag_id, search_query, action_data) VALUES (?, ?, ?, ?, ?)',
       [actionType, file_id || null, tag_id || null, search_query || null, actionData]
     );
     this.save();
   }
 
-  getFileViews(limit = 50) {
-    const sql = `
+  getFileViews(limit: number = 50): FileView[] {
+    const sql: string = `
       SELECT fv.*, f.name, f.path, f.ext, f.category, f.size
       FROM ai_file_views fv
       JOIN files f ON fv.file_id = f.id
       ORDER BY fv.last_viewed_at DESC
       LIMIT ?
     `;
-    const result = this.db.exec(sql, [limit]);
+    const result: QueryResult[] = this.db!.exec(sql, [limit]);
     if (result.length === 0) return [];
     return result[0].values.map(row => {
-      const obj = {};
+      const obj: Record<string, unknown> = {};
       result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
-      return obj;
+      return obj as unknown as FileView;
     });
   }
 
-  getUserActions(limit = 50) {
-    const result = this.db.exec(
+  getUserActions(limit: number = 50): UserAction[] {
+    const result: QueryResult[] = this.db!.exec(
       'SELECT * FROM ai_user_actions ORDER BY created_at DESC LIMIT ?',
       [limit]
     );
     if (result.length === 0) return [];
     return result[0].values.map(row => {
-      const obj = {};
+      const obj: Record<string, unknown> = {};
       result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
-      return obj;
+      return obj as unknown as UserAction;
     });
   }
 
   // === 偏好分析方法 ===
 
-  calculatePreferences() {
+  calculatePreferences(): Preferences {
     this._calculateCategoryPreferences();
     this._calculateTagPreferences();
     this._calculateKeywordPreferences();
     return this.getPreferences();
   }
 
-  _calculateCategoryPreferences() {
-    const sql = `
+  private _calculateCategoryPreferences(): void {
+    const sql: string = `
       SELECT f.category,
              COUNT(DISTINCT fv.file_id) as view_count,
              COUNT(DISTINCT CASE WHEN f.is_favorite = 1 THEN fv.file_id END) as fav_count,
@@ -896,28 +950,28 @@ class Database {
       LEFT JOIN file_tags ft ON ft.file_id = f.id
       GROUP BY f.category
     `;
-    const result = this.db.exec(sql);
-    const categoryScores = [];
+    const result: QueryResult[] = this.db!.exec(sql);
+    const categoryScores: { category: string; score: number; view_count: number; fav_count: number; tag_count: number }[] = [];
     if (result.length > 0) {
-      const columns = result[0].columns;
+      const columns: string[] = result[0].columns;
       for (const row of result[0].values) {
-        const obj = {};
+        const obj: Record<string, unknown> = {};
         columns.forEach((col, i) => { obj[col] = row[i]; });
-        const totalActions = obj.view_count * 0.3 + obj.fav_count * 0.5 + obj.tag_count * 0.2;
+        const totalActions: number = (obj.view_count as number) * 0.3 + (obj.fav_count as number) * 0.5 + (obj.tag_count as number) * 0.2;
         categoryScores.push({
-          category: obj.category,
+          category: obj.category as string,
           score: totalActions,
-          view_count: obj.view_count,
-          fav_count: obj.fav_count,
-          tag_count: obj.tag_count
+          view_count: obj.view_count as number,
+          fav_count: obj.fav_count as number,
+          tag_count: obj.tag_count as number
         });
       }
     }
 
-    const totalScore = categoryScores.reduce((sum, c) => sum + c.score, 0);
-    this.db.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['category']);
+    const totalScore: number = categoryScores.reduce((sum, c) => sum + c.score, 0);
+    this.db!.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['category']);
     for (const cat of categoryScores) {
-      this.db.run(
+      this.db!.run(
         'INSERT INTO ai_user_preferences (preference_type, preference_key, preference_value, data_source, last_updated) VALUES (?, ?, ?, ?, ?)',
         ['category', cat.category, totalScore > 0 ? cat.score / totalScore : 0, 'combined', new Date().toISOString()]
       );
@@ -925,8 +979,8 @@ class Database {
     this.save();
   }
 
-  _calculateTagPreferences() {
-    const sql = `
+  private _calculateTagPreferences(): void {
+    const sql: string = `
       SELECT t.id, t.name,
              COUNT(DISTINCT fv.file_id) as viewed_count,
              COUNT(DISTINCT ua.file_id) as action_count
@@ -936,24 +990,24 @@ class Database {
       LEFT JOIN ai_user_actions ua ON ua.file_id = ft.file_id AND ua.tag_id = t.id
       GROUP BY t.id
     `;
-    const result = this.db.exec(sql);
-    const tagScores = [];
+    const result: QueryResult[] = this.db!.exec(sql);
+    const tagScores: { tag_id: number; name: string; score: number }[] = [];
     if (result.length > 0) {
-      const columns = result[0].columns;
+      const columns: string[] = result[0].columns;
       for (const row of result[0].values) {
-        const obj = {};
+        const obj: Record<string, unknown> = {};
         columns.forEach((col, i) => { obj[col] = row[i]; });
-        const totalFilesWithTag = this.db.exec('SELECT COUNT(*) FROM file_tags WHERE tag_id = ?', [obj.id]);
-        const totalFiles = totalFilesWithTag.length > 0 ? totalFilesWithTag[0].values[0][0] : 1;
-        const score = (obj.viewed_count || 0) / totalFiles;
-        tagScores.push({ tag_id: obj.id, name: obj.name, score });
+        const totalFilesWithTag: QueryResult[] = this.db!.exec('SELECT COUNT(*) FROM file_tags WHERE tag_id = ?', [obj.id]);
+        const totalFiles: number = totalFilesWithTag.length > 0 ? (totalFilesWithTag[0].values[0][0] as number) : 1;
+        const score: number = ((obj.viewed_count as number) || 0) / totalFiles;
+        tagScores.push({ tag_id: obj.id as number, name: obj.name as string, score });
       }
     }
 
-    this.db.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['tag']);
+    this.db!.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['tag']);
     for (const tag of tagScores) {
       if (tag.score > 0) {
-        this.db.run(
+        this.db!.run(
           'INSERT INTO ai_user_preferences (preference_type, preference_key, preference_value, data_source, last_updated) VALUES (?, ?, ?, ?, ?)',
           ['tag', tag.name, tag.score, 'views', new Date().toISOString()]
         );
@@ -962,8 +1016,8 @@ class Database {
     this.save();
   }
 
-  _calculateKeywordPreferences() {
-    const sql = `
+  private _calculateKeywordPreferences(): void {
+    const sql: string = `
       SELECT search_query, COUNT(*) as query_count
       FROM ai_user_actions
       WHERE action_type = 'search' AND search_query IS NOT NULL
@@ -971,21 +1025,21 @@ class Database {
       ORDER BY query_count DESC
       LIMIT 50
     `;
-    const result = this.db.exec(sql);
-    const keywordScores = [];
+    const result: QueryResult[] = this.db!.exec(sql);
+    const keywordScores: { keyword: string; score: number }[] = [];
     if (result.length > 0) {
-      const maxCount = result[0].values.length > 0 ? result[0].values[0][1] : 1;
+      const maxCount: number = result[0].values.length > 0 ? (result[0].values[0][1] as number) : 1;
       for (const row of result[0].values) {
         keywordScores.push({
-          keyword: row[0],
-          score: row[1] / maxCount
+          keyword: row[0] as string,
+          score: (row[1] as number) / maxCount
         });
       }
     }
 
-    this.db.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['keyword']);
+    this.db!.run('DELETE FROM ai_user_preferences WHERE preference_type = ?', ['keyword']);
     for (const kw of keywordScores) {
-      this.db.run(
+      this.db!.run(
         'INSERT INTO ai_user_preferences (preference_type, preference_key, preference_value, data_source, last_updated) VALUES (?, ?, ?, ?, ?)',
         ['keyword', kw.keyword, kw.score, 'search', new Date().toISOString()]
       );
@@ -993,42 +1047,42 @@ class Database {
     this.save();
   }
 
-  getPreferences() {
-    const result = this.db.exec(
+  getPreferences(): Preferences {
+    const result: QueryResult[] = this.db!.exec(
       'SELECT * FROM ai_user_preferences ORDER BY preference_value DESC'
     );
     if (result.length === 0) return { categories: [], tags: [], keywords: [] };
-    const rows = result[0].values.map(row => {
-      const obj = {};
+    const rows: Record<string, unknown>[] = result[0].values.map(row => {
+      const obj: Record<string, unknown> = {};
       result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
       return obj;
     });
     return {
-      categories: rows.filter(r => r.preference_type === 'category'),
-      tags: rows.filter(r => r.preference_type === 'tag'),
-      keywords: rows.filter(r => r.preference_type === 'keyword')
+      categories: rows.filter(r => r.preference_type === 'category') as unknown as UserPreference[],
+      tags: rows.filter(r => r.preference_type === 'tag') as unknown as UserPreference[],
+      keywords: rows.filter(r => r.preference_type === 'keyword') as unknown as UserPreference[]
     };
   }
 
-  clearPreferencesData() {
-    this.db.run('DELETE FROM ai_user_preferences');
-    this.db.run('DELETE FROM ai_file_views');
-    this.db.run('DELETE FROM ai_user_actions');
-    this.db.run('DELETE FROM ai_recommendations');
-    this.db.run('DELETE FROM ai_search_history');
+  clearPreferencesData(): void {
+    this.db!.run('DELETE FROM ai_user_preferences');
+    this.db!.run('DELETE FROM ai_file_views');
+    this.db!.run('DELETE FROM ai_user_actions');
+    this.db!.run('DELETE FROM ai_recommendations');
+    this.db!.run('DELETE FROM ai_search_history');
     this.save();
   }
 
   // === 推荐引擎方法 ===
 
-  getRecommendations(type = null, limit = 20) {
-    let sql = `
+  getRecommendations(type: string | null = null, limit: number = 20): Recommendation[] {
+    let sql: string = `
       SELECT r.*, f.name, f.path, f.ext, f.category, f.size
       FROM ai_recommendations r
       JOIN files f ON r.file_id = f.id
       WHERE r.expires_at IS NULL OR r.expires_at > datetime('now')
     `;
-    const params = [];
+    const params: unknown[] = [];
     if (type) {
       sql += ' AND r.rec_type = ?';
       params.push(type);
@@ -1036,28 +1090,28 @@ class Database {
     sql += ' ORDER BY r.score DESC LIMIT ?';
     params.push(limit);
 
-    const result = this.db.exec(sql, params);
+    const result: QueryResult[] = this.db!.exec(sql, params);
     if (result.length === 0) return [];
     return result[0].values.map(row => {
-      const obj = {};
+      const obj: Record<string, unknown> = {};
       result[0].columns.forEach((col, i) => { obj[col] = row[i]; });
-      return obj;
+      return obj as unknown as Recommendation;
     });
   }
 
-  generateRecommendations() {
-    const prefs = this.getPreferences();
-    const now = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  generateRecommendations(): Recommendation[] {
+    const prefs: Preferences = this.getPreferences();
+    const now: string = new Date().toISOString();
+    const expiresAt: string = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    this.db.run('DELETE FROM ai_recommendations');
+    this.db!.run('DELETE FROM ai_recommendations');
 
-    const topCategories = prefs.categories.slice(0, 3).map(c => c.preference_key);
-    const topTags = prefs.tags.slice(0, 5).map(t => t.preference_key);
+    const topCategories: string[] = prefs.categories.slice(0, 3).map(c => c.preference_key);
+    const topTags: string[] = prefs.tags.slice(0, 5).map(t => t.preference_key);
 
     if (topCategories.length > 0) {
-      const placeholders = topCategories.map(() => '?').join(',');
-      const sql = `
+      const placeholders: string = topCategories.map(() => '?').join(',');
+      const sql: string = `
         SELECT f.id, f.name, f.category
         FROM files f
         LEFT JOIN ai_file_views fv ON fv.file_id = f.id
@@ -1065,13 +1119,13 @@ class Database {
         ORDER BY f.scanned_at DESC
         LIMIT 20
       `;
-      const result = this.db.exec(sql, topCategories);
+      const result: QueryResult[] = this.db!.exec(sql, topCategories);
       if (result.length > 0) {
         for (const row of result[0].values) {
-          const fileId = row[0];
-          const category = row[2];
-          const score = prefs.categories.find(c => c.preference_key === category)?.preference_value || 0.5;
-          this.db.run(
+          const fileId: number = row[0] as number;
+          const category: string = row[2] as string;
+          const score: number = prefs.categories.find(c => c.preference_key === category)?.preference_value || 0.5;
+          this.db!.run(
             'INSERT INTO ai_recommendations (rec_type, file_id, score, reason, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
             ['category_based', fileId, score, `基于你对「${category}」类别的偏好`, now, expiresAt]
           );
@@ -1080,8 +1134,8 @@ class Database {
     }
 
     if (topTags.length > 0) {
-      const placeholders = topTags.map(() => '?').join(',');
-      const sql = `
+      const placeholders: string = topTags.map(() => '?').join(',');
+      const sql: string = `
         SELECT DISTINCT f.id, f.name
         FROM files f
         JOIN file_tags ft ON ft.file_id = f.id
@@ -1091,12 +1145,12 @@ class Database {
         ORDER BY f.scanned_at DESC
         LIMIT 20
       `;
-      const result = this.db.exec(sql, topTags);
+      const result: QueryResult[] = this.db!.exec(sql, topTags);
       if (result.length > 0) {
         for (const row of result[0].values) {
-          const fileId = row[0];
-          const score = 0.7;
-          this.db.run(
+          const fileId: number = row[0] as number;
+          const score: number = 0.7;
+          this.db!.run(
             'INSERT INTO ai_recommendations (rec_type, file_id, score, reason, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
             ['tag_based', fileId, score, '基于你的标签偏好', now, expiresAt]
           );
@@ -1108,12 +1162,12 @@ class Database {
     return this.getRecommendations(null, 20);
   }
 
-  clearRecommendations() {
-    this.db.run('DELETE FROM ai_recommendations');
+  clearRecommendations(): void {
+    this.db!.run('DELETE FROM ai_recommendations');
     this.save();
   }
 
-  close() {
+  close(): void {
     if (this.db) {
       this.save();
       this.db.close();
@@ -1122,12 +1176,12 @@ class Database {
   }
 }
 
-const database = new Database();
+const database: Database = new Database();
 
-module.exports = { 
-  database, 
-  Database, 
-  classifyByExtension, 
+export {
+  database,
+  Database,
+  classifyByExtension,
   classifyByPathPrefix,
   EXTENSION_CLASS_MAP,
   DEFAULT_CATEGORY_RULES

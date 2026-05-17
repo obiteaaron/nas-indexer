@@ -4,23 +4,36 @@
     "es2022": true,
     "jest": true
   },
-  "extends": ["eslint:recommended"],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": 2022,
-    "sourceType": "module"
+    "sourceType": "module",
+    "project": "./tsconfig.json"
   },
+  "plugins": ["@typescript-eslint"],
   "rules": {
     "no-console": "warn",
-    "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
-    "no-constant-condition": "warn",
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-require-imports": "off",
     "semi": ["error", "always"],
     "quotes": ["error", "single", { "avoidEscape": true }],
     "indent": ["error", 2],
-    "comma-dangle": ["error", "only-multiline"],
-    "no-var": "error",
-    "prefer-const": "error"
+    "comma-dangle": ["error", "only-multiline"]
   },
   "overrides": [
+    {
+      "files": ["*.js"],
+      "rules": {
+        "@typescript-eslint/no-var-requires": "off",
+        "@typescript-eslint/explicit-function-return-type": "off"
+      }
+    },
     {
       "files": ["frontend/**/*.js", "frontend/**/*.vue"],
       "env": {
@@ -35,8 +48,8 @@
   ],
   "ignorePatterns": [
     "node_modules/",
-    "frontend/dist/",
-    "frontend/node_modules/",
+    "frontend/",
+    "dist/",
     "profiles/",
     "*.min.js"
   ]

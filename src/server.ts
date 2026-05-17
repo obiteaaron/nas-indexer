@@ -1,31 +1,32 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const cron = require('node-cron');
-const { performScanWithDatabase } = require('./scanner');
-const { database } = require('./database');
-const { logger } = require('./logger');
-const { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir } = require('./utils');
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import path from 'path';
+import cron from 'node-cron';
+import { performScanWithDatabase } from './scanner';
+import { database } from './database';
+import { logger } from './logger';
+import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir, getStoragePath } from './utils';
+import type { Config, FileExtensionFilter, ScanProgressEvent } from './types';
 
 // 路由模块
-const configRouter = require('./routes/config');
-const scanRouter = require('./routes/scan');
-const filesRouter = require('./routes/files');
-const tagsRouter = require('./routes/tags');
-const previewRouter = require('./routes/preview');
-const recommendationsRouter = require('./routes/recommendations');
-const trackingRouter = require('./routes/tracking');
-const { router: statsRouter, setScanJob } = require('./routes/stats');
+import configRouter from './routes/config';
+import scanRouter from './routes/scan';
+import filesRouter from './routes/files';
+import tagsRouter from './routes/tags';
+import previewRouter from './routes/preview';
+import recommendationsRouter from './routes/recommendations';
+import trackingRouter from './routes/tracking';
+import { router as statsRouter, setScanJob } from './routes/stats';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT: number = parseInt(process.env.PORT || '3000', 10);
 
 app.use(cors());
 app.use(express.json());
 
-let scanJob = null;
+let scanJob: cron.ScheduledTask | null = null;
 
-async function runScan(config, onProgress = null) {
+async function runScan(config: Config, onProgress: ((event: ScanProgressEvent) => void) | null = null): Promise<unknown> {
   try {
     ensureStorageDir(config);
 
@@ -38,21 +39,24 @@ async function runScan(config, onProgress = null) {
       database.setCategoryPathRules(config.categoryPathRules);
     }
 
+    const fileExtensionFilter: FileExtensionFilter = config.fileExtensionFilter || { whitelist: [], blacklist: [] };
+
     const result = await performScanWithDatabase(
       config.scanPaths,
       config.excludePatterns || [],
-      config.fileExtensionFilter || { whitelist: [], blacklist: [] },
+      fileExtensionFilter,
       onProgress
     );
 
     return result;
   } catch (err) {
-    logger.error('扫描失败: %s', err.message);
+    const error = err as Error;
+    logger.error('扫描失败: %s', error.message);
     throw err;
   }
 }
 
-function scheduleScan(config) {
+function scheduleScan(config: Config): void {
   if (scanJob) {
     scanJob.stop();
     scanJob = null;
@@ -82,9 +86,9 @@ app.use('/api/tracking', trackingRouter);
 app.use('/api', statsRouter);
 
 // Static files - serve Vue frontend
-const frontendPath = path.join(PROJECT_ROOT, 'frontend', 'dist');
+const frontendPath: string = path.join(PROJECT_ROOT, 'frontend', 'dist');
 app.use(express.static(frontendPath));
-app.get('*', (req, res, next) => {
+app.get('*', (req: Request, res: Response, next: NextFunction) => {
   if (req.path.startsWith('/api/')) {
     return next();
   }
@@ -97,9 +101,8 @@ app.listen(PORT, async () => {
   logger.info('📍 访问地址: http://localhost:%d', PORT);
   logger.info('📁 默认存储目录: %s\n', DEFAULT_STORAGE_PATH);
 
-  const config = loadConfig();
-  const { getStoragePath } = require('./utils');
-  const storagePath = getStoragePath(config);
+  const config: Config = loadConfig();
+  const storagePath: string = getStoragePath(config);
   logger.info('📂 当前存储目录: %s', storagePath);
 
   scheduleScan(config);

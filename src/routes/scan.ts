@@ -1,25 +1,29 @@
-const express = require('express');
-const fs = require('fs');
-const router = express.Router();
-const { performScanWithDatabase, formatSize } = require('../scanner');
-const { database } = require('../database');
-const { taskManager } = require('../task-manager');
-const { initDatabase, loadConfig } = require('../utils');
+import express, { Router, Request, Response } from 'express';
+import fs from 'fs';
+import { performScanWithDatabase, formatSize } from '../scanner';
+import { database } from '../database';
+import { taskManager } from '../task-manager';
+import { initDatabase, loadConfig } from '../utils';
+import type { Config, FileExtensionFilter, ScanProgressEvent } from '../types';
 
-const scanningPaths = new Set();
+const router: Router = express.Router();
+
+const scanningPaths: Set<string> = new Set();
 
 // 扫描全部路径
-router.post('/', async (req, res) => {
+router.post('/', async (_req: Request, res: Response): Promise<void> => {
   try {
     await initDatabase();
-    const config = loadConfig();
+    const config: Config = loadConfig();
 
     if (!config.scanPaths || config.scanPaths.length === 0) {
-      return res.status(400).json({ success: false, error: '请先配置扫描路径' });
+      res.status(400).json({ success: false, error: '请先配置扫描路径' });
+      return;
     }
 
     if (taskManager.hasRunningTask('scan')) {
-      return res.status(409).json({ success: false, error: '已有扫描任务正在执行' });
+      res.status(409).json({ success: false, error: '已有扫描任务正在执行' });
+      return;
     }
 
     const task = taskManager.createTask('scan');
@@ -28,11 +32,12 @@ router.post('/', async (req, res) => {
     // 异步执行扫描
     (async () => {
       try {
+        const fileExtensionFilter: FileExtensionFilter = config.fileExtensionFilter || { whitelist: [], blacklist: [] };
         const result = await performScanWithDatabase(
           config.scanPaths,
           config.excludePatterns || [],
-          config.fileExtensionFilter || { whitelist: [], blacklist: [] },
-          (progress) => {
+          fileExtensionFilter,
+          (progress: ScanProgressEvent) => {
             taskManager.updateTask(task.id, {
               progress: progress.progress || 0,
               message: progress.message,
@@ -46,35 +51,40 @@ router.post('/', async (req, res) => {
           totalSize: formatSize(result.totalSize)
         });
       } catch (err) {
-        taskManager.failTask(task.id, err.message);
+        const error = err as Error;
+        taskManager.failTask(task.id, error.message);
       }
     })();
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // 扫描单个路径
-router.post('/path', async (req, res) => {
+router.post('/path', async (req: Request, res: Response): Promise<void> => {
   try {
     await initDatabase();
     const { path: scanPath } = req.body;
 
     if (!scanPath) {
-      return res.status(400).json({ success: false, error: '请提供扫描路径' });
+      res.status(400).json({ success: false, error: '请提供扫描路径' });
+      return;
     }
 
     if (!fs.existsSync(scanPath)) {
-      return res.status(400).json({ success: false, error: '路径不存在' });
+      res.status(400).json({ success: false, error: '路径不存在' });
+      return;
     }
 
     if (scanningPaths.has(scanPath)) {
-      return res.status(409).json({ success: false, error: '该路径正在扫描中，请稍后再试' });
+      res.status(409).json({ success: false, error: '该路径正在扫描中，请稍后再试' });
+      return;
     }
 
     scanningPaths.add(scanPath);
 
-    const config = loadConfig();
+    const config: Config = loadConfig();
 
     if (config.categoryRules) {
       database.setCategoryRules(config.categoryRules);
@@ -89,11 +99,12 @@ router.post('/path', async (req, res) => {
     // 异步执行扫描
     (async () => {
       try {
+        const fileExtensionFilter: FileExtensionFilter = config.fileExtensionFilter || { whitelist: [], blacklist: [] };
         const result = await performScanWithDatabase(
           [scanPath],
           config.excludePatterns || [],
-          config.fileExtensionFilter || { whitelist: [], blacklist: [] },
-          (progress) => {
+          fileExtensionFilter,
+          (progress: ScanProgressEvent) => {
             taskManager.updateTask(task.id, {
               progress: progress.progress || 0,
               message: progress.message,
@@ -107,45 +118,49 @@ router.post('/path', async (req, res) => {
           totalSize: formatSize(result.totalSize)
         });
       } catch (err) {
-        taskManager.failTask(task.id, err.message);
+        const error = err as Error;
+        taskManager.failTask(task.id, error.message);
       } finally {
         scanningPaths.delete(scanPath);
       }
     })();
   } catch (err) {
+    const error = err as Error;
     scanningPaths.delete(req.body.path);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // 检测路径是否可达
-router.post('/check-path', async (req, res) => {
+router.post('/check-path', async (req: Request, res: Response): Promise<void> => {
   try {
     const { path: checkPath } = req.body;
-    
+
     if (!checkPath) {
-      return res.status(400).json({ success: false, error: '请提供检测路径' });
+      res.status(400).json({ success: false, error: '请提供检测路径' });
+      return;
     }
 
-    const startTime = Date.now();
-    let isAccessible = false;
-    let fileCount = 0;
-    let error = null;
+    const startTime: number = Date.now();
+    let isAccessible: boolean = false;
+    let fileCount: number = 0;
+    let error: string | null = null;
 
     try {
-      const stats = fs.statSync(checkPath);
+      const stats: fs.Stats = fs.statSync(checkPath);
       isAccessible = true;
-      
+
       if (stats.isDirectory()) {
-        const files = fs.readdirSync(checkPath);
+        const files: string[] = fs.readdirSync(checkPath);
         fileCount = files.length;
       }
     } catch (err) {
-      error = err.message;
+      const errObj = err as Error;
+      error = errObj.message;
       isAccessible = false;
     }
 
-    const latency = Date.now() - startTime;
+    const latency: number = Date.now() - startTime;
 
     res.json({
       success: true,
@@ -158,41 +173,44 @@ router.post('/check-path', async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // 批量检测所有配置路径
-router.post('/check-all-paths', async (req, res) => {
+router.post('/check-all-paths', async (_req: Request, res: Response): Promise<void> => {
   try {
     await initDatabase();
-    const config = loadConfig();
-    const paths = config.scanPaths || [];
+    const config: Config = loadConfig();
+    const paths: string[] = config.scanPaths || [];
 
     if (paths.length === 0) {
-      return res.json({ success: true, data: [] });
+      res.json({ success: true, data: [] });
+      return;
     }
 
-    const results = await Promise.all(paths.map(async (scanPath) => {
-      const startTime = Date.now();
-      let isAccessible = false;
-      let fileCount = 0;
-      let error = null;
+    const results = await Promise.all(paths.map(async (scanPath: string) => {
+      const startTime: number = Date.now();
+      let isAccessible: boolean = false;
+      let fileCount: number = 0;
+      let error: string | null = null;
 
       try {
-        const stats = fs.statSync(scanPath);
+        const stats: fs.Stats = fs.statSync(scanPath);
         isAccessible = true;
-        
+
         if (stats.isDirectory()) {
-          const files = fs.readdirSync(scanPath);
+          const files: string[] = fs.readdirSync(scanPath);
           fileCount = files.length;
         }
       } catch (err) {
-        error = err.message;
+        const errObj = err as Error;
+        error = errObj.message;
         isAccessible = false;
       }
 
-      const latency = Date.now() - startTime;
+      const latency: number = Date.now() - startTime;
 
       return {
         path: scanPath,
@@ -205,17 +223,18 @@ router.post('/check-all-paths', async (req, res) => {
 
     res.json({ success: true, data: results });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // 获取任务列表
-router.get('/tasks', (req, res) => {
+router.get('/tasks', (_req: Request, res: Response): void => {
   res.json({ success: true, tasks: taskManager.getActiveTasks() });
 });
 
 // 任务状态 SSE 流
-router.get('/tasks/stream', (req, res) => {
+router.get('/tasks/stream', (req: Request, res: Response): void => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -230,4 +249,4 @@ router.get('/tasks/stream', (req, res) => {
   });
 });
 
-module.exports = router;
+export default router;

@@ -1,18 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const { database } = require('../database');
-const { formatSize } = require('../scanner');
-const { initDatabase, loadConfig, getStoragePath } = require('../utils');
+import express, { Router, Request, Response } from 'express';
+import { database } from '../database';
+import { formatSize } from '../scanner';
+import { initDatabase, loadConfig, getStoragePath } from '../utils';
+import type { ScheduledTask } from 'node-cron';
 
-let scanJob = null;
+const router: Router = express.Router();
+
+let scanJob: ScheduledTask | null = null;
 
 // 设置扫描任务引用
-function setScanJob(job) {
+function setScanJob(job: ScheduledTask | null): void {
   scanJob = job;
 }
 
 // 获取统计信息
-router.get('/statistics', async (req, res) => {
+router.get('/statistics', async (_req: Request, res: Response): Promise<void> => {
   await initDatabase();
   try {
     const categoryStats = database.getStatistics();
@@ -38,19 +40,20 @@ router.get('/statistics', async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // 获取系统状态
-router.get('/status', async (req, res) => {
+router.get('/status', async (_req: Request, res: Response): Promise<void> => {
   await initDatabase();
   try {
     const config = loadConfig();
-    const storagePath = getStoragePath(config);
+    const storagePath: string = getStoragePath(config);
 
     const totalStats = database.getTotalStats();
-    const hasData = totalStats.totalFiles > 0;
+    const hasData: boolean = totalStats.totalFiles > 0;
 
     res.json({
       success: true,
@@ -64,8 +67,9 @@ router.get('/status', async (req, res) => {
       }
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-module.exports = { router, setScanJob };
+export { router, setScanJob };
