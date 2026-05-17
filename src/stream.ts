@@ -1,40 +1,41 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import type { Request, Response } from 'express';
 
-const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'];
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
-const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a'];
-const PDF_EXTENSION = '.pdf';
-const TEXT_EXTENSIONS = ['.txt'];
-const MARKDOWN_EXTENSIONS = ['.md'];
+const VIDEO_EXTENSIONS: string[] = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'];
+const IMAGE_EXTENSIONS: string[] = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+const AUDIO_EXTENSIONS: string[] = ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a'];
+const PDF_EXTENSION: string = '.pdf';
+const TEXT_EXTENSIONS: string[] = ['.txt'];
+const MARKDOWN_EXTENSIONS: string[] = ['.md'];
 
-function isVideoFile(ext) {
+function isVideoFile(ext: string): boolean {
   return VIDEO_EXTENSIONS.includes(ext.toLowerCase());
 }
 
-function isImageFile(ext) {
+function isImageFile(ext: string): boolean {
   return IMAGE_EXTENSIONS.includes(ext.toLowerCase());
 }
 
-function isAudioFile(ext) {
+function isAudioFile(ext: string): boolean {
   return AUDIO_EXTENSIONS.includes(ext.toLowerCase());
 }
 
-function isPdfFile(ext) {
+function isPdfFile(ext: string): boolean {
   return ext.toLowerCase() === PDF_EXTENSION;
 }
 
-function isTextFile(ext) {
+function isTextFile(ext: string): boolean {
   return TEXT_EXTENSIONS.includes(ext.toLowerCase());
 }
 
-function isMarkdownFile(ext) {
+function isMarkdownFile(ext: string): boolean {
   return MARKDOWN_EXTENSIONS.includes(ext.toLowerCase());
 }
 
-function getMimeType(ext) {
-  const lowerExt = ext.toLowerCase();
-  const mimeTypes = {
+function getMimeType(ext: string): string {
+  const lowerExt: string = ext.toLowerCase();
+  const mimeTypes: Record<string, string> = {
     '.mp4': 'video/mp4',
     '.mkv': 'video/x-matroska',
     '.avi': 'video/x-msvideo',
@@ -66,72 +67,75 @@ function getMimeType(ext) {
   return mimeTypes[lowerExt] || 'application/octet-stream';
 }
 
-function streamFile(req, res, filePath) {
+function streamFile(req: Request, res: Response, filePath: string): void {
   if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: '文件不存在' });
+    res.status(404).json({ error: '文件不存在' });
+    return;
   }
 
-  const ext = path.extname(filePath);
-  const mimeType = getMimeType(ext);
-  const stat = fs.statSync(filePath);
-  const fileSize = stat.size;
+  const ext: string = path.extname(filePath);
+  const mimeType: string = getMimeType(ext);
+  const stat: fs.Stats = fs.statSync(filePath);
+  const fileSize: number = stat.size;
 
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Accept-Ranges', 'bytes');
 
-  const range = req.headers.range;
+  const range: string | undefined = req.headers.range;
 
   if (range) {
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-    const chunkSize = end - start + 1;
+    const parts: string[] = range.replace(/bytes=/, '').split('-');
+    const start: number = parseInt(parts[0], 10);
+    const end: number = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    const chunkSize: number = end - start + 1;
 
     res.status(206);
     res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
     res.setHeader('Content-Length', chunkSize);
 
-    const fileStream = fs.createReadStream(filePath, { start, end });
+    const fileStream: fs.ReadStream = fs.createReadStream(filePath, { start, end });
     fileStream.pipe(res);
   } else {
     res.setHeader('Content-Length', fileSize);
-    const fileStream = fs.createReadStream(filePath);
+    const fileStream: fs.ReadStream = fs.createReadStream(filePath);
     fileStream.pipe(res);
   }
 }
 
-function serveImage(res, filePath) {
+function serveImage(res: Response, filePath: string): void {
   if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: '文件不存在' });
+    res.status(404).json({ error: '文件不存在' });
+    return;
   }
 
-  const ext = path.extname(filePath);
-  const mimeType = getMimeType(ext);
+  const ext: string = path.extname(filePath);
+  const mimeType: string = getMimeType(ext);
 
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Cache-Control', 'public, max-age=3600');
 
-  const fileStream = fs.createReadStream(filePath);
+  const fileStream: fs.ReadStream = fs.createReadStream(filePath);
   fileStream.pipe(res);
 }
 
-function servePdf(res, filePath) {
+function servePdf(res: Response, filePath: string): void {
   if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: '文件不存在' });
+    res.status(404).json({ error: '文件不存在' });
+    return;
   }
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Cache-Control', 'public, max-age=3600');
 
-  const stat = fs.statSync(filePath);
+  const stat: fs.Stats = fs.statSync(filePath);
   res.setHeader('Content-Length', stat.size);
 
-  const fileStream = fs.createReadStream(filePath);
+  const fileStream: fs.ReadStream = fs.createReadStream(filePath);
   fileStream.pipe(res);
 }
 
-function getPreviewType(ext) {
-  const lowerExt = ext.toLowerCase();
+function getPreviewType(ext: string): string {
+  const lowerExt: string = ext.toLowerCase();
   if (isVideoFile(lowerExt)) return 'video';
   if (isImageFile(lowerExt)) return 'image';
   if (isAudioFile(lowerExt)) return 'audio';
@@ -141,7 +145,7 @@ function getPreviewType(ext) {
   return 'unknown';
 }
 
-module.exports = {
+export {
   streamFile,
   serveImage,
   servePdf,

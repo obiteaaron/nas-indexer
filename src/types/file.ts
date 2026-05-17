@@ -1,0 +1,74 @@
+/**
+ * 文件相关类型定义
+ */
+
+export interface File {
+  id: number;
+  path: string;
+  name: string;
+  ext: string | null;
+  size: number;
+  category: string;
+  modified_at: string | null;
+  scanned_at: string | null;
+  is_favorite: number;
+  scan_path: string | null;
+}
+
+export interface FileQueryOptions {
+  category?: string;
+  search?: string;
+  orderBy?: 'name' | 'size' | 'modified_at' | 'scanned_at' | 'id';
+  orderDir?: 'ASC' | 'DESC';
+  limit?: number;
+  offset?: number;
+  minSize?: number | string;
+  maxSize?: number | string;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
+}
+
+export interface FileWithTags extends File {
+  tags?: TagWithGroup[];
+  sizeFormatted?: string;
+}
+
+export interface FileInfo {
+  path: string;
+  name: string;
+  ext: string;
+  size: number;
+  sizeFormatted: string;
+  category: string;
+  created: Date;
+  modified: Date;
+  accessed: Date;
+  parentDir: string;
+  isDirectory: boolean;
+  isFile: boolean;
+}
+
+export interface FileWithStat {
+  path: string;
+  stat: null;
+}
+
+export interface ScanPathResult {
+  path: string;
+  files: string[];
+  fileCount: number;
+}
+
+export interface ScanProgressEvent {
+  phase: 'counting' | 'scanning' | 'writing';
+  pathIndex: number;
+  totalPaths: number;
+  processed?: number;
+  total?: number;
+  progress?: number;
+  path: string;
+  message: string;
+}
+
+// 导入 TagWithGroup 类型
+import { TagWithGroup } from './tag';
