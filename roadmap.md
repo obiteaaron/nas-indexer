@@ -49,7 +49,23 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段四：游戏模块（v1.4.x，进行中）
+## 阶段四：TypeScript 升级（v1.3.2，优先进行）
+
+**目标**：渐进式 TypeScript 迁移，为复杂模块提供类型安全
+
+| 优先级 | 任务 | 状态 | 说明 |
+|--------|------|------|------|
+| **P0** | 项目配置 | 待开始 | tsconfig.json、构建脚本调整 |
+| **P0** | 类型定义 | 待开始 | 核心类型声明（Game、File、Config 等） |
+| **P1** | 核心模块迁移 | 待开始 | database.js → database.ts |
+| **P1** | 工具模块迁移 | 待开始 | utils.js → utils.ts、logger.js → logger.ts |
+| **P2** | 路由迁移 | 待开始 | routes/*.js → routes/*.ts |
+
+**渐进策略**：新模块直接用 TS 编写（如后续游戏模块），旧模块逐步迁移，不强求一次性完成。
+
+---
+
+## 阶段五：游戏模块（v1.4.x，进行中）
 
 **目标**：为 nas-indexer 添加游戏海报墙功能，以 files 为底座、games 为扩展
 
@@ -62,7 +78,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | **P0** | 游戏识别引擎 | 待开始 | 三级优先级：game.json > 路径前缀 > 文件特征 |
 | **P1** | Steam 刮削 | 待开始 | Steam Store API 刮削元数据和海报 |
 | **P1** | 本地元数据存储 | 待开始 | game.json + poster 文件存于游戏目录 |
-| **P1** | 游戏后端 API | 待开始 | routes/games.js、11 个 API 接口 |
+| **P1** | 游戏后端 API | 待开始 | routes/games.ts、11 个 API 接口 |
 | **P2** | 前端海报墙 | 待开始 | GameWallView、GameCard、GameModal 等 6+ 组件 |
 | **P2** | 扫描进度同步 | 待开始 | SSE 推送游戏识别/刮削进度 |
 
@@ -77,7 +93,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段五：架构升级（v1.5.x，待规划）
+## 阶段六：架构升级（v1.5.x，待规划）
 
 **目标**：现代化架构，支持更大规模使用
 
@@ -89,7 +105,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段六：生态集成（v1.6.x，持续迭代）
+## 阶段七：生态集成（v1.6.x，持续迭代）
 
 **目标**：扩展生态系统，满足更多用户需求
 
@@ -101,7 +117,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段七：AI 功能（v1.7.x，远期规划）
+## 阶段八：AI 功能（v1.7.x，远期规划）
 
 **目标**：集成 AI 能力，提供智能化体验
 
@@ -127,7 +143,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 | 任务 | 处理时机 | 说明 |
 |------|----------|------|
-| TypeScript 迁移 | 阶段五 | 逐步将核心模块迁移至 TypeScript |
+| TypeScript 迁移 | 阶段四 (v1.3.2) | 渐进式迁移，新模块直接用 TS |
 
 ---
 
