@@ -1,6 +1,6 @@
 # NAS Indexer Roadmap
 
-> 最后更新：2026-05-13
+> 最后更新：2026-05-17
 > 当前版本：v1.3.1
 
 ---
@@ -49,20 +49,47 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段四：架构升级（v1.4.x，4-6 周）
+## 阶段四：游戏模块（v1.4.x，进行中）
+
+**目标**：为 nas-indexer 添加游戏海报墙功能，以 files 为底座、games 为扩展
+
+**设计文档**：[docs/games-module-design.md](docs/games-module-design.md)
+
+| 优先级 | 任务 | 状态 | 说明 |
+|--------|------|------|------|
+| **P0** | 全局开关配置 | 待开始 | gamesEnabled（默认关闭）、gamesRules、gamesScrape |
+| **P0** | games 数据库表 | 待开始 | 新增 games 表，存储游戏目录信息 |
+| **P0** | 游戏识别引擎 | 待开始 | 三级优先级：game.json > 路径前缀 > 文件特征 |
+| **P1** | Steam 刮削 | 待开始 | Steam Store API 刮削元数据和海报 |
+| **P1** | 本地元数据存储 | 待开始 | game.json + poster 文件存于游戏目录 |
+| **P1** | 游戏后端 API | 待开始 | routes/games.js、11 个 API 接口 |
+| **P2** | 前端海报墙 | 待开始 | GameWallView、GameCard、GameModal 等 6+ 组件 |
+| **P2** | 扫描进度同步 | 待开始 | SSE 推送游戏识别/刮削进度 |
+
+**子版本规划**：
+
+| 版本 | 功能 |
+|------|------|
+| v1.4.0 | 游戏识别 + 海报墙基础功能 |
+| v1.4.1 | Steam 刮削优化 + 批量刮削 |
+| v1.4.2 | 本地元数据支持（game.json 读写） |
+| v1.4.3 | 多刮削源支持（SteamGridDB、IGDB） |
+
+---
+
+## 阶段五：架构升级（v1.5.x，待规划）
 
 **目标**：现代化架构，支持更大规模使用
 
 | 优先级 | 任务 | 状态 | 说明 |
 |--------|------|------|------|
 | **P0** | TypeScript 迁移 | 待开始 | 逐步将核心模块迁移至 TypeScript |
-| **P1** | 性能优化 | ✅ | 批量标签查询、API 响应缓存、虚拟滚动、数据库批量写入 |
 | **P1** | Docker 部署 | 待开始 | 提供 Dockerfile 和 docker-compose.yml |
-| **P2** | 用户认证 | 待开始 | JWT 认证、多用户支持（如需要） |
+| **P1** | 用户认证 | 待开始 | JWT 认证、多用户支持（如需要） |
 
 ---
 
-## 阶段五：生态集成（v1.5.x，持续迭代）
+## 阶段六：生态集成（v1.6.x，持续迭代）
 
 **目标**：扩展生态系统，满足更多用户需求
 
@@ -74,7 +101,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段六：AI 功能（v1.6.x，远期规划）
+## 阶段七：AI 功能（v1.7.x，远期规划）
 
 **目标**：集成 AI 能力，提供智能化体验
 
@@ -100,7 +127,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 | 任务 | 处理时机 | 说明 |
 |------|----------|------|
-| TypeScript 迁移 | 阶段四 | 逐步将核心模块迁移至 TypeScript |
+| TypeScript 迁移 | 阶段五 | 逐步将核心模块迁移至 TypeScript |
 
 ---
 
@@ -115,3 +142,4 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | API 路由 | `src/routes/` | 7 个路由模块 |
 | 测试文件 | `tests/` | Jest 单元测试 |
 | AI 设计文档 | `docs/ai-llm-integration-plan.md` | AI 集成方案参考 |
+| 游戏模块设计 | `docs/games-module-design.md` | 游戏模块技术方案 |
