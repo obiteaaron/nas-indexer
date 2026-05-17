@@ -1,7 +1,7 @@
 {
   "name": "nas-indexer",
   "version": "1.3.1",
-  "description": "NAS 文件索引工具 - 扫描目录生成 Markdown 知识库",
+  "description": "NAS 文件索引服务 - 离线文件索引、搜索、预览、管理",
   "main": "src/server.js",
   "scripts": {
     "start": "node scripts/start.js",
