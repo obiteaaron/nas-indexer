@@ -64,6 +64,17 @@ export function writeLocalMetadata(gamePath: string, metadata: Partial<Game>): b
       return false;
     }
 
+    // 安全解析可能是 JSON 数组也可能是普通字符串的字段
+    function safeParseArray(value: string | undefined | null): unknown {
+      if (!value) return [];
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [value];
+      } catch {
+        return [value];
+      }
+    }
+
     // 提取需要保存的字段
     const saveData = {
       title: metadata.title,
@@ -73,14 +84,14 @@ export function writeLocalMetadata(gamePath: string, metadata: Partial<Game>): b
       developer: metadata.developer,
       publisher: metadata.publisher,
       release_date: metadata.release_date,
-      genres: metadata.genres ? JSON.parse(metadata.genres) : [],
+      genres: safeParseArray(metadata.genres),
       rating: metadata.rating,
       description: metadata.description,
       short_description: metadata.short_description,
-      languages: metadata.languages ? JSON.parse(metadata.languages) : [],
-      tags: metadata.tags ? JSON.parse(metadata.tags) : [],
+      languages: safeParseArray(metadata.languages),
+      tags: safeParseArray(metadata.tags),
       notes: metadata.notes,
-      screenshots: metadata.screenshots ? JSON.parse(metadata.screenshots) : [],
+      screenshots: safeParseArray(metadata.screenshots),
       metadata_source: metadata.metadata_source,
       scraped_at: metadata.scraped_at
     };
