@@ -10,7 +10,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "allowJs": true,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -20,8 +19,9 @@
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "6.0",
+    "types": ["jest", "node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "frontend", "profiles", "dist"]
+  "exclude": ["node_modules", "frontend", "profiles", "dist", "tests"]
 }

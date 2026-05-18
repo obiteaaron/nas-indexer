@@ -1,4 +1,4 @@
-const { formatSize } = require('../src/scanner');
+import { formatSize } from '../src/scanner';
 
 describe('Scanner', () => {
   describe('formatSize', () => {

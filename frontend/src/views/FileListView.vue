@@ -22,8 +22,8 @@
             {{ filterTagIds.length > 0 ? '标签过滤 (' + filterTagIds.length + ')' : '标签过滤' }}
           </button>
           <div v-if="filterTags.length > 0" class="filter-tags-display">
-            <TagBadge 
-              v-for="tag in filterTags" 
+            <TagBadge
+              v-for="tag in filterTags"
               :key="tag.id"
               :name="tag.name"
               :color="tag.color"
@@ -32,9 +32,9 @@
             />
           </div>
         </div>
-        <button 
-          v-if="selectedFiles.length > 0" 
-          class="btn btn-primary btn-small" 
+        <button
+          v-if="selectedFiles.length > 0"
+          class="btn btn-primary btn-small"
           @click="showBatchTagger"
         >
           批量打标 ({{ selectedFiles.length }})
@@ -94,8 +94,8 @@
               </div>
               <div class="file-col file-col-tags">
                 <div class="file-tags">
-                  <TagBadge 
-                    v-for="tag in fileTags[file.id] || []" 
+                  <TagBadge
+                    v-for="tag in fileTags[file.id] || []"
                     :key="tag.id"
                     :name="tag.name"
                     :color="tag.color"
@@ -125,22 +125,22 @@
       </div>
     </div>
 
-    <TagSelector 
-      :visible="tagSelectorVisible" 
+    <TagSelector
+      :visible="tagSelectorVisible"
       :selectedIds="currentFileTags"
       @close="tagSelectorVisible = false"
       @confirm="handleTagConfirm"
     />
 
-    <TagSelector 
-      :visible="batchTaggerVisible" 
+    <TagSelector
+      :visible="batchTaggerVisible"
       :selectedIds="batchSelectedTagIds"
       @close="batchTaggerVisible = false"
       @confirm="handleBatchTagConfirm"
     />
 
-    <TagSelector 
-      :visible="tagFilterVisible" 
+    <TagSelector
+      :visible="tagFilterVisible"
       :selectedIds="filterTagIds"
       @close="tagFilterVisible = false"
       @confirm="handleTagFilterConfirm"
@@ -149,7 +149,7 @@
     <FilePreview :visible="!!previewFile" :file="previewFile" @close="previewFile = null" />
 
     <Teleport to="body">
-      <div v-if="hoverPreview.visible" 
+      <div v-if="hoverPreview.visible"
            class="hover-preview"
            :style="{ left: hoverPreview.x + 'px', top: hoverPreview.y + 'px' }">
         <img :src="hoverPreview.url" class="hover-preview-img" />
@@ -172,532 +172,531 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import * as XLSX from 'xlsx'
 import TagBadge from '../components/TagBadge.vue'
 import TagSelector from '../components/TagSelector.vue'
 import FilePreview from '../components/FilePreview.vue'
 import Pagination from '../components/Pagination.vue'
-import { 
-  getFiles, getCategories, openFile, renameFile as apiRename, deleteFile, 
+import {
+  getFiles, getCategories, openFile, renameFile as apiRename, deleteFile,
   addFavorite, removeFavorite,
   getFileTags, getFileTagsBatch, addFileTag, removeFileTag, batchFileTags,
   getFilesByTags, getTags, getStreamUrl, getConfig
 } from '../api'
+import type { FileWithTags, Tag, TagWithGroup, Config } from '../types'
 
-export default {
-  name: 'FileListView',
-  components: { TagBadge, TagSelector, FilePreview, Pagination },
-  setup() {
-    const files = ref([])
-    const categories = ref([])
-    const loading = ref(true)
-    const error = ref('')
-    const category = ref('')
-    const search = ref('')
-    const orderBy = ref('name')
-    const orderDir = ref('ASC')
-    const page = ref(1)
-    const pageSize = ref(50)
-    const total = ref(0)
-    const fileTags = ref({})
-    const selectedFiles = ref([])
+interface VideoMeta {
+  duration: string
+  width: number
+  height: number
+}
 
-    const previewFile = ref(null)
-    const renameFile = ref(null)
-    const newName = ref('')
-    const videoMetadata = ref({})
-    const thumbnailSizeLimit = ref(5)
-    const hoverPreview = ref({ visible: false, url: '', x: 0, y: 0 })
+interface HoverPreview {
+  visible: boolean
+  url: string
+  x: number
+  y: number
+}
 
-    const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
-    const VIDEO_EXTS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v']
+const files = ref<FileWithTags[]>([])
+const categories = ref<string[]>([])
+const loading = ref(true)
+const error = ref('')
+const category = ref('')
+const search = ref('')
+const orderBy = ref('name')
+const orderDir = ref('ASC')
+const page = ref(1)
+const pageSize = ref(50)
+const total = ref(0)
+const fileTags = ref<Record<number, TagWithGroup[]>>({})
+const selectedFiles = ref<number[]>([])
 
-    const tagSelectorVisible = ref(false)
-    const currentEditingFile = ref(null)
-    const currentFileTags = ref([])
+const previewFile = ref<FileWithTags | null>(null)
+const renameFile = ref<FileWithTags | null>(null)
+const newName = ref('')
+const videoMetadata = ref<Record<number, VideoMeta>>({})
+const thumbnailSizeLimit = ref(5)
+const hoverPreview = ref<HoverPreview>({ visible: false, url: '', x: 0, y: 0 })
 
-    const batchTaggerVisible = ref(false)
-    const batchSelectedTagIds = ref([])
+const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
+const VIDEO_EXTS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v']
 
-    const tagFilterVisible = ref(false)
-    const filterTagIds = ref([])
-    const allTags = ref([])
-    const filterTags = computed(() => {
-      return allTags.value.filter(t => filterTagIds.value.includes(t.id))
-    })
+const tagSelectorVisible = ref(false)
+const currentEditingFile = ref<FileWithTags | null>(null)
+const currentFileTags = ref<number[]>([])
 
-    const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
-    const isAllSelected = computed(() => {
-      return files.value.length > 0 && selectedFiles.value.length === files.value.length
-    })
+const batchTaggerVisible = ref(false)
+const batchSelectedTagIds = ref<number[]>([])
 
-    watch(page, () => {
-      loadFiles()
-    })
+const tagFilterVisible = ref(false)
+const filterTagIds = ref<number[]>([])
+const allTags = ref<Tag[]>([])
+const filterTags = computed(() => {
+  return allTags.value.filter(t => filterTagIds.value.includes(t.id))
+})
 
-    onMounted(async () => {
-      await loadConfig()
-      await loadCategories()
-      await loadFiles()
-    })
+const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
+const isAllSelected = computed(() => {
+  return files.value.length > 0 && selectedFiles.value.length === files.value.length
+})
 
-    async function loadConfig() {
-      try {
-        const res = await getConfig()
-        if (res.thumbnailSizeLimit !== undefined) {
-          thumbnailSizeLimit.value = res.thumbnailSizeLimit
-        }
-      } catch (err) {
-        console.error('获取配置失败:', err)
-      }
+watch(page, () => {
+  loadFiles()
+})
+
+onMounted(async () => {
+  await loadConfig()
+  await loadCategories()
+  await loadFiles()
+})
+
+async function loadConfig(): Promise<void> {
+  try {
+    const res = await getConfig()
+    if (res.success && res.data && res.data.thumbnailSizeLimit !== undefined) {
+      thumbnailSizeLimit.value = res.data.thumbnailSizeLimit
     }
+  } catch (err) {
+    console.error('获取配置失败:', err)
+  }
+}
 
-    async function loadCategories() {
-      try {
-        const res = await getCategories()
-        if (res.success) {
-          categories.value = res.data
-        }
-      } catch (err) {
-        console.error('获取分类失败:', err)
-      }
+async function loadCategories(): Promise<void> {
+  try {
+    const res = await getCategories()
+    if (res.success && res.data) {
+      categories.value = res.data
     }
+  } catch (err) {
+    console.error('获取分类失败:', err)
+  }
+}
 
-    async function loadFiles() {
-      loading.value = true
-      error.value = ''
-      selectedFiles.value = []
-      try {
-        if (filterTagIds.value.length > 0) {
-          const res = await getFilesByTags({
-            tagIds: filterTagIds.value.join(','),
-            matchAll: 'true',
-            page: page.value,
-            pageSize: pageSize.value,
-            orderBy: orderBy.value,
-            orderDir: orderDir.value
-          })
-          if (res.success) {
-            files.value = res.data.files
-            total.value = res.data.total
-            await loadFileTagsBatch(res.data.files.map(f => f.id))
-            loadVideoMetadataBatch(res.data.files)
-          } else {
-            error.value = res.error
-          }
-        } else {
-          const res = await getFiles({
-            category: category.value,
-            search: search.value,
-            orderBy: orderBy.value,
-            orderDir: orderDir.value,
-            page: page.value,
-            pageSize: pageSize.value
-          })
-          if (res.success) {
-            files.value = res.data.files
-            total.value = res.data.total
-            await loadFileTagsBatch(res.data.files.map(f => f.id))
-            loadVideoMetadataBatch(res.data.files)
-          } else {
-            error.value = res.error
-          }
-        }
-      } catch (err) {
-        error.value = err.message
-      }
-      loading.value = false
-    }
-
-    async function loadFileTagsBatch(fileIds) {
-      if (fileIds.length === 0) return
-      try {
-        const res = await getFileTagsBatch(fileIds)
-        if (res.success) {
-          Object.assign(fileTags.value, res.data)
-        }
-      } catch (err) {
-        console.error('批量获取标签失败:', err)
-        for (const fileId of fileIds) {
-          fileTags.value[fileId] = []
-        }
-      }
-    }
-
-    function toggleSelectAll(event) {
-      if (event.target.checked) {
-        selectedFiles.value = files.value.map(f => f.id)
+async function loadFiles(): Promise<void> {
+  loading.value = true
+  error.value = ''
+  selectedFiles.value = []
+  try {
+    if (filterTagIds.value.length > 0) {
+      const res = await getFilesByTags({
+        tagIds: filterTagIds.value.join(','),
+        matchAll: true,
+        page: page.value,
+        pageSize: pageSize.value,
+        orderBy: orderBy.value,
+        orderDir: orderDir.value
+      })
+      if (res.success && res.data) {
+        files.value = res.data.files
+        total.value = res.data.total
+        await loadFileTagsBatch(res.data.files.map(f => f.id))
+        loadVideoMetadataBatch(res.data.files)
       } else {
-        selectedFiles.value = []
+        error.value = res.error || ''
       }
-    }
-
-    function toggleSelect(fileId) {
-      const index = selectedFiles.value.indexOf(fileId)
-      if (index > -1) {
-        selectedFiles.value.splice(index, 1)
+    } else {
+      const res = await getFiles({
+        category: category.value,
+        search: search.value,
+        orderBy: orderBy.value,
+        orderDir: orderDir.value,
+        page: page.value,
+        pageSize: pageSize.value
+      })
+      if (res.success && res.data) {
+        files.value = res.data.files
+        total.value = res.data.total
+        await loadFileTagsBatch(res.data.files.map(f => f.id))
+        loadVideoMetadataBatch(res.data.files)
       } else {
-        selectedFiles.value.push(fileId)
+        error.value = res.error || ''
       }
     }
+  } catch (err) {
+    const e = err as Error
+    error.value = e.message
+  }
+  loading.value = false
+}
 
-    function showBatchTagger() {
-      batchSelectedTagIds.value = []
-      batchTaggerVisible.value = true
+async function loadFileTagsBatch(fileIds: number[]): Promise<void> {
+  if (fileIds.length === 0) return
+  try {
+    const res = await getFileTagsBatch(fileIds)
+    if (res.success && res.data) {
+      Object.assign(fileTags.value, res.data)
     }
-
-    async function handleBatchTagConfirm(tagIds) {
-      if (tagIds.length === 0) return
-      try {
-        await batchFileTags(selectedFiles.value, tagIds, 'add')
-        await loadFileTagsBatch(selectedFiles.value)
-        selectedFiles.value = []
-      } catch (err) {
-        alert('批量打标失败: ' + err.message)
-      }
-    }
-
-    async function showTagFilter() {
-      try {
-        const res = await getTags()
-        if (res.success) {
-          allTags.value = res.data
-        }
-      } catch (err) {
-        console.error('加载标签失败:', err)
-      }
-      tagFilterVisible.value = true
-    }
-
-    function handleTagFilterConfirm(tagIds) {
-      filterTagIds.value = tagIds
-      page.value = 1
-      loadFiles()
-    }
-
-    function resetAndLoad() {
-      page.value = 1
-      loadFiles()
-    }
-
-    function removeFilterTag(tagId) {
-      const index = filterTagIds.value.indexOf(tagId)
-      if (index > -1) {
-        filterTagIds.value.splice(index, 1)
-        page.value = 1
-        loadFiles()
-      }
-    }
-
-    async function openLocation(file) {
-      try {
-        await openFile(file.id)
-      } catch (err) {
-        alert('打开失败：' + err.message)
-      }
-    }
-
-    function showPreview(file) {
-      previewFile.value = file
-    }
-
-    function showRename(file) {
-      renameFile.value = file
-      newName.value = file.name
-    }
-
-    async function doRename() {
-      if (!newName.value) return
-      
-      try {
-        const res = await apiRename(renameFile.value.id, newName.value)
-        if (res.success) {
-          renameFile.value = null
-          loadFiles()
-        } else {
-          alert('重命名失败：' + res.error)
-        }
-      } catch (err) {
-        alert('重命名失败：' + err.message)
-      }
-    }
-
-    async function toggleFavorite(file) {
-      try {
-        if (file.is_favorite) {
-          await removeFavorite(file.id)
-        } else {
-          await addFavorite(file.id)
-        }
-        loadFiles()
-      } catch (err) {
-        alert('操作失败：' + err.message)
-      }
-    }
-
-    async function confirmDelete(file) {
-      if (confirm('确定删除文件 "' + file.name + '"？')) {
-        try {
-          const res = await deleteFile(file.id)
-          if (res.success) {
-            loadFiles()
-          } else {
-            alert('删除失败：' + res.error)
-          }
-        } catch (err) {
-          alert('删除失败：' + err.message)
-        }
-      }
-    }
-
-    function openTagSelector(file) {
-      currentEditingFile.value = file
-      currentFileTags.value = (fileTags.value[file.id] || []).map(t => t.id)
-      tagSelectorVisible.value = true
-    }
-
-    async function handleTagConfirm(tagIds) {
-      if (!currentEditingFile.value) return
-      const fileId = currentEditingFile.value.id
-      const existingTagIds = (fileTags.value[fileId] || []).map(t => t.id)
-      const toAdd = tagIds.filter(id => !existingTagIds.includes(id))
-      const toRemove = existingTagIds.filter(id => !tagIds.includes(id))
-      
-      try {
-        for (const tagId of toAdd) {
-          await addFileTag(fileId, tagId)
-        }
-        for (const tagId of toRemove) {
-          await removeFileTag(fileId, tagId)
-        }
-        const res = await getFileTags(fileId)
-        if (res.success) {
-          fileTags.value[fileId] = res.data
-        }
-      } catch (err) {
-        alert('打标失败: ' + err.message)
-      }
-    }
-
-    async function removeTagFromFile(fileId, tagId) {
-      try {
-        await removeFileTag(fileId, tagId)
-        const res = await getFileTags(fileId)
-        if (res.success) {
-          fileTags.value[fileId] = res.data
-        }
-      } catch (err) {
-        alert('移除标签失败: ' + err.message)
-      }
-    }
-
-    function getBadgeClass(category) {
-      const map = {
-        '视频': 'video',
-        '图片': 'image',
-        '音频': 'audio',
-        '文档': 'doc'
-      }
-      return map[category] || 'other'
-    }
-
-    function isImageFile(ext) {
-      return IMAGE_EXTS.includes((ext || '').toLowerCase())
-    }
-
-    function isVideoFile(ext) {
-      return VIDEO_EXTS.includes((ext || '').toLowerCase())
-    }
-
-    function getFileIconClass(ext) {
-      const lower = (ext || '').toLowerCase()
-      if (IMAGE_EXTS.includes(lower)) return 'icon-image'
-      if (['.mp4', '.mkv', '.avi', '.mov'].includes(lower)) return 'icon-video'
-      if (['.mp3', '.wav', '.flac'].includes(lower)) return 'icon-audio'
-      if (['.pdf', '.doc', '.docx'].includes(lower)) return 'icon-doc'
-      return 'icon-file'
-    }
-
-    function formatDuration(seconds) {
-      if (!seconds || isNaN(seconds)) return ''
-      const h = Math.floor(seconds / 3600)
-      const m = Math.floor((seconds % 3600) / 60)
-      const s = Math.floor(seconds % 60)
-      if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-      return `${m}:${String(s).padStart(2, '0')}`
-    }
-
-    function loadVideoMetadata(file) {
-      if (videoMetadata.value[file.id]) return
-      const video = document.createElement('video')
-      video.preload = 'metadata'
-      video.src = getStreamUrl(file.id)
-      video.onloadedmetadata = () => {
-        videoMetadata.value[file.id] = {
-          duration: formatDuration(video.duration),
-          width: video.videoWidth,
-          height: video.videoHeight
-        }
-        video.src = ''
-      }
-      video.onerror = () => {
-        video.src = ''
-      }
-    }
-
-    function loadVideoMetadataBatch(filesList) {
-      for (const file of filesList) {
-        if (isVideoFile(file.ext)) {
-          loadVideoMetadata(file)
-        }
-      }
-    }
-
-    function shouldLoadThumbnail(file) {
-      if (!isImageFile(file.ext)) return false
-      if (thumbnailSizeLimit.value === 0) return true
-      const sizeInMB = (file.size || 0) / (1024 * 1024)
-      return sizeInMB <= thumbnailSizeLimit.value
-    }
-
-    function showHoverPreview(event, file) {
-      const previewWidth = 608
-      const previewHeight = 458
-      let x = event.clientX + 16
-      let y = event.clientY + 16
-
-      if (x + previewWidth > window.innerWidth) {
-        x = event.clientX - previewWidth - 16
-      }
-      if (y + previewHeight > window.innerHeight) {
-        y = event.clientY - previewHeight - 16
-      }
-      if (x < 0) x = 0
-      if (y < 0) y = 0
-
-      hoverPreview.value = {
-        visible: true,
-        url: getStreamUrl(file.id),
-        x,
-        y
-      }
-    }
-
-    function hideHoverPreview() {
-      hoverPreview.value.visible = false
-    }
-
-    function moveHoverPreview(event) {
-      if (hoverPreview.value.visible) {
-        const previewWidth = 608
-        const previewHeight = 458
-        let x = event.clientX + 16
-        let y = event.clientY + 16
-
-        if (x + previewWidth > window.innerWidth) {
-          x = event.clientX - previewWidth - 16
-        }
-        if (y + previewHeight > window.innerHeight) {
-          y = event.clientY - previewHeight - 16
-        }
-        if (x < 0) x = 0
-        if (y < 0) y = 0
-
-        hoverPreview.value.x = x
-        hoverPreview.value.y = y
-      }
-    }
-
-    async function exportToExcel() {
-      try {
-        let allFiles = []
-        let currentPage = 1
-        const exportPageSize = 500
-        let hasMore = true
-
-        while (hasMore) {
-          const params = {
-            category: category.value,
-            search: search.value,
-            orderBy: orderBy.value,
-            orderDir: orderDir.value,
-            page: currentPage,
-            pageSize: exportPageSize
-          }
-
-          let res
-          if (filterTagIds.value.length > 0) {
-            res = await getFilesByTags({
-              tagIds: filterTagIds.value.join(','),
-              matchAll: 'true',
-              ...params
-            })
-          } else {
-            res = await getFiles(params)
-          }
-
-          if (res.success) {
-            allFiles = allFiles.concat(res.data.files)
-            hasMore = currentPage < res.data.totalPages
-            currentPage++
-          } else {
-            hasMore = false
-          }
-        }
-
-        const exportData = allFiles.map(f => ({
-          '文件名': f.name,
-          '路径': f.path,
-          '大小': f.sizeFormatted,
-          '分类': f.category,
-          '修改时间': f.modified_at ? new Date(f.modified_at).toLocaleString('zh-CN') : ''
-        }))
-
-        const ws = XLSX.utils.json_to_sheet(exportData)
-        const wb = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(wb, ws, '文件列表')
-
-        ws['!cols'] = [
-          { wch: 40 },
-          { wch: 60 },
-          { wch: 12 },
-          { wch: 10 },
-          { wch: 20 }
-        ]
-
-        const date = new Date().toISOString().slice(0, 10)
-        XLSX.writeFile(wb, `文件列表_${date}.xlsx`)
-      } catch (err) {
-        alert('导出失败: ' + err.message)
-      }
-    }
-
-    function formatDate(date) {
-      if (!date) return ''
-      return new Date(date).toLocaleDateString('zh-CN')
-    }
-
-    return {
-      files, categories, loading, error,
-      category, search, orderBy, orderDir, page, pageSize, total, totalPages,
-      previewFile,
-      renameFile, newName, videoMetadata, thumbnailSizeLimit, hoverPreview,
-      fileTags, selectedFiles, isAllSelected,
-      tagSelectorVisible, currentFileTags, currentEditingFile,
-      batchTaggerVisible, batchSelectedTagIds,
-      tagFilterVisible, filterTagIds, allTags, filterTags,
-      loadFiles, resetAndLoad,
-      openLocation, showPreview, showRename, doRename,
-      toggleFavorite, confirmDelete,
-      toggleSelectAll, toggleSelect, showBatchTagger, handleBatchTagConfirm,
-      openTagSelector, handleTagConfirm, removeTagFromFile,
-      showTagFilter, handleTagFilterConfirm, removeFilterTag,
-      getBadgeClass, formatDate, isImageFile, isVideoFile, getFileIconClass, getStreamUrl,
-      exportToExcel, shouldLoadThumbnail, showHoverPreview, hideHoverPreview, moveHoverPreview
+  } catch (err) {
+    console.error('批量获取标签失败:', err)
+    for (const fileId of fileIds) {
+      fileTags.value[fileId] = []
     }
   }
+}
+
+function toggleSelectAll(event: Event): void {
+  const target = event.target as HTMLInputElement
+  if (target.checked) {
+    selectedFiles.value = files.value.map(f => f.id)
+  } else {
+    selectedFiles.value = []
+  }
+}
+
+function toggleSelect(fileId: number): void {
+  const index = selectedFiles.value.indexOf(fileId)
+  if (index > -1) {
+    selectedFiles.value.splice(index, 1)
+  } else {
+    selectedFiles.value.push(fileId)
+  }
+}
+
+function showBatchTagger(): void {
+  batchSelectedTagIds.value = []
+  batchTaggerVisible.value = true
+}
+
+async function handleBatchTagConfirm(tagIds: number[]): Promise<void> {
+  if (tagIds.length === 0) return
+  try {
+    await batchFileTags(selectedFiles.value, tagIds, 'add')
+    await loadFileTagsBatch(selectedFiles.value)
+    selectedFiles.value = []
+  } catch (err) {
+    const e = err as Error
+    alert('批量打标失败: ' + e.message)
+  }
+}
+
+async function showTagFilter(): Promise<void> {
+  try {
+    const res = await getTags()
+    if (res.success && res.data) {
+      allTags.value = res.data as Tag[]
+    }
+  } catch (err) {
+    console.error('加载标签失败:', err)
+  }
+  tagFilterVisible.value = true
+}
+
+function handleTagFilterConfirm(tagIds: number[]): void {
+  filterTagIds.value = tagIds
+  page.value = 1
+  loadFiles()
+}
+
+function resetAndLoad(): void {
+  page.value = 1
+  loadFiles()
+}
+
+function removeFilterTag(tagId: number): void {
+  const index = filterTagIds.value.indexOf(tagId)
+  if (index > -1) {
+    filterTagIds.value.splice(index, 1)
+    page.value = 1
+    loadFiles()
+  }
+}
+
+async function openLocation(file: FileWithTags): Promise<void> {
+  try {
+    await openFile(file.id)
+  } catch (err) {
+    const e = err as Error
+    alert('打开失败：' + e.message)
+  }
+}
+
+function showPreview(file: FileWithTags): void {
+  previewFile.value = file
+}
+
+function showRename(file: FileWithTags): void {
+  renameFile.value = file
+  newName.value = file.name
+}
+
+async function doRename(): Promise<void> {
+  if (!newName.value) return
+
+  try {
+    const res = await apiRename(renameFile.value!.id, newName.value)
+    if (res.success) {
+      renameFile.value = null
+      loadFiles()
+    } else {
+      alert('重命名失败：' + res.error)
+    }
+  } catch (err) {
+    const e = err as Error
+    alert('重命名失败：' + e.message)
+  }
+}
+
+async function toggleFavorite(file: FileWithTags): Promise<void> {
+  try {
+    if (file.is_favorite) {
+      await removeFavorite(file.id)
+    } else {
+      await addFavorite(file.id)
+    }
+    loadFiles()
+  } catch (err) {
+    const e = err as Error
+    alert('操作失败：' + e.message)
+  }
+}
+
+async function confirmDelete(file: FileWithTags): Promise<void> {
+  if (confirm('确定删除文件 "' + file.name + '"？')) {
+    try {
+      const res = await deleteFile(file.id)
+      if (res.success) {
+        loadFiles()
+      } else {
+        alert('删除失败：' + res.error)
+      }
+    } catch (err) {
+      const e = err as Error
+      alert('删除失败：' + e.message)
+    }
+  }
+}
+
+function openTagSelector(file: FileWithTags): void {
+  currentEditingFile.value = file
+  currentFileTags.value = (fileTags.value[file.id] || []).map(t => t.id)
+  tagSelectorVisible.value = true
+}
+
+async function handleTagConfirm(tagIds: number[]): Promise<void> {
+  if (!currentEditingFile.value) return
+  const fileId = currentEditingFile.value.id
+  const existingTagIds = (fileTags.value[fileId] || []).map(t => t.id)
+  const toAdd = tagIds.filter(id => !existingTagIds.includes(id))
+  const toRemove = existingTagIds.filter(id => !tagIds.includes(id))
+
+  try {
+    for (const tagId of toAdd) {
+      await addFileTag(fileId, tagId)
+    }
+    for (const tagId of toRemove) {
+      await removeFileTag(fileId, tagId)
+    }
+    const res = await getFileTags(fileId)
+    if (res.success && res.data) {
+      fileTags.value[fileId] = res.data
+    }
+  } catch (err) {
+    const e = err as Error
+    alert('打标失败: ' + e.message)
+  }
+}
+
+async function removeTagFromFile(fileId: number, tagId: number): Promise<void> {
+  try {
+    await removeFileTag(fileId, tagId)
+    const res = await getFileTags(fileId)
+    if (res.success && res.data) {
+      fileTags.value[fileId] = res.data
+    }
+  } catch (err) {
+    const e = err as Error
+    alert('移除标签失败: ' + e.message)
+  }
+}
+
+function getBadgeClass(category: string): string {
+  const map: Record<string, string> = {
+    '视频': 'video',
+    '图片': 'image',
+    '音频': 'audio',
+    '文档': 'doc'
+  }
+  return map[category] || 'other'
+}
+
+function isImageFile(ext: string | null): boolean {
+  return IMAGE_EXTS.includes((ext || '').toLowerCase())
+}
+
+function isVideoFile(ext: string | null): boolean {
+  return VIDEO_EXTS.includes((ext || '').toLowerCase())
+}
+
+function getFileIconClass(ext: string | null): string {
+  const lower = (ext || '').toLowerCase()
+  if (IMAGE_EXTS.includes(lower)) return 'icon-image'
+  if (['.mp4', '.mkv', '.avi', '.mov'].includes(lower)) return 'icon-video'
+  if (['.mp3', '.wav', '.flac'].includes(lower)) return 'icon-audio'
+  if (['.pdf', '.doc', '.docx'].includes(lower)) return 'icon-doc'
+  return 'icon-file'
+}
+
+function formatDuration(seconds: number): string {
+  if (!seconds || isNaN(seconds)) return ''
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function loadVideoMetadata(file: FileWithTags): void {
+  if (videoMetadata.value[file.id]) return
+  const video = document.createElement('video')
+  video.preload = 'metadata'
+  video.src = getStreamUrl(file.id)
+  video.onloadedmetadata = () => {
+    videoMetadata.value[file.id] = {
+      duration: formatDuration(video.duration),
+      width: video.videoWidth,
+      height: video.videoHeight
+    }
+    video.src = ''
+  }
+  video.onerror = () => {
+    video.src = ''
+  }
+}
+
+function loadVideoMetadataBatch(filesList: FileWithTags[]): void {
+  for (const file of filesList) {
+    if (isVideoFile(file.ext)) {
+      loadVideoMetadata(file)
+    }
+  }
+}
+
+function shouldLoadThumbnail(file: FileWithTags): boolean {
+  if (!isImageFile(file.ext)) return false
+  if (thumbnailSizeLimit.value === 0) return true
+  const sizeInMB = (file.size || 0) / (1024 * 1024)
+  return sizeInMB <= thumbnailSizeLimit.value
+}
+
+function showHoverPreview(event: MouseEvent, file: FileWithTags): void {
+  const previewWidth = 608
+  const previewHeight = 458
+  let x = event.clientX + 16
+  let y = event.clientY + 16
+
+  if (x + previewWidth > window.innerWidth) {
+    x = event.clientX - previewWidth - 16
+  }
+  if (y + previewHeight > window.innerHeight) {
+    y = event.clientY - previewHeight - 16
+  }
+  if (x < 0) x = 0
+  if (y < 0) y = 0
+
+  hoverPreview.value = {
+    visible: true,
+    url: getStreamUrl(file.id),
+    x,
+    y
+  }
+}
+
+function hideHoverPreview(): void {
+  hoverPreview.value.visible = false
+}
+
+function moveHoverPreview(event: MouseEvent): void {
+  if (hoverPreview.value.visible) {
+    const previewWidth = 608
+    const previewHeight = 458
+    let x = event.clientX + 16
+    let y = event.clientY + 16
+
+    if (x + previewWidth > window.innerWidth) {
+      x = event.clientX - previewWidth - 16
+    }
+    if (y + previewHeight > window.innerHeight) {
+      y = event.clientY - previewHeight - 16
+    }
+    if (x < 0) x = 0
+    if (y < 0) y = 0
+
+    hoverPreview.value.x = x
+    hoverPreview.value.y = y
+  }
+}
+
+async function exportToExcel(): Promise<void> {
+  try {
+    const allFiles: FileWithTags[] = []
+    let currentPage = 1
+    const exportPageSize = 500
+    let hasMore = true
+
+    while (hasMore) {
+      const params = {
+        category: category.value,
+        search: search.value,
+        orderBy: orderBy.value,
+        orderDir: orderDir.value,
+        page: currentPage,
+        pageSize: exportPageSize
+      }
+
+      let res
+      if (filterTagIds.value.length > 0) {
+        res = await getFilesByTags({
+          tagIds: filterTagIds.value.join(','),
+          matchAll: true,
+          ...params
+        })
+      } else {
+        res = await getFiles(params)
+      }
+
+      if (res.success && res.data) {
+        allFiles.push(...res.data.files)
+        hasMore = currentPage < res.data.totalPages
+        currentPage++
+      } else {
+        hasMore = false
+      }
+    }
+
+    const exportData = allFiles.map(f => ({
+      '文件名': f.name,
+      '路径': f.path,
+      '大小': f.sizeFormatted,
+      '分类': f.category,
+      '修改时间': f.modified_at ? new Date(f.modified_at).toLocaleString('zh-CN') : ''
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '文件列表')
+
+    ws['!cols'] = [
+      { wch: 40 },
+      { wch: 60 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 20 }
+    ]
+
+    const date = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(wb, `文件列表_${date}.xlsx`)
+  } catch (err) {
+    const e = err as Error
+    alert('导出失败: ' + e.message)
+  }
+}
+
+function formatDate(date: string | null): string {
+  if (!date) return ''
+  return new Date(date).toLocaleDateString('zh-CN')
 }
 </script>
 

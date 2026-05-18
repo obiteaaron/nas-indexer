@@ -1,11 +1,11 @@
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-const { Database } = require('../src/database');
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { Database } from '../src/database';
 
 describe('Database', () => {
-  let db;
-  let tempDbPath;
+  let db: Database;
+  let tempDbPath: string;
 
   beforeEach(async () => {
     tempDbPath = path.join(os.tmpdir(), `test_db_${Date.now()}.db`);
@@ -76,9 +76,9 @@ describe('Database', () => {
 
       const file = db.getFileById(fileId);
       expect(file).toBeDefined();
-      expect(file.name).toBe('file.mp4');
-      expect(file.ext).toBe('.mp4');
-      expect(file.size).toBe(1024);
+      expect(file!.name).toBe('file.mp4');
+      expect(file!.ext).toBe('.mp4');
+      expect(file!.size).toBe(1024);
     });
   });
 

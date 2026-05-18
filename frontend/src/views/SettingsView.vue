@@ -54,7 +54,7 @@
     <div class="card">
       <h3 class="section-title">分类规则（按后缀）</h3>
       <p class="hint">根据文件后缀自动分类，每个分类对应一组扩展名</p>
-      
+
       <div class="category-rules">
         <div class="category-item" v-for="(extensions, category) in localCategoryRules" :key="category">
           <div class="category-header">
@@ -66,9 +66,9 @@
               {{ ext }}
               <button class="remove-ext" @click="removeExtension(category, i)">×</button>
             </span>
-            <input 
-              class="input extension-input" 
-              v-model="newExtensions[category]" 
+            <input
+              class="input extension-input"
+              v-model="newExtensions[category]"
               placeholder="添加扩展名，如 .mp4"
               @keyup.enter="addExtension(category)"
             >
@@ -80,7 +80,7 @@
           <button class="btn btn-secondary btn-small" @click="addCategory">添加分类</button>
         </div>
       </div>
-      
+
       <div class="form-actions">
         <button class="btn btn-primary" @click="applyCategoryRules">应用分类规则</button>
       </div>
@@ -89,7 +89,7 @@
     <div class="card">
       <h3 class="section-title">目录分类规则（优先级更高）</h3>
       <p class="hint">根据文件所在目录路径前缀分类，优先级高于后缀规则</p>
-      
+
       <div class="path-rules">
         <div class="path-rule-item" v-for="(rule, i) in localCategoryPathRules" :key="i">
           <input class="input path-prefix" v-model="rule.pathPrefix" placeholder="目录路径前缀，如 D:/NAS/Games">
@@ -101,7 +101,7 @@
         </div>
         <button class="btn btn-secondary btn-small" @click="addPathRule">添加目录规则</button>
       </div>
-      
+
       <div class="form-actions">
         <button class="btn btn-primary" @click="applyPathRules">应用目录规则</button>
       </div>
@@ -142,15 +142,15 @@
       <h3 class="section-title">偏好分析</h3>
       <div class="form-group">
         <label class="checkbox-label">
-          <input type="checkbox" v-model="config.trackingConfig.trackingEnabled">
+          <input type="checkbox" v-model="config.trackingConfig!.trackingEnabled">
           启用行为追踪
         </label>
         <span class="hint">开启后将记录文件查看、预览、搜索等行为，用于生成个性化推荐</span>
       </div>
 
-      <div class="form-group" v-if="config.trackingConfig.trackingEnabled">
+      <div class="form-group" v-if="config.trackingConfig?.trackingEnabled">
         <label>追踪级别</label>
-        <select class="select" v-model="config.trackingConfig.trackingLevel">
+        <select class="select" v-model="config.trackingConfig!.trackingLevel">
           <option value="minimal">基础（仅搜索记录）</option>
           <option value="full">完整（查看、预览、搜索、打标）</option>
         </select>
@@ -181,249 +181,249 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths } from '../api'
+import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule } from '../types'
 
-export default {
-  name: 'SettingsView',
-  setup() {
-    const config = ref({
-      scanPaths: [],
-      scanTime: '0 2 * * *',
-      excludePatterns: [],
-      fileExtensionFilter: { whitelist: [], blacklist: [] },
-      categoryRules: {},
-      categoryPathRules: [],
-      trackingConfig: { trackingEnabled: true, trackingLevel: 'full' },
-      thumbnailSizeLimit: 5
-    })
-    const status = ref(null)
-    const saving = ref(false)
-    const checkingPaths = ref(false)
-    const pathStatuses = ref([])
-    
-    const localCategoryRules = reactive({})
-    const localCategoryPathRules = ref([])
-    const newExtensions = reactive({})
-    const newCategoryName = ref('')
-    
-    const categories = computed(() => Object.keys(localCategoryRules))
+const config = ref<Config>({
+  storagePath: '',
+  scanPaths: [],
+  scanTime: '0 2 * * *',
+  excludePatterns: [],
+  fileExtensionFilter: { whitelist: [], blacklist: [] },
+  categoryRules: {},
+  categoryPathRules: [],
+  trackingConfig: { trackingEnabled: true, trackingLevel: 'full' },
+  thumbnailSizeLimit: 5
+})
+const status = ref<StatusResponse | null>(null)
+const saving = ref(false)
+const checkingPaths = ref(false)
+const pathStatuses = ref<PathStatus[]>([])
 
-    const excludePatternsStr = computed({
-      get: () => config.value.excludePatterns.join(', '),
-      set: (v) => config.value.excludePatterns = v.split(',').map(s => s.trim()).filter(s => s)
-    })
+const localCategoryRules = reactive<CategoryRule>({})
+const localCategoryPathRules = ref<CategoryPathRule[]>([])
+const newExtensions = reactive<Record<string, string>>({})
+const newCategoryName = ref('')
 
-    const whitelistStr = computed({
-      get: () => (config.value.fileExtensionFilter?.whitelist || []).join(', '),
-      set: (v) => config.value.fileExtensionFilter.whitelist = v.split(',').map(s => s.trim()).filter(s => s)
-    })
+const categories = computed(() => Object.keys(localCategoryRules))
 
-    const blacklistStr = computed({
-      get: () => (config.value.fileExtensionFilter?.blacklist || []).join(', '),
-      set: (v) => config.value.fileExtensionFilter.blacklist = v.split(',').map(s => s.trim()).filter(s => s)
-    })
+const excludePatternsStr = computed({
+  get: () => config.value.excludePatterns.join(', '),
+  set: (v: string) => config.value.excludePatterns = v.split(',').map(s => s.trim()).filter(s => s)
+})
 
-    onMounted(async () => {
-      await loadConfig()
-      await loadStatus()
-      await checkPathsStatus()
-    })
-
-    async function loadConfig() {
-      try {
-        const res = await getConfig()
-        config.value = {
-          ...res,
-          fileExtensionFilter: res.fileExtensionFilter || { whitelist: [], blacklist: [] },
-          categoryRules: res.categoryRules || {},
-          categoryPathRules: res.categoryPathRules || [],
-          trackingConfig: res.trackingConfig || { trackingEnabled: true, trackingLevel: 'full' },
-          thumbnailSizeLimit: res.thumbnailSizeLimit ?? 5
-        }
-        
-        Object.keys(localCategoryRules).forEach(key => delete localCategoryRules[key])
-        Object.assign(localCategoryRules, config.value.categoryRules)
-        localCategoryPathRules.value = [...config.value.categoryPathRules]
-      } catch (err) {
-        console.error('获取配置失败:', err)
-      }
-    }
-
-    async function loadStatus() {
-      try {
-        const res = await getStatus()
-        if (res.success) {
-          status.value = res.status
-        }
-      } catch (err) {
-        console.error('获取状态失败:', err)
-      }
-    }
-
-    function addPath() {
-      config.value.scanPaths.push('')
-    }
-
-    function removePath(index) {
-      config.value.scanPaths.splice(index, 1)
-    }
-
-    async function scanPath(index) {
-      const path = config.value.scanPaths[index]
-      if (!path) return
-      
-      try {
-        const res = await scanSinglePath(path)
-        if (!res.success) {
-          alert('启动扫描失败：' + res.error)
-        }
-      } catch (err) {
-        alert('启动扫描失败：' + err.message)
-      }
-    }
-
-    async function save() {
-      saving.value = true
-      try {
-        const res = await saveConfig(config.value)
-        if (res.success) {
-          alert('配置已保存')
-          loadStatus()
-        } else {
-          alert('保存失败：' + res.error)
-        }
-      } catch (err) {
-        alert('保存失败：' + err.message)
-      }
-      saving.value = false
-    }
-
-    function reset() {
-      loadConfig()
-    }
-
-    function addCategory() {
-      if (!newCategoryName.value.trim()) return
-      const name = newCategoryName.value.trim()
-      if (localCategoryRules[name]) {
-        alert('分类已存在')
-        return
-      }
-      localCategoryRules[name] = []
-      newExtensions[name] = ''
-      newCategoryName.value = ''
-    }
-
-    function removeCategory(category) {
-      delete localCategoryRules[category]
-      delete newExtensions[category]
-    }
-
-    function updateCategoryName(oldName, event) {
-      const newName = event.target.value.trim()
-      if (!newName || newName === oldName) return
-      if (localCategoryRules[newName]) {
-        alert('分类名称已存在')
-        event.target.value = oldName
-        return
-      }
-      const extensions = localCategoryRules[oldName]
-      delete localCategoryRules[oldName]
-      localCategoryRules[newName] = extensions
-      newExtensions[newName] = newExtensions[oldName] || ''
-      delete newExtensions[oldName]
-    }
-
-    function addExtension(category) {
-      const ext = newExtensions[category]?.trim()
-      if (!ext) return
-      const normalizedExt = ext.startsWith('.') ? ext.toLowerCase() : '.' + ext.toLowerCase()
-      if (localCategoryRules[category].includes(normalizedExt)) {
-        alert('扩展名已存在')
-        return
-      }
-      localCategoryRules[category].push(normalizedExt)
-      newExtensions[category] = ''
-    }
-
-    function removeExtension(category, index) {
-      localCategoryRules[category].splice(index, 1)
-    }
-
-    function addPathRule() {
-      localCategoryPathRules.value.push({ pathPrefix: '', category: '其他' })
-    }
-
-    function removePathRule(index) {
-      localCategoryPathRules.value.splice(index, 1)
-    }
-
-    async function applyCategoryRules() {
-      config.value.categoryRules = { ...localCategoryRules }
-      await save()
-    }
-
-    async function applyPathRules() {
-      config.value.categoryPathRules = [...localCategoryPathRules.value]
-      await save()
-    }
-
-    async function clearPreferences() {
-      if (!confirm('确定要清除所有偏好数据吗？此操作不可恢复。')) return
-      try {
-        const res = await clearPreferencesData()
-        if (res.success) {
-          alert('偏好数据已清除')
-        } else {
-          alert('清除失败：' + res.error)
-        }
-      } catch (err) {
-        alert('清除失败：' + err.message)
-      }
-    }
-
-    async function checkPathsStatus() {
-      checkingPaths.value = true
-      try {
-        const res = await checkAllPaths()
-        if (res.success) {
-          pathStatuses.value = res.data
-        } else {
-          alert('检测失败：' + res.error)
-        }
-      } catch (err) {
-        alert('检测失败：' + err.message)
-      }
-      checkingPaths.value = false
-    }
-
-    function getPathStatusClass(path) {
-      if (!path) return 'status-unknown'
-      const ps = pathStatuses.value.find(p => p.path === path)
-      if (!ps) return 'status-unknown'
-      return ps.isAccessible ? 'status-ok' : 'status-error'
-    }
-
-    function getPathStatusTitle(path) {
-      if (!path) return '未配置'
-      const ps = pathStatuses.value.find(p => p.path === path)
-      if (!ps) return '未检测'
-      if (ps.isAccessible) return `可达 - 文件数: ${ps.fileCount}, 延迟: ${ps.latency}ms`
-      return `不可达 - ${ps.error}`
-    }
-
-    return {
-      config, status, saving, checkingPaths, pathStatuses,
-      excludePatternsStr, whitelistStr, blacklistStr,
-      addPath, removePath, scanPath, save, reset,
-      localCategoryRules, localCategoryPathRules, newExtensions, newCategoryName, categories,
-      addCategory, removeCategory, updateCategoryName, addExtension, removeExtension,
-      addPathRule, removePathRule, applyCategoryRules, applyPathRules,
-      clearPreferences, checkPathsStatus, getPathStatusClass, getPathStatusTitle
-    }
+const whitelistStr = computed({
+  get: () => (config.value.fileExtensionFilter?.whitelist || []).join(', '),
+  set: (v: string) => {
+    if (!config.value.fileExtensionFilter) config.value.fileExtensionFilter = { whitelist: [], blacklist: [] }
+    config.value.fileExtensionFilter.whitelist = v.split(',').map(s => s.trim()).filter(s => s)
   }
+})
+
+const blacklistStr = computed({
+  get: () => (config.value.fileExtensionFilter?.blacklist || []).join(', '),
+  set: (v: string) => {
+    if (!config.value.fileExtensionFilter) config.value.fileExtensionFilter = { whitelist: [], blacklist: [] }
+    config.value.fileExtensionFilter.blacklist = v.split(',').map(s => s.trim()).filter(s => s)
+  }
+})
+
+onMounted(async () => {
+  await loadConfig()
+  await loadStatus()
+  await checkPathsStatus()
+})
+
+async function loadConfig(): Promise<void> {
+  try {
+    const res = await getConfig()
+    if (res.success && res.data) {
+      config.value = {
+        ...res.data,
+        fileExtensionFilter: res.data.fileExtensionFilter || { whitelist: [], blacklist: [] },
+        categoryRules: res.data.categoryRules || {},
+        categoryPathRules: res.data.categoryPathRules || [],
+        trackingConfig: res.data.trackingConfig || { trackingEnabled: true, trackingLevel: 'full' },
+        thumbnailSizeLimit: res.data.thumbnailSizeLimit ?? 5
+      }
+
+      Object.keys(localCategoryRules).forEach(key => delete localCategoryRules[key])
+      Object.assign(localCategoryRules, config.value.categoryRules || {})
+      localCategoryPathRules.value = [...(config.value.categoryPathRules || [])]
+    }
+  } catch (err) {
+    console.error('获取配置失败:', err)
+  }
+}
+
+async function loadStatus(): Promise<void> {
+  try {
+    const res = await getStatus()
+    if (res.success && res.data) {
+      status.value = res.data
+    }
+  } catch (err) {
+    console.error('获取状态失败:', err)
+  }
+}
+
+function addPath(): void {
+  config.value.scanPaths.push('')
+}
+
+function removePath(index: number): void {
+  config.value.scanPaths.splice(index, 1)
+}
+
+async function scanPath(index: number): Promise<void> {
+  const path = config.value.scanPaths[index]
+  if (!path) return
+
+  try {
+    const res = await scanSinglePath(path)
+    if (!res.success) {
+      alert('启动扫描失败：' + res.error)
+    }
+  } catch (err) {
+    const error = err as Error
+    alert('启动扫描失败：' + error.message)
+  }
+}
+
+async function save(): Promise<void> {
+  saving.value = true
+  try {
+    const res = await saveConfig(config.value)
+    if (res.success) {
+      alert('配置已保存')
+      loadStatus()
+    } else {
+      alert('保存失败：' + res.error)
+    }
+  } catch (err) {
+    const error = err as Error
+    alert('保存失败：' + error.message)
+  }
+  saving.value = false
+}
+
+function reset(): void {
+  loadConfig()
+}
+
+function addCategory(): void {
+  if (!newCategoryName.value.trim()) return
+  const name = newCategoryName.value.trim()
+  if (localCategoryRules[name]) {
+    alert('分类已存在')
+    return
+  }
+  localCategoryRules[name] = []
+  newExtensions[name] = ''
+  newCategoryName.value = ''
+}
+
+function removeCategory(category: string): void {
+  delete localCategoryRules[category]
+  delete newExtensions[category]
+}
+
+function updateCategoryName(oldName: string, event: Event): void {
+  const target = event.target as HTMLInputElement
+  const newName = target.value.trim()
+  if (!newName || newName === oldName) return
+  if (localCategoryRules[newName]) {
+    alert('分类名称已存在')
+    target.value = oldName
+    return
+  }
+  const extensions = localCategoryRules[oldName]
+  delete localCategoryRules[oldName]
+  localCategoryRules[newName] = extensions
+  newExtensions[newName] = newExtensions[oldName] || ''
+  delete newExtensions[oldName]
+}
+
+function addExtension(category: string): void {
+  const ext = newExtensions[category]?.trim()
+  if (!ext) return
+  const normalizedExt = ext.startsWith('.') ? ext.toLowerCase() : '.' + ext.toLowerCase()
+  if (localCategoryRules[category].includes(normalizedExt)) {
+    alert('扩展名已存在')
+    return
+  }
+  localCategoryRules[category].push(normalizedExt)
+  newExtensions[category] = ''
+}
+
+function removeExtension(category: string, index: number): void {
+  localCategoryRules[category].splice(index, 1)
+}
+
+function addPathRule(): void {
+  localCategoryPathRules.value.push({ pathPrefix: '', category: '其他' })
+}
+
+function removePathRule(index: number): void {
+  localCategoryPathRules.value.splice(index, 1)
+}
+
+async function applyCategoryRules(): Promise<void> {
+  config.value.categoryRules = { ...localCategoryRules }
+  await save()
+}
+
+async function applyPathRules(): Promise<void> {
+  config.value.categoryPathRules = [...localCategoryPathRules.value]
+  await save()
+}
+
+async function clearPreferences(): Promise<void> {
+  if (!confirm('确定要清除所有偏好数据吗？此操作不可恢复。')) return
+  try {
+    const res = await clearPreferencesData()
+    if (res.success) {
+      alert('偏好数据已清除')
+    } else {
+      alert('清除失败：' + res.error)
+    }
+  } catch (err) {
+    const error = err as Error
+    alert('清除失败：' + error.message)
+  }
+}
+
+async function checkPathsStatus(): Promise<void> {
+  checkingPaths.value = true
+  try {
+    const res = await checkAllPaths()
+    if (res.success && res.data) {
+      pathStatuses.value = res.data
+    } else {
+      alert('检测失败：' + res.error)
+    }
+  } catch (err) {
+    const error = err as Error
+    alert('检测失败：' + error.message)
+  }
+  checkingPaths.value = false
+}
+
+function getPathStatusClass(path: string): string {
+  if (!path) return 'status-unknown'
+  const ps = pathStatuses.value.find(p => p.path === path)
+  if (!ps) return 'status-unknown'
+  return ps.isAccessible ? 'status-ok' : 'status-error'
+}
+
+function getPathStatusTitle(path: string): string {
+  if (!path) return '未配置'
+  const ps = pathStatuses.value.find(p => p.path === path)
+  if (!ps) return '未检测'
+  if (ps.isAccessible) return `可达 - 文件数: ${ps.fileCount}, 延迟: ${ps.latency}ms`
+  return `不可达 - ${ps.error}`
 }
 </script>
 
@@ -616,12 +616,6 @@ export default {
   color: var(--text-muted);
   font-size: 13px;
   line-height: 32px;
-}
-
-.form-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .path-status-actions {

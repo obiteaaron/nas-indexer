@@ -1,5 +1,21 @@
 # 更新日志
 
+## [v1.3.2] - 2026-05-18
+
+### TypeScript 迁移完成
+- **后端全量迁移** - 所有 .js 文件迁移为 .ts（database、scanner、utils、logger、8 个路由模块）
+- **前端全量迁移** - 13 个 Vue 组件改用 `<script setup lang="ts">`，API 层约 50 个函数类型化
+- **类型定义** - src/types/*.ts 后端类型、frontend/src/types/*.ts 前端类型
+- **测试迁移** - tests/*.test.js → tests/*.test.ts
+- **allowJs 禁用** - 后端/前端 tsconfig.json 均移除 allowJs，纯 TypeScript 项目
+
+### 技术改进
+- **API 响应格式统一** - 所有 API 响应统一使用 `{ success, data }` 格式
+- **Jest 配置更新** - 使用新版 ts-jest transform 配置格式
+- **构建验证** - 后端/前端构建、类型检查、测试全部通过
+
+---
+
 ## [v1.3.1] - 2026-05-14
 
 ### 性能优化

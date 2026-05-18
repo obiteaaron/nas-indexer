@@ -8,10 +8,10 @@ const router: Router = express.Router();
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {
     const config: Config = loadConfig();
-    res.json(config);
+    res.json({ success: true, data: config });
   } catch (err) {
     const error = err as Error;
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -22,10 +22,10 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const config: Config = loadConfig();
     const updatedConfig: Config = { ...config, ...newConfig };
     saveConfig(updatedConfig);
-    res.json({ success: true, message: '配置已保存' });
+    res.json({ success: true, data: updatedConfig });
   } catch (err) {
     const error = err as Error;
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -33,10 +33,10 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 router.get('/full', async (_req: Request, res: Response): Promise<void> => {
   try {
     const config: Config = loadConfig();
-    res.json(config);
+    res.json({ success: true, data: config });
   } catch (err) {
     const error = err as Error;
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -45,10 +45,10 @@ router.get('/storage/path', async (_req: Request, res: Response): Promise<void> 
   try {
     const config: Config = loadConfig();
     const storagePath: string = getStoragePath(config);
-    res.json({ storagePath });
+    res.json({ success: true, data: { storagePath } });
   } catch (err) {
     const error = err as Error;
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
