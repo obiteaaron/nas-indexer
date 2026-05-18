@@ -1,7 +1,7 @@
 # NAS Indexer Roadmap
 
-> 最后更新：2026-05-18
-> 当前版本：v1.3.2
+> 最后更新：2026-05-19
+> 当前版本：v1.4.0
 
 ---
 
@@ -70,7 +70,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段五：游戏模块（v1.4.x，进行中）
+## 阶段五：游戏模块（v1.4.0）✅ 已完成
 
 **目标**：为 nas-indexer 添加游戏海报墙功能，以 files 为底座、games 为扩展
 
@@ -78,23 +78,21 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 | 优先级 | 任务 | 状态 | 说明 |
 |--------|------|------|------|
-| **P0** | 全局开关配置 | 待开始 | gamesEnabled（默认关闭）、gamesRules、gamesScrape |
-| **P0** | games 数据库表 | 待开始 | 新增 games 表，存储游戏目录信息 |
-| **P0** | 游戏识别引擎 | 待开始 | 三级优先级：game.json > 路径前缀 > 文件特征 |
-| **P1** | Steam 刮削 | 待开始 | Steam Store API 刮削元数据和海报 |
-| **P1** | 本地元数据存储 | 待开始 | game.json + poster 文件存于游戏目录 |
-| **P1** | 游戏后端 API | 待开始 | routes/games.ts、11 个 API 接口 |
-| **P2** | 前端海报墙 | 待开始 | GameWallView、GameCard、GameModal 等 6+ 组件 |
-| **P2** | 扫描进度同步 | 待开始 | SSE 推送游戏识别/刮削进度 |
+| **P0** | 全局开关配置 | ✅ | gamesEnabled（默认关闭）、gamesRules、gamesScrape |
+| **P0** | games 数据库表 | ✅ | 新增 games 表，存储游戏目录信息 |
+| **P0** | 游戏识别引擎 | ✅ | 五级优先级：排除 > 路径前缀 > 路径关键词 > 目录名特征 > 文件特征 |
+| **P1** | Steam 刮削 | ✅ | Steam Store API 刮削元数据和海报 |
+| **P1** | 本地元数据存储 | ✅ | game.json + poster 文件存于游戏目录 |
+| **P1** | 游戏后端 API | ✅ | routes/games.ts、11 个 API 接口 |
+| **P2** | 前端海报墙 | ✅ | GameWallView、GameCard 组件 |
+| **P2** | 扫描进度同步 | ✅ | SSE 推送游戏识别/刮削进度 |
 
-**子版本规划**：
+**后续优化方向**：
 
 | 版本 | 功能 |
 |------|------|
-| v1.4.0 | 游戏识别 + 海报墙基础功能 |
 | v1.4.1 | Steam 刮削优化 + 批量刮削 |
-| v1.4.2 | 本地元数据支持（game.json 读写） |
-| v1.4.3 | 多刮削源支持（SteamGridDB、IGDB） |
+| v1.4.2 | 多刮削源支持（SteamGridDB、IGDB） |
 
 ---
 
@@ -160,10 +158,15 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 数据库层 | `src/database.ts` | SQLite 核心业务逻辑 |
 | 扫描引擎 | `src/scanner.ts` | 异步文件扫描 |
 | 类型定义 | `src/types/*.ts` | 核心类型声明 |
-| API 路由 | `src/routes/*.ts` | 8 个路由模块 |
+| API 路由 | `src/routes/*.ts` | 9 个路由模块（含 games） |
 | 测试文件 | `tests/*.test.ts` | Jest 单元测试 |
+| 游戏模块 | `src/games/*.ts` | 游戏识别、刮削、数据库等 |
+| 游戏路由 | `src/routes/games.ts` | 游戏 API 接口 |
+| 游戏类型 | `src/types/game.ts` | 游戏相关类型定义 |
 | 前端入口 | `frontend/src/main.ts` | Vue 3 应用入口 |
-| 前端 API | `frontend/src/api/index.ts` | 50+ API 函数 |
+| 前端 API | `frontend/src/api/index.ts` | 60+ API 函数 |
 | 前端类型 | `frontend/src/types/*.ts` | 前端类型定义 |
+| 游戏海报墙 | `frontend/src/views/GameWallView.vue` | 游戏展示视图 |
+| 游戏卡片 | `frontend/src/components/GameCard.vue` | 游戏卡片组件 |
 | AI 设计文档 | `docs/ai-llm-integration-plan.md` | AI 集成方案参考 |
 | 游戏模块设计 | `docs/games-module-design.md` | 游戏模块技术方案 |
