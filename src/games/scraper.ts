@@ -153,6 +153,11 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
   } else {
     // 搜索 Steam
     appid = await searchSteamGame(game.title);
+    // 搜索成功后缓存别名映射，下次识别时直接命中
+    if (appid && game.original_name) {
+      gameDatabase.saveAlias(game.original_name, String(appid));
+      logger.info('缓存别名: %s -> appid %d', game.original_name, appid);
+    }
   }
 
   if (!appid) {

@@ -67,6 +67,19 @@ class GameDatabase {
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_metadata_source ON games(metadata_source)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_release_date ON games(release_date)');
 
+    // 别名映射表：文件夹名 → steam_appid
+    database.db!.run(`
+      CREATE TABLE IF NOT EXISTS game_aliases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folder_name TEXT NOT NULL,
+        steam_appid TEXT NOT NULL,
+        source TEXT DEFAULT 'auto',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(folder_name)
+      )
+    `);
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_game_aliases_folder ON game_aliases(folder_name)');
+
     database.save();
     logger.info('游戏数据库表已创建');
   }
@@ -390,6 +403,25 @@ class GameDatabase {
     `);
     if (result.length === 0) return [];
     return result[0].values.map(row => row[0] as string);
+  }
+
+  // === 别名映射操作 ===
+
+  saveAlias(folderName: string, steamAppid: string, source: string = 'auto'): void {
+    database.db!.run(
+      'INSERT OR REPLACE INTO game_aliases (folder_name, steam_appid, source) VALUES (?, ?, ?)',
+      [folderName, steamAppid, source]
+    );
+    database.save();
+  }
+
+  lookupAlias(folderName: string): string | null {
+    const result: QueryResult[] = database.db!.exec(
+      'SELECT steam_appid FROM game_aliases WHERE folder_name = ?',
+      [folderName]
+    );
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return result[0].values[0][0] as string;
   }
 
   // === 海报路径处理 ===
