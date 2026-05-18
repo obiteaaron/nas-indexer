@@ -178,13 +178,88 @@
         <button class="btn btn-primary" @click="save">保存显示设置</button>
       </div>
     </div>
+
+    <div class="card">
+      <h3 class="section-title">游戏模块</h3>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="config.gamesEnabled">
+          启用游戏模块
+        </label>
+        <span class="hint">开启后将在扫描时识别游戏目录，并显示"游戏"导航入口</span>
+      </div>
+
+      <div class="form-group" v-if="config.gamesEnabled">
+        <label>识别规则</label>
+        <div class="game-rules-section">
+          <div class="rule-item">
+            <label>路径前缀匹配</label>
+            <input class="input" v-model="pathPrefixesStr" placeholder="D:\Games, E:\SteamLibrary">
+            <span class="hint">路径以这些前缀开头时识别为游戏，逗号分隔</span>
+          </div>
+          <div class="rule-item">
+            <label>路径关键词匹配</label>
+            <input class="input" v-model="pathKeywordsStr" placeholder="steamapps, games, game">
+            <span class="hint">路径包含这些关键词时识别为游戏，逗号分隔</span>
+          </div>
+          <div class="rule-item">
+            <label>目录名特征（正则表达式）</label>
+            <input class="input" v-model="folderPatternsStr" placeholder="\[GOG\], \[Steam\]">
+            <span class="hint">目录名匹配这些模式时识别为游戏，逗号分隔</span>
+          </div>
+          <div class="rule-item">
+            <label>特征文件</label>
+            <input class="input" v-model="fileIndicatorsStr" placeholder=".exe, steam_api.dll, game.json">
+            <span class="hint">目录内存在这些文件时识别为游戏，逗号分隔</span>
+          </div>
+          <div class="rule-item">
+            <label>排除路径</label>
+            <input class="input" v-model="gameExcludePatternsStr" placeholder="$Recycle.Bin, node_modules">
+            <span class="hint">路径包含这些关键词时排除，逗号分隔</span>
+          </div>
+        </div>
+        <span class="hint">识别优先级：排除规则 > 路径前缀 > 路径关键词 > 目录名特征 > 文件特征</span>
+      </div>
+
+      <div class="form-group" v-if="config.gamesEnabled">
+        <label>刮削设置</label>
+        <label class="checkbox-label sub-checkbox">
+          <input type="checkbox" v-model="config.gamesScrape!.autoScrape">
+          扫描后自动刮削元数据
+        </label>
+        <label class="checkbox-label sub-checkbox">
+          <input type="checkbox" v-model="config.gamesScrape!.downloadPosters">
+          下载海报到本地
+        </label>
+        <span class="hint">刮削将从 Steam Store 获取游戏元数据和海报</span>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" @click="save">保存游戏设置</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths } from '../api'
-import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule } from '../types'
+import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule, GameRules, GameScrapeConfig } from '../types'
+
+const DEFAULT_GAME_RULES: GameRules = {
+  pathPrefixes: [],
+  pathKeywords: ['steamapps', 'steam_library', 'steamlibrary', 'games', 'game'],
+  fileIndicators: ['.exe', 'steam_api.dll', 'steam_api64.dll', 'steam_appid.txt'],
+  excludePatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__'],
+  folderPatterns: ['\\[GOG\\]', '\\[Steam\\]'],
+  metadataFile: 'game.json'
+}
+
+const DEFAULT_GAME_SCRAPE: GameScrapeConfig = {
+  autoScrape: true,
+  downloadPosters: true,
+  scrapeOnIdentify: true
+}
 
 const config = ref<Config>({
   storagePath: '',
@@ -195,7 +270,10 @@ const config = ref<Config>({
   categoryRules: {},
   categoryPathRules: [],
   trackingConfig: { trackingEnabled: true, trackingLevel: 'full' },
-  thumbnailSizeLimit: 5
+  thumbnailSizeLimit: 5,
+  gamesEnabled: false,
+  gamesRules: DEFAULT_GAME_RULES,
+  gamesScrape: DEFAULT_GAME_SCRAPE
 })
 const status = ref<StatusResponse | null>(null)
 const saving = ref(false)
@@ -230,6 +308,46 @@ const blacklistStr = computed({
   }
 })
 
+const pathKeywordsStr = computed({
+  get: () => (config.value.gamesRules?.pathKeywords || []).join(', '),
+  set: (v: string) => {
+    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
+    config.value.gamesRules.pathKeywords = v.split(',').map(s => s.trim()).filter(s => s)
+  }
+})
+
+const pathPrefixesStr = computed({
+  get: () => (config.value.gamesRules?.pathPrefixes || []).join(', '),
+  set: (v: string) => {
+    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
+    config.value.gamesRules.pathPrefixes = v.split(',').map(s => s.trim()).filter(s => s)
+  }
+})
+
+const folderPatternsStr = computed({
+  get: () => (config.value.gamesRules?.folderPatterns || []).join(', '),
+  set: (v: string) => {
+    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
+    config.value.gamesRules.folderPatterns = v.split(',').map(s => s.trim()).filter(s => s)
+  }
+})
+
+const fileIndicatorsStr = computed({
+  get: () => (config.value.gamesRules?.fileIndicators || []).join(', '),
+  set: (v: string) => {
+    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
+    config.value.gamesRules.fileIndicators = v.split(',').map(s => s.trim()).filter(s => s)
+  }
+})
+
+const gameExcludePatternsStr = computed({
+  get: () => (config.value.gamesRules?.excludePatterns || []).join(', '),
+  set: (v: string) => {
+    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
+    config.value.gamesRules.excludePatterns = v.split(',').map(s => s.trim()).filter(s => s)
+  }
+})
+
 onMounted(async () => {
   await loadConfig()
   await loadStatus()
@@ -246,7 +364,10 @@ async function loadConfig(): Promise<void> {
         categoryRules: res.data.categoryRules || {},
         categoryPathRules: res.data.categoryPathRules || [],
         trackingConfig: res.data.trackingConfig || { trackingEnabled: true, trackingLevel: 'full' },
-        thumbnailSizeLimit: res.data.thumbnailSizeLimit ?? 5
+        thumbnailSizeLimit: res.data.thumbnailSizeLimit ?? 5,
+        gamesEnabled: res.data.gamesEnabled ?? false,
+        gamesRules: res.data.gamesRules || DEFAULT_GAME_RULES,
+        gamesScrape: res.data.gamesScrape || DEFAULT_GAME_SCRAPE
       }
 
       Object.keys(localCategoryRules).forEach(key => delete localCategoryRules[key])
@@ -611,6 +732,11 @@ function getPathStatusTitle(path: string): string {
   cursor: pointer;
 }
 
+.sub-checkbox {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
 .clear-tip {
   margin-left: 8px;
   color: var(--text-muted);
@@ -679,5 +805,34 @@ function getPathStatusTitle(path: string): string {
 .size-unit {
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.game-rules-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.rule-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rule-item label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 0;
+}
+
+.rule-item .hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 0;
 }
 </style>

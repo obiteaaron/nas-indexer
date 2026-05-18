@@ -2,11 +2,26 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { logger } from './logger';
-import type { Config } from './types';
+import type { Config, GameRules, GameScrapeConfig } from './types';
 
 const PROJECT_ROOT: string = path.join(__dirname, '..');
 const DEFAULT_STORAGE_PATH: string = path.join(PROJECT_ROOT, 'profiles');
 const DEFAULT_CONFIG_FILE: string = path.join(PROJECT_ROOT, 'config.default.json');
+
+const DEFAULT_GAME_RULES: GameRules = {
+  pathPrefixes: [],
+  pathKeywords: ['steamapps', 'steam_library', 'steamlibrary', 'games', 'game'],
+  fileIndicators: ['.exe', 'steam_api.dll', 'steam_api64.dll', 'steam_appid.txt', 'game.json'],
+  excludePatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__', '.cache'],
+  folderPatterns: ['\\[GOG\\]', '\\[Steam\\]', '\\[CRACK\\]'],
+  metadataFile: 'game.json'
+};
+
+const DEFAULT_GAME_SCRAPE: GameScrapeConfig = {
+  autoScrape: true,
+  downloadPosters: true,
+  scrapeOnIdentify: true
+};
 
 let dbInitialized: boolean = false;
 
@@ -76,7 +91,10 @@ function getDefaultConfig(): Config {
         '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz'
       ]
     },
-    categories: ['电影/视频', '音乐/音频', '文档/资料', '软件/安装包', '图片/照片', '项目/代码', '备份/归档', '其他']
+    categories: ['电影/视频', '音乐/音频', '文档/资料', '软件/安装包', '图片/照片', '项目/代码', '备份/归档', '其他'],
+    gamesEnabled: false,
+    gamesRules: DEFAULT_GAME_RULES,
+    gamesScrape: DEFAULT_GAME_SCRAPE
   };
 }
 
@@ -138,6 +156,8 @@ export {
   PROJECT_ROOT,
   DEFAULT_STORAGE_PATH,
   DEFAULT_CONFIG_FILE,
+  DEFAULT_GAME_RULES,
+  DEFAULT_GAME_SCRAPE,
   initDatabase,
   getStoragePath,
   getStorageFilePath,

@@ -357,6 +357,13 @@ class Database {
     return this.rowToFile(result[0], result[0].values[0]);
   }
 
+  getFilesByPathPrefix(pathPrefix: string): File[] {
+    const normalizedPrefix: string = normalizePath(pathPrefix);
+    const result: QueryResult[] = this.db!.exec('SELECT * FROM files WHERE path LIKE ? ORDER BY name ASC', [`${normalizedPrefix}%`]);
+    if (result.length === 0) return [];
+    return result[0].values.map(row => this.rowToFile(result[0], row));
+  }
+
   getFiles(options: FileQueryOptions = {}): File[] {
     const { category, search, orderBy = 'name', orderDir = 'ASC', limit = 100, offset = 0, minSize, maxSize, modifiedAfter, modifiedBefore } = options;
 

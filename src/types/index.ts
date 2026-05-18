@@ -7,3 +7,4 @@ export * from './config';
 export * from './tag';
 export * from './api';
 export * from './tracking';
+export * from './game';

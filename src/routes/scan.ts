@@ -2,8 +2,11 @@ import express, { Router, Request, Response } from 'express';
 import fs from 'fs';
 import { performScanWithDatabase, formatSize } from '../scanner';
 import { database } from '../database';
+import { gameDatabase } from '../games/database';
+import { runIdentification } from '../games/identifier';
+import { scrapeUnscrapedGames } from '../games/scraper';
 import { taskManager } from '../task-manager';
-import { initDatabase, loadConfig } from '../utils';
+import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from '../utils';
 import type { Config, FileExtensionFilter, ScanProgressEvent } from '../types';
 
 const router: Router = express.Router();
@@ -45,6 +48,44 @@ router.post('/', async (_req: Request, res: Response): Promise<void> => {
             });
           }
         );
+
+        // 游戏模块集成：扫描完成后识别游戏
+        console.log('[扫描全部] 文件扫描完成, gamesEnabled:', config.gamesEnabled);
+        if (config.gamesEnabled) {
+          try {
+            gameDatabase.createGameTables();
+
+            const rules = config.gamesRules || DEFAULT_GAME_RULES;
+            const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
+
+            console.log('[扫描全部] 游戏识别规则:', JSON.stringify(rules, null, 2));
+            console.log('[扫描全部] 扫描路径:', config.scanPaths);
+
+            taskManager.updateTask(task.id, {
+              progress: 95,
+              message: '正在识别游戏目录...'
+            });
+
+            const { games, ids } = await runIdentification(config.scanPaths, rules, scrapeConfig);
+            console.log(`[扫描全部] 游戏识别完成: ${games.length} 个游戏, ${ids.length} 个ID`);
+
+            // 自动刮削
+            if (scrapeConfig.autoScrape && ids.length > 0) {
+              taskManager.updateTask(task.id, {
+                progress: 97,
+                message: '正在刮削游戏元数据...'
+              });
+
+              const scrapedIds = await scrapeUnscrapedGames(scrapeConfig.downloadPosters);
+              console.log(`[扫描全部] 自动刮削完成: ${scrapedIds.length} 个游戏`);
+            }
+          } catch (gameErr) {
+            const gameError = gameErr as Error;
+            console.error('[扫描全部] 游戏识别失败:', gameError.message, gameError.stack);
+          }
+        } else {
+          console.log('[扫描全部] 游戏模块未启用');
+        }
 
         taskManager.completeTask(task.id, {
           totalFiles: result.totalFiles,
@@ -112,6 +153,43 @@ router.post('/path', async (req: Request, res: Response): Promise<void> => {
             });
           }
         );
+
+        // 游戏模块集成：扫描完成后识别游戏
+        console.log(`[单路径扫描] 文件扫描完成, scanPath: ${scanPath}, gamesEnabled: ${config.gamesEnabled}`);
+        if (config.gamesEnabled) {
+          try {
+            gameDatabase.createGameTables();
+
+            const rules = config.gamesRules || DEFAULT_GAME_RULES;
+            const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
+
+            console.log('[单路径扫描] 游戏识别规则:', JSON.stringify(rules, null, 2));
+
+            taskManager.updateTask(task.id, {
+              progress: 95,
+              message: '正在识别游戏目录...'
+            });
+
+            const { games, ids } = await runIdentification([scanPath], rules, scrapeConfig);
+            console.log(`[单路径扫描] 游戏识别完成: ${games.length} 个游戏, ${ids.length} 个ID`);
+
+            // 自动刮削
+            if (scrapeConfig.autoScrape && ids.length > 0) {
+              taskManager.updateTask(task.id, {
+                progress: 97,
+                message: '正在刮削游戏元数据...'
+              });
+
+              const scrapedIds = await scrapeUnscrapedGames(scrapeConfig.downloadPosters);
+              console.log(`[单路径扫描] 自动刮削完成: ${scrapedIds.length} 个游戏`);
+            }
+          } catch (gameErr) {
+            const gameError = gameErr as Error;
+            console.error('[单路径扫描] 游戏识别失败:', gameError.message, gameError.stack);
+          }
+        } else {
+          console.log('[单路径扫描] 游戏模块未启用');
+        }
 
         taskManager.completeTask(task.id, {
           totalFiles: result.totalFiles,

@@ -31,6 +31,9 @@ export interface Config {
   categoryRules?: CategoryRule;
   categoryPathRules?: CategoryPathRule[];
   trackingConfig?: TrackingConfig;
+  gamesEnabled?: boolean;
+  gamesRules?: import('./game').GameRules;
+  gamesScrape?: import('./game').GameScrapeConfig;
 }
 
 export const DEFAULT_EXCLUDE_PATTERNS: string[] = [

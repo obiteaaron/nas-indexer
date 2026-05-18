@@ -85,6 +85,9 @@ export interface Config {
   categoryRules?: CategoryRule;
   categoryPathRules?: CategoryPathRule[];
   trackingConfig?: TrackingConfig;
+  gamesEnabled?: boolean;
+  gamesRules?: GameRules;
+  gamesScrape?: GameScrapeConfig;
   // 前端扩展属性
   thumbnailSizeLimit?: number;
 }
@@ -233,4 +236,88 @@ export interface FileInfo {
   parentDir: string;
   isDirectory: boolean;
   isFile: boolean;
+}
+
+// 游戏类型
+export interface Game {
+  id: number;
+  source_path: string;
+  title: string;
+  title_en?: string;
+  original_name?: string;
+  steam_appid?: string;
+  poster_url?: string;
+  cover_url?: string;
+  poster_horizontal_path?: string;
+  poster_vertical_path?: string;
+  poster_banner_path?: string;
+  background_path?: string;
+  has_local_poster: number;
+  developer?: string;
+  publisher?: string;
+  release_date?: string;
+  genres?: string;
+  rating?: number;
+  description?: string;
+  short_description?: string;
+  languages?: string;
+  tags?: string;
+  notes?: string;
+  screenshots?: string;
+  metadata_source: string;
+  metadata_path?: string;
+  scraped_at?: string;
+  is_manually_edited: number;
+  created_at?: string;
+  updated_at?: string;
+  posterLocal?: string;
+  genresArray?: string[];
+}
+
+export interface GameQueryOptions {
+  genre?: string;
+  year?: string;
+  search?: string;
+  scraped?: 'true' | 'false';
+  orderBy?: 'title' | 'rating' | 'release_date' | 'scraped_at';
+  orderDir?: 'ASC' | 'DESC';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface GamesResponse {
+  games: Game[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface GameStatistics {
+  totalGames: number;
+  scrapedGames: number;
+  unscrapedGames: number;
+  byYear: { year: string; count: number }[];
+  byGenre: { genre: string; count: number }[];
+}
+
+export interface GameRules {
+  pathPrefixes: string[];
+  pathKeywords: string[];
+  fileIndicators: string[];
+  excludePatterns: string[];
+  folderPatterns: string[];
+  metadataFile: string;
+}
+
+export interface GameScrapeConfig {
+  autoScrape: boolean;
+  downloadPosters: boolean;
+  scrapeOnIdentify: boolean;
+}
+
+export interface GameConfig {
+  gamesEnabled: boolean;
+  gamesRules?: GameRules;
+  gamesScrape?: GameScrapeConfig;
 }

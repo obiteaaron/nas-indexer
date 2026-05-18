@@ -60,7 +60,7 @@ export interface ScanPathResult {
 }
 
 export interface ScanProgressEvent {
-  phase: 'counting' | 'scanning' | 'writing';
+  phase: 'counting' | 'scanning' | 'writing' | 'games' | 'scraping';
   pathIndex: number;
   totalPaths: number;
   processed?: number;

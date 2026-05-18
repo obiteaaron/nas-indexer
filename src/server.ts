@@ -4,8 +4,11 @@ import path from 'path';
 import cron from 'node-cron';
 import { performScanWithDatabase } from './scanner';
 import { database } from './database';
+import { gameDatabase } from './games/database';
+import { runIdentification } from './games/identifier';
+import { scrapeUnscrapedGames } from './games/scraper';
 import { logger } from './logger';
-import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir, getStoragePath } from './utils';
+import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from './utils';
 import type { Config, FileExtensionFilter, ScanProgressEvent } from './types';
 
 // 路由模块
@@ -16,6 +19,7 @@ import tagsRouter from './routes/tags';
 import previewRouter from './routes/preview';
 import recommendationsRouter from './routes/recommendations';
 import trackingRouter from './routes/tracking';
+import gamesRouter from './routes/games';
 import { router as statsRouter, setScanJob } from './routes/stats';
 
 const app = express();
@@ -48,6 +52,50 @@ async function runScan(config: Config, onProgress: ((event: ScanProgressEvent) =
       onProgress
     );
 
+    // 游戏模块集成：扫描完成后识别游戏
+    if (config.gamesEnabled) {
+      try {
+        gameDatabase.createGameTables();
+
+        const rules = config.gamesRules || DEFAULT_GAME_RULES;
+        const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
+
+        if (onProgress) {
+          onProgress({
+            phase: 'games',
+            pathIndex: 0,
+            totalPaths: config.scanPaths.length,
+            progress: 95,
+            path: '',
+            message: '正在识别游戏目录...'
+          });
+        }
+
+        const { games, ids } = await runIdentification(config.scanPaths, rules, scrapeConfig);
+        logger.info('游戏识别完成: %d 个游戏', games.length);
+
+        // 自动刮削
+        if (scrapeConfig.autoScrape && ids.length > 0) {
+          if (onProgress) {
+            onProgress({
+              phase: 'scraping',
+              pathIndex: 0,
+              totalPaths: 1,
+              progress: 97,
+              path: '',
+              message: `正在刮削游戏元数据...`
+            });
+          }
+
+          const scrapedIds = await scrapeUnscrapedGames(scrapeConfig.downloadPosters);
+          logger.info('自动刮削完成: %d 个游戏', scrapedIds.length);
+        }
+      } catch (gameErr) {
+        const gameError = gameErr as Error;
+        logger.warn('游戏识别失败: %s', gameError.message);
+      }
+    }
+
     return result;
   } catch (err) {
     const error = err as Error;
@@ -79,6 +127,7 @@ function scheduleScan(config: Config): void {
 app.use('/api/config', configRouter);
 app.use('/api/scan', scanRouter);
 app.use('/api/files', filesRouter);
+app.use('/api/games', gamesRouter);
 app.use('/api', tagsRouter);
 app.use('/api', previewRouter);
 app.use('/api', recommendationsRouter);

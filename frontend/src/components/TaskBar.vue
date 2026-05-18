@@ -44,7 +44,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const expanded = ref(false)
-const completedTaskIds = ref(new Set<string>())
+// 存储已通知过的任务 ID，防止重复通知
+const notifiedTaskIds = new Set<string>()
 
 const hasRunning = computed(() => props.tasks.some(t => t.status === 'running'))
 const runningCount = computed(() => props.tasks.filter(t => t.status === 'running').length)
@@ -61,15 +62,32 @@ onMounted(() => {
   }
 })
 
-watch(() => props.tasks, (newTasks: Task[]) => {
+watch(() => props.tasks, (newTasks: Task[], oldTasks: Task[] | undefined) => {
   if (newTasks.length === 0) {
     expanded.value = false
+    return
   }
 
-  for (const task of newTasks) {
-    if (task.status === 'completed' && !completedTaskIds.value.has(task.id)) {
-      completedTaskIds.value.add(task.id)
-      sendNotification(task)
+  // 构建旧任务状态映射
+  const oldTaskMap = new Map<string, Task>()
+  if (oldTasks) {
+    for (const task of oldTasks) {
+      oldTaskMap.set(task.id, task)
+    }
+  }
+
+  // 只在任务从 running 变为 completed 时通知
+  for (const newTask of newTasks) {
+    const oldTask = oldTaskMap.get(newTask.id)
+
+    // 新任务变为 completed，且之前是 running，且未通知过
+    if (
+      newTask.status === 'completed' &&
+      (!oldTask || oldTask.status === 'running') &&
+      !notifiedTaskIds.has(newTask.id)
+    ) {
+      notifiedTaskIds.add(newTask.id)
+      sendNotification(newTask)
     }
   }
 }, { deep: true })

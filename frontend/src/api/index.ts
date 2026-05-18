@@ -15,7 +15,10 @@ import type {
   Task,
   Recommendation,
   Preferences,
-  FileView
+  FileView,
+  Game,
+  GamesResponse,
+  GameStatistics
 } from '../types'
 
 const API_BASE = '/api'
@@ -305,4 +308,86 @@ export function getTasks(): Promise<ApiResponse<Task[]>> {
 
 export function getTaskStreamUrl(): string {
   return API_BASE + '/scan/tasks/stream'
+}
+
+// 游戏 API
+export function getGames(params: Record<string, string | number | undefined> = {}): Promise<ApiResponse<GamesResponse>> {
+  const query = new URLSearchParams(
+    Object.entries(params)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)])
+  ).toString()
+  clearCache('/games')
+  return request<GamesResponse>('/games?' + query)
+}
+
+export function getGame(id: number): Promise<ApiResponse<Game>> {
+  return request<Game>('/games/' + id)
+}
+
+export function updateGame(id: number, data: Partial<Game>): Promise<ApiResponse<Game>> {
+  clearCache('/games')
+  return request<Game>('/games/' + id, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export function deleteGame(id: number): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/' + id, { method: 'DELETE' })
+}
+
+export function scrapeGame(id: number, downloadPosters: boolean = true): Promise<ApiResponse<Game>> {
+  clearCache('/games')
+  return request<Game>('/games/' + id + '/scrape', { method: 'POST', body: JSON.stringify({ downloadPosters }) })
+}
+
+export function scrapeGamesBatch(downloadPosters: boolean = true): Promise<ApiResponse<{ scrapedCount: number; scrapedIds: number[] }>> {
+  clearCache('/games')
+  return request<{ scrapedCount: number; scrapedIds: number[] }>('/games/scrape/batch', { method: 'POST', body: JSON.stringify({ downloadPosters }) })
+}
+
+export function getGamePosterUrl(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' = 'horizontal'): string {
+  return API_BASE + '/games/' + id + '/poster/' + type
+}
+
+export function uploadGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background', file: globalThis.File): Promise<ApiResponse<{ posterPath: string }>> {
+  clearCache('/games')
+  const formData = new FormData()
+  formData.append('poster', file)
+  return fetch(API_BASE + '/games/' + id + '/poster/' + type, { method: 'POST', body: formData })
+    .then(res => res.json() as Promise<ApiResponse<{ posterPath: string }>>)
+}
+
+export function deleteGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background'): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/' + id + '/poster/' + type, { method: 'DELETE' })
+}
+
+export function openGame(id: number): Promise<ApiResponse<void>> {
+  return request<void>('/games/' + id + '/open', { method: 'POST' })
+}
+
+export function getGameFiles(id: number): Promise<ApiResponse<{ files: File[]; gamePath: string }>> {
+  return request<{ files: File[]; gamePath: string }>('/games/' + id + '/files')
+}
+
+export function getGameStatistics(): Promise<ApiResponse<GameStatistics>> {
+  return cachedGet<GameStatistics>('/games/statistics')
+}
+
+export function getGameGenres(): Promise<ApiResponse<string[]>> {
+  return cachedGet<string[]>('/games/genres')
+}
+
+export function getGameYears(): Promise<ApiResponse<string[]>> {
+  return cachedGet<string[]>('/games/years')
+}
+
+export function identifyGames(scanRoots?: string[]): Promise<ApiResponse<{ gamesCount: number; ids: number[] }>> {
+  clearCache('/games')
+  return request<{ gamesCount: number; ids: number[] }>('/games/identify', { method: 'POST', body: JSON.stringify({ scanRoots }) })
+}
+
+export function clearGames(): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/clear', { method: 'POST' })
 }

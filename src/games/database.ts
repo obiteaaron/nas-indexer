@@ -1,0 +1,443 @@
+/**
+ * 游戏数据库操作模块
+ */
+
+import fs from 'fs';
+import { database } from '../database';
+import { logger } from '../logger';
+import type { Game, GameQueryOptions, GameStatistics } from '../types';
+
+interface QueryResult {
+  columns: string[];
+  values: unknown[][];
+}
+
+class GameDatabase {
+  async init(): Promise<this> {
+    return this;
+  }
+
+  // === 游戏表操作 ===
+
+  createGameTables(): void {
+    database.db!.run(`
+      CREATE TABLE IF NOT EXISTS games (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_path TEXT NOT NULL UNIQUE,
+
+        title TEXT NOT NULL,
+        title_en TEXT,
+        original_name TEXT,
+
+        steam_appid TEXT,
+
+        poster_url TEXT,
+        cover_url TEXT,
+        poster_horizontal_path TEXT,
+        poster_vertical_path TEXT,
+        poster_banner_path TEXT,
+        background_path TEXT,
+        has_local_poster INTEGER DEFAULT 0,
+
+        developer TEXT,
+        publisher TEXT,
+        release_date TEXT,
+        genres TEXT,
+        rating REAL,
+        description TEXT,
+        short_description TEXT,
+        languages TEXT,
+        tags TEXT,
+        notes TEXT,
+        screenshots TEXT,
+
+        metadata_source TEXT DEFAULT 'unknown',
+        metadata_path TEXT,
+        scraped_at DATETIME,
+        is_manually_edited INTEGER DEFAULT 0,
+
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME
+      )
+    `);
+
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_source_path ON games(source_path)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_title ON games(title)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_steam_appid ON games(steam_appid)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_metadata_source ON games(metadata_source)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_release_date ON games(release_date)');
+
+    database.save();
+    logger.info('游戏数据库表已创建');
+  }
+
+  insertGame(gameData: Partial<Game>): number {
+    const {
+      source_path,
+      title,
+      title_en = null,
+      original_name = null,
+      steam_appid = null,
+      poster_url = null,
+      cover_url = null,
+      poster_horizontal_path = null,
+      poster_vertical_path = null,
+      poster_banner_path = null,
+      background_path = null,
+      has_local_poster = 0,
+      developer = null,
+      publisher = null,
+      release_date = null,
+      genres = null,
+      rating = null,
+      description = null,
+      short_description = null,
+      languages = null,
+      tags = null,
+      notes = null,
+      screenshots = null,
+      metadata_source = 'unknown',
+      metadata_path = null,
+      scraped_at = null,
+      is_manually_edited = 0
+    } = gameData;
+
+    if (!source_path || !title) {
+      logger.warn('插入游戏失败: 缺少 source_path 或 title, source_path=%s, title=%s', source_path, title);
+      return 0;
+    }
+
+    if (!database.db) {
+      logger.error('插入游戏失败: 数据库未初始化');
+      return 0;
+    }
+
+    logger.debug('准备插入游戏: source_path=%s, title=%s', source_path, title);
+
+    try {
+      const existing: Game | null = this.getGameByPath(source_path);
+      if (existing) {
+        logger.debug('游戏已存在，更新: id=%d, path=%s', existing.id, source_path);
+        database.db!.run(`
+          UPDATE games SET
+            title = ?, title_en = ?, original_name = ?, steam_appid = ?,
+            poster_url = ?, cover_url = ?, poster_horizontal_path = ?, poster_vertical_path = ?,
+            poster_banner_path = ?, background_path = ?, has_local_poster = ?,
+            developer = ?, publisher = ?, release_date = ?, genres = ?, rating = ?,
+            description = ?, short_description = ?, languages = ?, tags = ?, notes = ?,
+            screenshots = ?, metadata_source = ?, metadata_path = ?, scraped_at = ?,
+            is_manually_edited = ?, updated_at = datetime('now', 'localtime')
+          WHERE id = ?
+        `, [
+          title, title_en, original_name, steam_appid,
+          poster_url, cover_url, poster_horizontal_path, poster_vertical_path,
+          poster_banner_path, background_path, has_local_poster,
+          developer, publisher, release_date, genres, rating,
+          description, short_description, languages, tags, notes,
+          screenshots, metadata_source, metadata_path, scraped_at,
+          is_manually_edited, existing.id
+        ]);
+        database.save();
+        return existing.id;
+      } else {
+        logger.debug('插入新游戏: path=%s, title=%s', source_path, title);
+        const insertSql = `
+          INSERT INTO games (
+            source_path, title, title_en, original_name, steam_appid,
+            poster_url, cover_url, poster_horizontal_path, poster_vertical_path,
+            poster_banner_path, background_path, has_local_poster,
+            developer, publisher, release_date, genres, rating,
+            description, short_description, languages, tags, notes,
+            screenshots, metadata_source, metadata_path, scraped_at,
+            is_manually_edited
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        const insertParams = [
+          source_path, title, title_en, original_name, steam_appid,
+          poster_url, cover_url, poster_horizontal_path, poster_vertical_path,
+          poster_banner_path, background_path, has_local_poster,
+          developer, publisher, release_date, genres, rating,
+          description, short_description, languages, tags, notes,
+          screenshots, metadata_source, metadata_path, scraped_at,
+          is_manually_edited
+        ];
+        logger.debug('INSERT 参数数量: %d', insertParams.length);
+        database.db!.run(insertSql, insertParams);
+        database.save();
+        const result: QueryResult[] = database.db!.exec('SELECT MAX(id) as id FROM games');
+        const newId = (result[0].values[0][0] as number) || 0;
+        logger.debug('插入成功, newId=%d', newId);
+        return newId;
+      }
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error('插入游戏失败: %s', error.message);
+      logger.error('游戏数据: source_path=%s, title=%s', source_path, title);
+      logger.error('错误堆栈: %s', error.stack || '无堆栈信息');
+      return 0;
+    }
+  }
+
+  getGameById(id: number): Game | null {
+    const result: QueryResult[] = database.db!.exec('SELECT * FROM games WHERE id = ?', [id]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return this.rowToGame(result[0], result[0].values[0]);
+  }
+
+  getGameByPath(sourcePath: string): Game | null {
+    const result: QueryResult[] = database.db!.exec('SELECT * FROM games WHERE source_path = ?', [sourcePath]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return this.rowToGame(result[0], result[0].values[0]);
+  }
+
+  getGames(options: GameQueryOptions = {}): Game[] {
+    const { genre, year, search, scraped, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
+
+    let sql: string = 'SELECT * FROM games';
+    const params: unknown[] = [];
+    const conditions: string[] = [];
+
+    if (genre) {
+      conditions.push('genres LIKE ?');
+      params.push(`%${genre}%`);
+    }
+
+    if (year) {
+      conditions.push('release_date LIKE ?');
+      params.push(`${year}%`);
+    }
+
+    if (search) {
+      conditions.push('(title LIKE ? OR title_en LIKE ? OR original_name LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (scraped === 'true') {
+      conditions.push('metadata_source != ?');
+      params.push('unknown');
+    } else if (scraped === 'false') {
+      conditions.push('metadata_source = ?');
+      params.push('unknown');
+    }
+
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    sql += ` ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`;
+    params.push(limit, offset);
+
+    const result: QueryResult[] = database.db!.exec(sql, params);
+    if (result.length === 0) return [];
+
+    return result[0].values.map(row => this.rowToGame(result[0], row));
+  }
+
+  getGameCount(options: GameQueryOptions = {}): number {
+    const { genre, year, search, scraped } = options;
+
+    let sql: string = 'SELECT COUNT(*) as count FROM games';
+    const params: unknown[] = [];
+    const conditions: string[] = [];
+
+    if (genre) {
+      conditions.push('genres LIKE ?');
+      params.push(`%${genre}%`);
+    }
+
+    if (year) {
+      conditions.push('release_date LIKE ?');
+      params.push(`${year}%`);
+    }
+
+    if (search) {
+      conditions.push('(title LIKE ? OR title_en LIKE ? OR original_name LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (scraped === 'true') {
+      conditions.push('metadata_source != ?');
+      params.push('unknown');
+    } else if (scraped === 'false') {
+      conditions.push('metadata_source = ?');
+      params.push('unknown');
+    }
+
+    if (conditions.length > 0) {
+      sql += ' WHERE ' + conditions.join(' AND ');
+    }
+
+    const result: QueryResult[] = database.db!.exec(sql, params);
+    if (result.length === 0) return 0;
+    return result[0].values[0][0] as number;
+  }
+
+  updateGame(id: number, data: Partial<Game>): boolean {
+    const fields: string[] = [];
+    const params: unknown[] = [];
+
+    const allowedFields = [
+      'title', 'title_en', 'original_name', 'steam_appid',
+      'poster_url', 'cover_url', 'poster_horizontal_path', 'poster_vertical_path',
+      'poster_banner_path', 'background_path', 'has_local_poster',
+      'developer', 'publisher', 'release_date', 'genres', 'rating',
+      'description', 'short_description', 'languages', 'tags', 'notes',
+      'screenshots', 'metadata_source', 'metadata_path', 'scraped_at',
+      'is_manually_edited'
+    ];
+
+    for (const field of allowedFields) {
+      if (data[field as keyof Game] !== undefined) {
+        fields.push(`${field} = ?`);
+        params.push(data[field as keyof Game]);
+      }
+    }
+
+    if (fields.length === 0) return false;
+
+    fields.push('updated_at = datetime("now", "localtime")');
+    params.push(id);
+
+    database.db!.run(`UPDATE games SET ${fields.join(', ')} WHERE id = ?`, params);
+    database.save();
+    return true;
+  }
+
+  deleteGame(id: number): boolean {
+    database.db!.run('DELETE FROM games WHERE id = ?', [id]);
+    database.save();
+    return true;
+  }
+
+  clearAllGames(): void {
+    database.db!.run('DELETE FROM games');
+    database.save();
+  }
+
+  // === 统计方法 ===
+
+  getStatistics(): GameStatistics {
+    const totalResult: QueryResult[] = database.db!.exec('SELECT COUNT(*) as count FROM games');
+    const totalGames: number = totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0;
+
+    const scrapedResult: QueryResult[] = database.db!.exec(
+      'SELECT COUNT(*) as count FROM games WHERE metadata_source != ?',
+      ['unknown']
+    );
+    const scrapedGames: number = scrapedResult.length > 0 ? (scrapedResult[0].values[0][0] as number) : 0;
+
+    const unscrapedGames: number = totalGames - scrapedGames;
+
+    const yearResult: QueryResult[] = database.db!.exec(`
+      SELECT substr(release_date, 1, 4) as year, COUNT(*) as count
+      FROM games
+      WHERE release_date IS NOT NULL AND release_date != ''
+      GROUP BY year
+      ORDER BY year DESC
+      LIMIT 20
+    `);
+    const byYear: { year: string; count: number }[] = yearResult.length > 0
+      ? yearResult[0].values.map(row => ({ year: row[0] as string, count: row[1] as number }))
+      : [];
+
+    // 解析 genres JSON 并统计
+    const genreMap: Record<string, number> = {};
+    const genreResult: QueryResult[] = database.db!.exec('SELECT genres FROM games WHERE genres IS NOT NULL');
+    if (genreResult.length > 0) {
+      for (const row of genreResult[0].values) {
+        try {
+          const genres: string[] = JSON.parse(row[0] as string);
+          for (const genre of genres) {
+            genreMap[genre] = (genreMap[genre] || 0) + 1;
+          }
+        } catch {
+          // JSON 解析失败，跳过
+        }
+      }
+    }
+    const byGenre: { genre: string; count: number }[] = Object.entries(genreMap)
+      .map(([genre, count]) => ({ genre, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
+
+    return { totalGames, scrapedGames, unscrapedGames, byYear, byGenre };
+  }
+
+  getGenres(): string[] {
+    const genreMap: Record<string, number> = {};
+    const result: QueryResult[] = database.db!.exec('SELECT genres FROM games WHERE genres IS NOT NULL');
+    if (result.length > 0) {
+      for (const row of result[0].values) {
+        try {
+          const genres: string[] = JSON.parse(row[0] as string);
+          for (const genre of genres) {
+            genreMap[genre] = (genreMap[genre] || 0) + 1;
+          }
+        } catch {
+          // JSON 解析失败，跳过
+        }
+      }
+    }
+    return Object.keys(genreMap).sort();
+  }
+
+  getYears(): string[] {
+    const result: QueryResult[] = database.db!.exec(`
+      SELECT DISTINCT substr(release_date, 1, 4) as year
+      FROM games
+      WHERE release_date IS NOT NULL AND release_date != ''
+      ORDER BY year DESC
+    `);
+    if (result.length === 0) return [];
+    return result[0].values.map(row => row[0] as string);
+  }
+
+  // === 海报路径处理 ===
+
+  getPosterPath(game: Game, type: 'horizontal' | 'vertical' | 'banner' | 'background'): string | null {
+    const pathField = `poster_${type}_path` as keyof Game;
+    const localPath = game[pathField] as string | undefined;
+    if (localPath && fs.existsSync(localPath)) {
+      return localPath;
+    }
+    return null;
+  }
+
+  updatePosterPath(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background', filePath: string): void {
+    const field = `poster_${type}_path`;
+    database.db!.run(`UPDATE games SET ${field} = ?, has_local_poster = 1, updated_at = datetime('now', 'localtime') WHERE id = ?`, [filePath, id]);
+    database.save();
+  }
+
+  private rowToGame(resultMeta: QueryResult, row: unknown[]): Game {
+    const obj: Record<string, unknown> = {};
+    resultMeta.columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    const game = obj as unknown as Game;
+
+    // 解析 JSON 字段
+    if (game.genres) {
+      try {
+        game.genresArray = JSON.parse(game.genres);
+      } catch {
+        game.genresArray = [];
+      }
+    } else {
+      game.genresArray = [];
+    }
+
+    // 计算本地海报路径
+    if (game.poster_horizontal_path) {
+      game.posterLocal = game.poster_horizontal_path;
+    } else if (game.poster_vertical_path) {
+      game.posterLocal = game.poster_vertical_path;
+    }
+
+    return game;
+  }
+}
+
+const gameDatabase: GameDatabase = new GameDatabase();
+
+export { gameDatabase, GameDatabase };
