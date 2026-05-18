@@ -1,0 +1,277 @@
+<template>
+  <div class="game-card" @click="$emit('click', game)">
+    <div class="poster-container">
+      <img
+        v-if="posterUrl"
+        :src="posterUrl"
+        :alt="game.title"
+        class="poster"
+        loading="lazy"
+      />
+      <div v-else class="poster-placeholder">
+        <span class="poster-icon">🎮</span>
+        <span class="poster-title">{{ game.title }}</span>
+      </div>
+      <div class="poster-overlay">
+        <div class="game-rating" v-if="game.rating">
+          <span class="rating-badge">{{ game.rating }}</span>
+        </div>
+        <div class="game-actions">
+          <button class="action-btn" @click.stop="$emit('open', game)" title="打开目录">
+            📂
+          </button>
+          <button class="action-btn" @click.stop="$emit('scrape', game)" title="刮削元数据">
+            🔍
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="game-info">
+      <h4 class="game-title">{{ game.title }}</h4>
+      <p class="game-meta" v-if="game.developer || game.release_date">
+        <span v-if="game.developer">{{ game.developer }}</span>
+        <span v-if="game.release_date"> · {{ formatYear(game.release_date) }}</span>
+      </p>
+      <div class="game-tags" v-if="genres.length">
+        <span class="genre-tag" v-for="genre in genres.slice(0, 3)" :key="genre">{{ genre }}</span>
+      </div>
+      <div class="game-status">
+        <span class="status-badge" :class="statusClass">{{ statusText }}</span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import type { Game } from '../types'
+
+interface Props {
+  game: Game
+  posterType?: 'horizontal' | 'vertical' | 'banner'
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  posterType: 'horizontal'
+})
+
+defineEmits<{
+  click: [game: Game]
+  open: [game: Game]
+  scrape: [game: Game]
+}>()
+
+const posterUrl = computed(() => {
+  if (props.game.poster_horizontal_path) {
+    return `/api/games/${props.game.id}/poster/${props.posterType}`
+  }
+  if (props.game.poster_url) {
+    return props.game.poster_url
+  }
+  return null
+})
+
+const genres = computed(() => {
+  if (props.game.genresArray) {
+    return props.game.genresArray
+  }
+  if (props.game.genres) {
+    try {
+      return JSON.parse(props.game.genres)
+    } catch {
+      return []
+    }
+  }
+  return []
+})
+
+const statusClass = computed(() => {
+  const source = props.game.metadata_source
+  if (source === 'steam') return 'status-scraped'
+  if (source === 'local') return 'status-local'
+  return 'status-unscraped'
+})
+
+const statusText = computed(() => {
+  const source = props.game.metadata_source
+  if (source === 'steam') return '已刮削'
+  if (source === 'local') return '本地'
+  return '待刮削'
+})
+
+function formatYear(dateStr: string): string {
+  if (!dateStr) return ''
+  const match = dateStr.match(/\d{4}/)
+  return match ? match[0] : dateStr.slice(0, 4)
+}
+</script>
+
+<style scoped>
+.game-card {
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.game-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.poster-container {
+  position: relative;
+  aspect-ratio: 460 / 215;
+  overflow: hidden;
+}
+
+.poster {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.poster-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--bg) 0%, var(--border) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.poster-icon {
+  font-size: 48px;
+}
+
+.poster-title {
+  font-size: 14px;
+  color: var(--text);
+  max-width: 80%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.poster-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.2s;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 12px;
+}
+
+.game-card:hover .poster-overlay {
+  opacity: 1;
+}
+
+.game-rating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.rating-badge {
+  background: var(--accent);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.game-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  background: rgba(255, 255, 255, 0.9);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+
+.action-btn:hover {
+  background: white;
+}
+
+.game-info {
+  padding: 12px;
+}
+
+.game-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.game-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-tags {
+  display: flex;
+  gap: 4px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.genre-tag {
+  background: var(--bg);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.game-status {
+  margin-top: 8px;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.status-scraped {
+  background: #10b981;
+  color: white;
+}
+
+.status-local {
+  background: #3b82f6;
+  color: white;
+}
+
+.status-unscraped {
+  background: #6b7280;
+  color: white;
+}
+</style>

@@ -6,6 +6,7 @@
         <nav class="nav">
           <router-link to="/" class="nav-link">首页</router-link>
           <router-link to="/files" class="nav-link">文件列表</router-link>
+          <router-link to="/games" class="nav-link">游戏</router-link>
           <router-link to="/search" class="nav-link">搜索</router-link>
           <router-link to="/statistics" class="nav-link">统计</router-link>
           <router-link to="/tags" class="nav-link">标签管理</router-link>

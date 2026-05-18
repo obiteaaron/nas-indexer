@@ -1,0 +1,256 @@
+/**
+ * Steam 刮削模块
+ */
+
+import { logger } from '../logger';
+import { gameDatabase } from './database';
+import { writeLocalMetadata, savePoster } from './metadata-manager';
+import { cleanGameName } from './name-cleaner';
+import type { Game } from '../types';
+
+const STEAM_SEARCH_URL = 'https://store.steampowered.com/api/storesearch/';
+const STEAM_DETAILS_URL = 'https://store.steampowered.com/api/appdetails';
+
+interface SteamSearchResult {
+  success: boolean;
+  total: number;
+  items: Array<{
+    id: number;
+    name: string;
+    price: { final: number };
+    tiny_image: string;
+    metacritic_score?: number;
+  }>;
+}
+
+interface SteamAppDetails {
+  success: boolean;
+  data?: {
+    steam_appid: number;
+    name: string;
+    short_description: string;
+    detailed_description: string;
+    developers: string[];
+    publishers: string[];
+    release_date: { date: string };
+    genres: Array<{ id: string; description: string }>;
+    header_image: string;
+    capsule_images: Array<{ id: string; capsule: string }>;
+    screenshots: Array<{ id: number; path_thumbnail: string; path_full: string }>;
+    background: string;
+    background_raw: string;
+    movies?: Array<{ id: number; thumbnail: string; mp4: { max: string } }>;
+    metacritic?: { score: number; url: string };
+    recommendations?: { total: number };
+    supported_languages: string;
+    type: string;
+    is_free: boolean;
+  };
+}
+
+/**
+ * 在 Steam 搜索游戏
+ */
+async function searchSteamGame(title: string): Promise<number | null> {
+  try {
+    const searchUrl = `${STEAM_SEARCH_URL}?term=${encodeURIComponent(title)}&l=english&cc=US`;
+    const response = await fetch(searchUrl);
+
+    if (!response.ok) {
+      logger.warn('Steam 搜索请求失败: %s', title);
+      return null;
+    }
+
+    const result = (await response.json()) as SteamSearchResult;
+
+    if (!result.success || !result.items || result.items.length === 0) {
+      logger.info('Steam 搜索无结果: %s', title);
+      return null;
+    }
+
+    // 找最匹配的结果（名称最接近）
+    const cleanTitle = cleanGameName(title).toLowerCase();
+    for (const item of result.items) {
+      const itemName = item.name.toLowerCase();
+      // 简单匹配：名称包含或相近
+      if (itemName.includes(cleanTitle) || cleanTitle.includes(itemName)) {
+        logger.info('Steam 搜索匹配: %s -> appid %d', title, item.id);
+        return item.id;
+      }
+    }
+
+    // 默认取第一个结果
+    const firstMatch = result.items[0].id;
+    logger.info('Steam 搜索取首个: %s -> appid %d', title, firstMatch);
+    return firstMatch;
+  } catch (err) {
+    const error = err as Error;
+    logger.error('Steam 搜索失败: %s - %s', title, error.message);
+    return null;
+  }
+}
+
+/**
+ * 获取 Steam 游戏详情
+ */
+async function getSteamDetails(appid: number): Promise<SteamAppDetails | null> {
+  try {
+    const detailsUrl = `${STEAM_DETAILS_URL}?appids=${appid}&l=schinese`;
+    const response = await fetch(detailsUrl);
+
+    if (!response.ok) {
+      logger.warn('Steam 详情请求失败: appid %d', appid);
+      return null;
+    }
+
+    const result = await response.json() as Record<string, SteamAppDetails>;
+    const appDetails = result[String(appid)];
+
+    if (!appDetails || !appDetails.success || !appDetails.data) {
+      logger.info('Steam 详情无数据: appid %d', appid);
+      return null;
+    }
+
+    return appDetails;
+  } catch (err) {
+    const error = err as Error;
+    logger.error('Steam 详情获取失败: appid %d - %s', appid, error.message);
+    return null;
+  }
+}
+
+/**
+ * 下载图片
+ */
+async function downloadImage(url: string): Promise<Buffer | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (err) {
+    logger.warn('下载图片失败: %s', url);
+    return null;
+  }
+}
+
+/**
+ * 刮削单个游戏
+ */
+export async function scrapeGame(gameId: number, downloadPosters: boolean = true): Promise<Game | null> {
+  const game = gameDatabase.getGameById(gameId);
+  if (!game) {
+    logger.warn('游戏不存在: id %d', gameId);
+    return null;
+  }
+
+  // 如果已经有 Steam appid，直接用
+  let appid: number | null = null;
+  if (game.steam_appid) {
+    appid = parseInt(game.steam_appid);
+  } else {
+    // 搜索 Steam
+    appid = await searchSteamGame(game.title);
+  }
+
+  if (!appid) {
+    logger.info('无法找到 Steam appid: %s', game.title);
+    return game;
+  }
+
+  // 获取详情
+  const details = await getSteamDetails(appid);
+  if (!details || !details.data) {
+    logger.info('无法获取 Steam 详情: appid %d', appid);
+    // 保存 appid 至少
+    gameDatabase.updateGame(gameId, {
+      steam_appid: String(appid),
+      metadata_source: 'steam'
+    });
+    return gameDatabase.getGameById(gameId);
+  }
+
+  const data = details.data;
+
+  // 更新游戏元数据
+  const updateData: Partial<Game> = {
+    steam_appid: String(data.steam_appid),
+    title: data.name,
+    title_en: data.name,
+    developer: data.developers?.[0] || undefined,
+    publisher: data.publishers?.[0] || undefined,
+    release_date: data.release_date?.date || undefined,
+    genres: data.genres ? JSON.stringify(data.genres.map(g => g.description)) : undefined,
+    rating: data.metacritic?.score || undefined,
+    description: data.detailed_description || undefined,
+    short_description: data.short_description || undefined,
+    languages: data.supported_languages || undefined,
+    poster_url: data.header_image || undefined,
+    cover_url: data.capsule_images?.[0]?.capsule || undefined,
+    screenshots: data.screenshots ? JSON.stringify(data.screenshots.slice(0, 5).map(s => s.path_full)) : undefined,
+    metadata_source: 'steam',
+    scraped_at: new Date().toISOString()
+  };
+
+  // 下载海报到本地
+  if (downloadPosters && game.source_path) {
+    try {
+      // 横版海报 (header_image)
+      if (data.header_image) {
+        const horizontalData = await downloadImage(data.header_image);
+        if (horizontalData) {
+          const posterPath = savePoster(game.source_path, 'horizontal', horizontalData);
+          updateData.poster_horizontal_path = posterPath;
+          updateData.has_local_poster = 1;
+        }
+      }
+
+      // 背景图
+      if (data.background) {
+        const backgroundData = await downloadImage(data.background);
+        if (backgroundData) {
+          const bgPath = savePoster(game.source_path, 'background', backgroundData);
+          updateData.background_path = bgPath;
+        }
+      }
+    } catch (err) {
+      logger.warn('下载海报失败: %s', game.title);
+    }
+  }
+
+  // 更新数据库
+  gameDatabase.updateGame(gameId, updateData);
+
+  // 写入本地 game.json
+  if (game.source_path && downloadPosters) {
+    const updatedGame = gameDatabase.getGameById(gameId);
+    if (updatedGame) {
+      writeLocalMetadata(game.source_path, updatedGame);
+    }
+  }
+
+  logger.info('刮削完成: %s (appid %d)', game.title, appid);
+  return gameDatabase.getGameById(gameId);
+}
+
+/**
+ * 批量刮削未刮削的游戏
+ */
+export async function scrapeUnscrapedGames(downloadPosters: boolean = true): Promise<number[]> {
+  const unscraped = gameDatabase.getGames({ scraped: 'false', limit: 100 });
+  const scrapedIds: number[] = [];
+
+  for (const game of unscraped) {
+    const result = await scrapeGame(game.id, downloadPosters);
+    if (result && result.metadata_source !== 'unknown') {
+      scrapedIds.push(game.id);
+    }
+    // 避免请求过快
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+
+  logger.info('批量刮削完成: %d 个游戏', scrapedIds.length);
+  return scrapedIds;
+}
