@@ -1,7 +1,7 @@
 # NAS Indexer Roadmap
 
-> 最后更新：2026-05-17
-> 当前版本：v1.3.1
+> 最后更新：2026-05-18
+> 当前版本：v1.3.2
 
 ---
 
@@ -49,19 +49,24 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段四：TypeScript 升级（v1.3.2，优先进行）
+## 阶段四：TypeScript 升级（v1.3.2）✅ 已完成
 
-**目标**：渐进式 TypeScript 迁移，为复杂模块提供类型安全
+**目标**：全栈 TypeScript 迁移，关闭 allowJs
 
 | 优先级 | 任务 | 状态 | 说明 |
 |--------|------|------|------|
-| **P0** | 项目配置 | 待开始 | tsconfig.json、构建脚本调整 |
-| **P0** | 类型定义 | 待开始 | 核心类型声明（Game、File、Config 等） |
-| **P1** | 核心模块迁移 | 待开始 | database.js → database.ts |
-| **P1** | 工具模块迁移 | 待开始 | utils.js → utils.ts、logger.js → logger.ts |
-| **P2** | 路由迁移 | 待开始 | routes/*.js → routes/*.ts |
+| **P0** | 项目配置 | ✅ | tsconfig.json、tsconfig.test.json 配置 |
+| **P0** | 类型定义 | ✅ | src/types/*.ts 核心类型声明 |
+| **P1** | 后端核心迁移 | ✅ | database.js、scanner.js、utils.js → .ts |
+| **P1** | 后端路由迁移 | ✅ | routes/*.js → routes/*.ts（8个模块） |
+| **P2** | 前端配置 | ✅ | frontend/tsconfig.json、vite.config.ts |
+| **P2** | 前端类型 | ✅ | frontend/src/types/*.ts |
+| **P2** | Vue 组件迁移 | ✅ | 13 个组件 `<script setup lang="ts">` |
+| **P2** | 前端 API 迁移 | ✅ | api/index.ts 约 50 个函数类型化 |
+| **P2** | 测试迁移 | ✅ | tests/*.test.js → tests/*.test.ts |
+| **P3** | allowJs 移除 | ✅ | 后端/前端 tsconfig 均禁用 allowJs |
 
-**渐进策略**：新模块直接用 TS 编写（如后续游戏模块），旧模块逐步迁移，不强求一次性完成。
+**验证结果**：`npm run build` ✅、`npm test` ✅（15/15）、前端 `type-check` ✅
 
 ---
 
@@ -99,7 +104,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 | 优先级 | 任务 | 状态 | 说明 |
 |--------|------|------|------|
-| **P0** | TypeScript 迁移 | 待开始 | 逐步将核心模块迁移至 TypeScript |
+| **P0** | TypeScript 迁移 | ✅ | v1.3.2 已完成 |
 | **P1** | Docker 部署 | 待开始 | 提供 Dockerfile 和 docker-compose.yml |
 | **P1** | 用户认证 | 待开始 | JWT 认证、多用户支持（如需要） |
 
@@ -138,12 +143,11 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 版本号统一 | v1.1.0 | 全部文件版本号一致 |
 | ESLint + Prettier | v1.1.0 | 代码规范工具配置完成 |
 | Jest 单元测试 | v1.1.0 | 15 个测试用例，覆盖核心模块 |
+| TypeScript 迁移 | v1.3.2 | 全栈 TS 迁移完成，allowJs 已禁用 |
 
 ## 待处理的技术债务
 
-| 任务 | 处理时机 | 说明 |
-|------|----------|------|
-| TypeScript 迁移 | 阶段四 (v1.3.2) | 渐进式迁移，新模块直接用 TS |
+暂无
 
 ---
 
@@ -151,11 +155,15 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 | 模块 | 文件 | 说明 |
 |------|------|------|
-| 后端入口 | `src/server.js` | Express 服务入口，约 100 行 |
-| 共享工具 | `src/utils.js` | 配置加载、数据库初始化等 |
-| 数据库层 | `src/database.js` | SQLite 核心业务逻辑 |
-| 扫描引擎 | `src/scanner.js` | 异步文件扫描 |
-| API 路由 | `src/routes/` | 7 个路由模块 |
-| 测试文件 | `tests/` | Jest 单元测试 |
+| 后端入口 | `src/server.ts` | Express 服务入口 |
+| 共享工具 | `src/utils.ts` | 配置加载、数据库初始化等 |
+| 数据库层 | `src/database.ts` | SQLite 核心业务逻辑 |
+| 扫描引擎 | `src/scanner.ts` | 异步文件扫描 |
+| 类型定义 | `src/types/*.ts` | 核心类型声明 |
+| API 路由 | `src/routes/*.ts` | 8 个路由模块 |
+| 测试文件 | `tests/*.test.ts` | Jest 单元测试 |
+| 前端入口 | `frontend/src/main.ts` | Vue 3 应用入口 |
+| 前端 API | `frontend/src/api/index.ts` | 50+ API 函数 |
+| 前端类型 | `frontend/src/types/*.ts` | 前端类型定义 |
 | AI 设计文档 | `docs/ai-llm-integration-plan.md` | AI 集成方案参考 |
 | 游戏模块设计 | `docs/games-module-design.md` | 游戏模块技术方案 |

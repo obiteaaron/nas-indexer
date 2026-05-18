@@ -31,10 +31,10 @@
             <input class="input" v-model="maxSize" placeholder="最大 (字节)" type="number">
           </div>
           <div class="size-presets">
-            <button class="btn btn-secondary btn-small" @click="minSize = 1048576; maxSize = ''">> 1MB</button>
-            <button class="btn btn-secondary btn-small" @click="minSize = 10485760; maxSize = ''">> 10MB</button>
-            <button class="btn btn-secondary btn-small" @click="minSize = 104857600; maxSize = ''">> 100MB</button>
-            <button class="btn btn-secondary btn-small" @click="minSize = 1073741824; maxSize = ''">> 1GB</button>
+            <button class="btn btn-secondary btn-small" @click="minSize = '1048576'; maxSize = ''">> 1MB</button>
+            <button class="btn btn-secondary btn-small" @click="minSize = '10485760'; maxSize = ''">> 10MB</button>
+            <button class="btn btn-secondary btn-small" @click="minSize = '104857600'; maxSize = ''">> 100MB</button>
+            <button class="btn btn-secondary btn-small" @click="minSize = '1073741824'; maxSize = ''">> 1GB</button>
             <button class="btn btn-secondary btn-small" @click="minSize = ''; maxSize = ''">清除</button>
           </div>
         </div>
@@ -111,197 +111,184 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { getFiles, getCategories, openFile, getSearchHistory, clearSearchHistory, recordFilePreview, recordUserAction, getPreview, getStreamUrl } from '../api'
 import Pagination from '../components/Pagination.vue'
+import type { File, FileWithTags } from '../types'
 
-export default {
-  name: 'SearchView',
-  components: { Pagination },
-  setup() {
-    const query = ref('')
-    const category = ref('')
-    const results = ref([])
-    const total = ref(0)
-    const loading = ref(false)
-    const searched = ref(false)
-    const history = ref([])
-    const categories = ref([])
-    
-    const page = ref(1)
-    const pageSize = ref(100)
-    const totalPages = ref(0)
-    
-    const previewFile = ref(null)
-    const previewType = ref('')
-    const streamUrl = ref('')
-    
-    const showAdvanced = ref(false)
-    const minSize = ref('')
-    const maxSize = ref('')
-    const modifiedAfter = ref('')
-    const modifiedBefore = ref('')
+const query = ref('')
+const category = ref('')
+const results = ref<FileWithTags[]>([])
+const total = ref(0)
+const loading = ref(false)
+const searched = ref(false)
+const history = ref<string[]>([])
+const categories = ref<string[]>([])
 
-    onMounted(async () => {
-      await loadHistory()
-      await loadCategories()
-    })
+const page = ref(1)
+const pageSize = ref(100)
+const totalPages = ref(0)
 
-    async function loadHistory() {
-      try {
-        const res = await getSearchHistory()
-        if (res.success) {
-          history.value = [...new Set(res.data)]
-        }
-      } catch (err) {
-        console.error('获取历史失败:', err)
-      }
+const previewFile = ref<FileWithTags | null>(null)
+const previewType = ref('')
+const streamUrl = ref('')
+
+const showAdvanced = ref(false)
+const minSize = ref('')
+const maxSize = ref('')
+const modifiedAfter = ref('')
+const modifiedBefore = ref('')
+
+onMounted(async () => {
+  await loadHistory()
+  await loadCategories()
+})
+
+async function loadHistory(): Promise<void> {
+  try {
+    const res = await getSearchHistory()
+    if (res.success && res.data) {
+      history.value = [...new Set(res.data)]
     }
-
-    async function loadCategories() {
-      try {
-        const res = await getCategories()
-        if (res.success) {
-          categories.value = res.data
-        }
-      } catch (err) {
-        console.error('获取分类失败:', err)
-      }
-    }
-
-    async function doSearch() {
-      if (!query.value.trim()) return
-      
-      loading.value = true
-      searched.value = true
-      page.value = 1
-      
-      try {
-        const res = await getFiles({
-          search: query.value,
-          category: category.value,
-          page: page.value,
-          pageSize: pageSize.value,
-          minSize: minSize.value,
-          maxSize: maxSize.value,
-          modifiedAfter: modifiedAfter.value,
-          modifiedBefore: modifiedBefore.value
-        })
-        if (res.success) {
-          results.value = res.data.files
-          total.value = res.data.total
-          totalPages.value = res.data.totalPages
-          loadHistory()
-          recordUserAction(0, 'search', { search_query: query.value }).catch(() => {})
-        }
-      } catch (err) {
-        console.error('搜索失败:', err)
-      }
-      
-      loading.value = false
-    }
-
-    async function loadSearchResults() {
-      if (!query.value.trim()) return
-      
-      loading.value = true
-      
-      try {
-        const res = await getFiles({
-          search: query.value,
-          category: category.value,
-          page: page.value,
-          pageSize: pageSize.value,
-          minSize: minSize.value,
-          maxSize: maxSize.value,
-          modifiedAfter: modifiedAfter.value,
-          modifiedBefore: modifiedBefore.value
-        })
-        if (res.success) {
-          results.value = res.data.files
-          total.value = res.data.total
-          totalPages.value = res.data.totalPages
-        }
-      } catch (err) {
-        console.error('搜索失败:', err)
-      }
-      
-      loading.value = false
-    }
-
-    function setDateRange(days) {
-      const now = new Date()
-      const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-      modifiedAfter.value = from.toISOString().split('T')[0]
-      modifiedBefore.value = now.toISOString().split('T')[0]
-    }
-
-    watch(page, () => {
-      if (searched.value) {
-        loadSearchResults()
-      }
-    })
-    
-    async function showPreview(file) {
-      previewFile.value = file
-      streamUrl.value = getStreamUrl(file.id)
-      previewType.value = ''
-      
-      try {
-        const res = await getPreview(file.id)
-        if (res.success) {
-          previewType.value = res.data.previewType
-          recordFilePreview(file.id).catch(() => {})
-        }
-      } catch (err) {
-        console.error('获取预览失败:', err)
-      }
-    }
-
-    async function openLocation(file) {
-      try {
-        await openFile(file.id)
-      } catch (err) {
-        alert('打开失败：' + err.message)
-      }
-    }
-
-    async function clearHistory() {
-      try {
-        await clearSearchHistory()
-        history.value = []
-      } catch (err) {
-        console.error('清除历史失败:', err)
-      }
-    }
-
-    function truncatePath(path) {
-      if (path.length > 60) {
-        return '...' + path.slice(-57)
-      }
-      return path
-    }
-
-    function getBadgeClass(category) {
-      const map = {
-        '视频': 'video',
-        '图片': 'image',
-        '音频': 'audio',
-        '文档': 'doc'
-      }
-      return map[category] || 'other'
-    }
-
-    return {
-      query, category, results, total, loading, searched, history, categories,
-      page, pageSize, totalPages,
-      previewFile, previewType, streamUrl,
-      showAdvanced, minSize, maxSize, modifiedAfter, modifiedBefore,
-      doSearch, openLocation, clearHistory, showPreview, setDateRange,
-      truncatePath, getBadgeClass
-    }
+  } catch (err) {
+    console.error('获取历史失败:', err)
   }
+}
+
+async function loadCategories(): Promise<void> {
+  try {
+    const res = await getCategories()
+    if (res.success && res.data) {
+      categories.value = res.data
+    }
+  } catch (err) {
+    console.error('获取分类失败:', err)
+  }
+}
+
+async function doSearch(): Promise<void> {
+  if (!query.value.trim()) return
+
+  loading.value = true
+  searched.value = true
+  page.value = 1
+
+  try {
+    const res = await getFiles({
+      search: query.value,
+      category: category.value,
+      page: page.value,
+      pageSize: pageSize.value,
+      minSize: minSize.value,
+      maxSize: maxSize.value,
+      modifiedAfter: modifiedAfter.value,
+      modifiedBefore: modifiedBefore.value
+    })
+    if (res.success && res.data) {
+      results.value = res.data.files
+      total.value = res.data.total
+      totalPages.value = res.data.totalPages
+      loadHistory()
+      recordUserAction(0, 'search', { search_query: query.value }).catch(() => {})
+    }
+  } catch (err) {
+    console.error('搜索失败:', err)
+  }
+
+  loading.value = false
+}
+
+async function loadSearchResults(): Promise<void> {
+  if (!query.value.trim()) return
+
+  loading.value = true
+
+  try {
+    const res = await getFiles({
+      search: query.value,
+      category: category.value,
+      page: page.value,
+      pageSize: pageSize.value,
+      minSize: minSize.value,
+      maxSize: maxSize.value,
+      modifiedAfter: modifiedAfter.value,
+      modifiedBefore: modifiedBefore.value
+    })
+    if (res.success && res.data) {
+      results.value = res.data.files
+      total.value = res.data.total
+      totalPages.value = res.data.totalPages
+    }
+  } catch (err) {
+    console.error('搜索失败:', err)
+  }
+
+  loading.value = false
+}
+
+function setDateRange(days: number): void {
+  const now = new Date()
+  const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  modifiedAfter.value = from.toISOString().split('T')[0]
+  modifiedBefore.value = now.toISOString().split('T')[0]
+}
+
+watch(page, () => {
+  if (searched.value) {
+    loadSearchResults()
+  }
+})
+
+async function showPreview(file: FileWithTags): Promise<void> {
+  previewFile.value = file
+  streamUrl.value = getStreamUrl(file.id)
+  previewType.value = ''
+
+  try {
+    const res = await getPreview(file.id)
+    if (res.success && res.data) {
+      previewType.value = res.data.previewType
+      recordFilePreview(file.id).catch(() => {})
+    }
+  } catch (err) {
+    console.error('获取预览失败:', err)
+  }
+}
+
+async function openLocation(file: FileWithTags): Promise<void> {
+  try {
+    await openFile(file.id)
+  } catch (err) {
+    const error = err as Error
+    alert('打开失败：' + error.message)
+  }
+}
+
+async function clearHistory(): Promise<void> {
+  try {
+    await clearSearchHistory()
+    history.value = []
+  } catch (err) {
+    console.error('清除历史失败:', err)
+  }
+}
+
+function truncatePath(path: string): string {
+  if (path.length > 60) {
+    return '...' + path.slice(-57)
+  }
+  return path
+}
+
+function getBadgeClass(category: string): string {
+  const map: Record<string, string> = {
+    '视频': 'video',
+    '图片': 'image',
+    '音频': 'audio',
+    '文档': 'doc'
+  }
+  return map[category] || 'other'
 }
 </script>
 

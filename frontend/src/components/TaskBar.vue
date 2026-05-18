@@ -31,60 +31,56 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import type { Task } from '../types'
 
-export default {
-  name: 'TaskBar',
-  props: {
-    tasks: {
-      type: Array,
-      default: () => []
+interface Props {
+  tasks?: Task[]
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  tasks: () => []
+})
+
+const expanded = ref(false)
+const completedTaskIds = ref(new Set<string>())
+
+const hasRunning = computed(() => props.tasks.some(t => t.status === 'running'))
+const runningCount = computed(() => props.tasks.filter(t => t.status === 'running').length)
+
+const statusText: Record<Task['status'], string> = {
+  running: '进行中',
+  completed: '已完成',
+  failed: '失败'
+}
+
+onMounted(() => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission()
+  }
+})
+
+watch(() => props.tasks, (newTasks: Task[]) => {
+  if (newTasks.length === 0) {
+    expanded.value = false
+  }
+
+  for (const task of newTasks) {
+    if (task.status === 'completed' && !completedTaskIds.value.has(task.id)) {
+      completedTaskIds.value.add(task.id)
+      sendNotification(task)
     }
-  },
-  setup(props) {
-    const expanded = ref(false)
-    const completedTaskIds = ref(new Set())
+  }
+}, { deep: true })
 
-    const hasRunning = computed(() => props.tasks.some(t => t.status === 'running'))
-    const runningCount = computed(() => props.tasks.filter(t => t.status === 'running').length)
-
-    const statusText = {
-      running: '进行中',
-      completed: '已完成',
-      failed: '失败'
-    }
-
-    onMounted(() => {
-      if ('Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission()
-      }
+function sendNotification(task: Task): void {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const totalFiles = task.result?.totalFiles || 0
+    const totalSize = task.result?.totalSize || ''
+    new Notification('扫描完成', {
+      body: `共扫描 ${totalFiles} 个文件${totalSize ? '，' + totalSize : ''}`
     })
-
-    watch(() => props.tasks, (newTasks) => {
-      if (newTasks.length === 0) {
-        expanded.value = false
-      }
-
-      for (const task of newTasks) {
-        if (task.status === 'completed' && !completedTaskIds.value.has(task.id)) {
-          completedTaskIds.value.add(task.id)
-          sendNotification(task)
-        }
-      }
-    }, { deep: true })
-
-    function sendNotification(task) {
-      if ('Notification' in window && Notification.permission === 'granted') {
-        const totalFiles = task.result?.totalFiles || 0
-        const totalSize = task.result?.totalSize || ''
-        new Notification('扫描完成', {
-          body: `共扫描 ${totalFiles} 个文件${totalSize ? '，' + totalSize : ''}`
-        })
-      }
-    }
-
-    return { expanded, hasRunning, runningCount, statusText }
   }
 }
 </script>

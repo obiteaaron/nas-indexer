@@ -7,7 +7,7 @@
       </div>
 
       <div v-if="loading" class="loading">加载中...</div>
-      
+
       <div v-else class="tag-content">
         <div v-if="groups.length === 0 && allTags.length === 0" class="empty-state">
           <p>暂无标签，点击上方按钮创建</p>
@@ -17,7 +17,7 @@
           <div v-for="group in groups" :key="group.id" class="tag-group-section">
             <div class="group-header">
               <span class="group-name" :style="{ color: group.color }">{{ group.name }}</span>
-              <span class="group-count">{{ group.tags.length }} 个标签</span>
+              <span class="group-count">{{ group.tags?.length || 0 }} 个标签</span>
               <div class="group-actions">
                 <button class="btn btn-secondary btn-small" @click="editGroup(group)">编辑</button>
                 <button class="btn btn-danger btn-small" @click="deleteGroup(group)">删除</button>
@@ -32,7 +32,7 @@
                   <button class="btn btn-danger btn-small" @click="deleteTag(tag)">删除</button>
                 </div>
               </div>
-              <div v-if="group.tags.length === 0" class="no-tags">暂无标签</div>
+              <div v-if="!group.tags || group.tags.length === 0" class="no-tags">暂无标签</div>
             </div>
           </div>
 
@@ -107,151 +107,152 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import TagBadge from '../components/TagBadge.vue'
 import { getTagGroups, createTagGroup, updateTagGroup, deleteTagGroup, getTagStats, createTag, updateTag, deleteTag as apiDeleteTag } from '../api'
+import type { TagGroup, Tag, TagStats } from '../types'
 
-export default {
-  name: 'TagManagerView',
-  components: { TagBadge },
-  setup() {
-    const loading = ref(true)
-    const groups = ref([])
-    const tagStats = ref([])
-    
-    const showGroupModal = ref(false)
-    const editingGroup = ref(null)
-    const groupForm = ref({ name: '', color: '#6366f1' })
-    
-    const showTagModal = ref(false)
-    const editingTag = ref(null)
-    const tagForm = ref({ name: '', groupId: '', color: '#6366f1' })
-    
-    const allTags = computed(() => tagStats.value)
-    const ungroupedTags = computed(() => tagStats.value.filter(t => !t.group_id || t.group_id === null))
+interface TagWithStats extends Tag {
+  file_count?: number
+}
 
-    onMounted(async () => {
-      await loadData()
-    })
+interface TagGroupWithStats extends TagGroup {
+  tags?: TagWithStats[]
+}
 
-    async function loadData() {
-      loading.value = true
-      try {
-        const groupsRes = await getTagGroups()
-        if (groupsRes.success) {
-          groups.value = groupsRes.data
+const loading = ref(true)
+const groups = ref<TagGroupWithStats[]>([])
+const tagStats = ref<TagStats[]>([])
+
+const showGroupModal = ref(false)
+const editingGroup = ref<TagGroup | null>(null)
+const groupForm = ref({ name: '', color: '#6366f1' })
+
+const showTagModal = ref(false)
+const editingTag = ref<Tag | null>(null)
+const tagForm = ref({ name: '', groupId: '', color: '#6366f1' })
+
+const allTags = computed(() => tagStats.value)
+const ungroupedTags = computed(() => tagStats.value.filter(t => !t.group_id || t.group_id === null))
+
+onMounted(async () => {
+  await loadData()
+})
+
+async function loadData(): Promise<void> {
+  loading.value = true
+  try {
+    const groupsRes = await getTagGroups()
+    if (groupsRes.success && groupsRes.data) {
+      groups.value = groupsRes.data
+    }
+    const statsRes = await getTagStats()
+    if (statsRes.success && statsRes.data) {
+      tagStats.value = statsRes.data
+      const tagsMap: Record<number, TagStats> = {}
+      tagStats.value.forEach(t => { tagsMap[t.id] = t })
+      groups.value.forEach(group => {
+        if (group.tags) {
+          group.tags = group.tags.map(tag => ({
+            ...tag,
+            file_count: tagsMap[tag.id]?.file_count || 0
+          }))
         }
-        const statsRes = await getTagStats()
-        if (statsRes.success) {
-          tagStats.value = statsRes.data
-          const tagsMap = {}
-          tagStats.value.forEach(t => { tagsMap[t.id] = t })
-          groups.value.forEach(group => {
-            group.tags = group.tags.map(tag => ({
-              ...tag,
-              file_count: tagsMap[tag.id]?.file_count || 0
-            }))
-          })
-        }
-      } catch (err) {
-        console.error('加载失败:', err)
-      }
-      loading.value = false
+      })
     }
+  } catch (err) {
+    console.error('加载失败:', err)
+  }
+  loading.value = false
+}
 
-    function showAddGroup() {
-      editingGroup.value = null
-      groupForm.value = { name: '', color: '#6366f1' }
-      showGroupModal.value = true
-    }
+function showAddGroup(): void {
+  editingGroup.value = null
+  groupForm.value = { name: '', color: '#6366f1' }
+  showGroupModal.value = true
+}
 
-    function editGroup(group) {
-      editingGroup.value = group
-      groupForm.value = { name: group.name, color: group.color }
-      showGroupModal.value = true
-    }
+function editGroup(group: TagGroup): void {
+  editingGroup.value = group
+  groupForm.value = { name: group.name, color: group.color }
+  showGroupModal.value = true
+}
 
-    async function saveGroup() {
-      if (!groupForm.value.name) {
-        alert('请输入分组名称')
-        return
-      }
-      try {
-        if (editingGroup.value) {
-          await updateTagGroup(editingGroup.value.id, groupForm.value)
-        } else {
-          await createTagGroup(groupForm.value)
-        }
-        showGroupModal.value = false
-        await loadData()
-      } catch (err) {
-        alert('保存失败: ' + err.message)
-      }
+async function saveGroup(): Promise<void> {
+  if (!groupForm.value.name) {
+    alert('请输入分组名称')
+    return
+  }
+  try {
+    if (editingGroup.value) {
+      await updateTagGroup(editingGroup.value.id, groupForm.value)
+    } else {
+      await createTagGroup(groupForm.value)
     }
+    showGroupModal.value = false
+    await loadData()
+  } catch (err) {
+    const error = err as Error
+    alert('保存失败: ' + error.message)
+  }
+}
 
-    async function deleteGroup(group) {
-      if (!confirm('确定删除分组 "' + group.name + '"？组内标签将变为未分组。')) return
-      try {
-        await deleteTagGroup(group.id)
-        await loadData()
-      } catch (err) {
-        alert('删除失败: ' + err.message)
-      }
-    }
+async function deleteGroup(group: TagGroup): Promise<void> {
+  if (!confirm('确定删除分组 "' + group.name + '"？组内标签将变为未分组。')) return
+  try {
+    await deleteTagGroup(group.id)
+    await loadData()
+  } catch (err) {
+    const error = err as Error
+    alert('删除失败: ' + error.message)
+  }
+}
 
-    function showAddTag() {
-      editingTag.value = null
-      tagForm.value = { name: '', groupId: '', color: '#6366f1' }
-      showTagModal.value = true
-    }
+function showAddTag(): void {
+  editingTag.value = null
+  tagForm.value = { name: '', groupId: '', color: '#6366f1' }
+  showTagModal.value = true
+}
 
-    function editTag(tag) {
-      editingTag.value = tag
-      tagForm.value = { name: tag.name, groupId: tag.group_id || '', color: tag.color }
-      showTagModal.value = true
-    }
+function editTag(tag: Tag): void {
+  editingTag.value = tag
+  tagForm.value = { name: tag.name, groupId: tag.group_id ? String(tag.group_id) : '', color: tag.color }
+  showTagModal.value = true
+}
 
-    async function saveTag() {
-      if (!tagForm.value.name) {
-        alert('请输入标签名称')
-        return
-      }
-      try {
-        const data = {
-          name: tagForm.value.name,
-          groupId: tagForm.value.groupId ? parseInt(tagForm.value.groupId) : null,
-          color: tagForm.value.color
-        }
-        if (editingTag.value) {
-          await updateTag(editingTag.value.id, data)
-        } else {
-          await createTag(data)
-        }
-        showTagModal.value = false
-        await loadData()
-      } catch (err) {
-        alert('保存失败: ' + err.message)
-      }
+async function saveTag(): Promise<void> {
+  if (!tagForm.value.name) {
+    alert('请输入标签名称')
+    return
+  }
+  try {
+    const data = {
+      name: tagForm.value.name,
+      groupId: tagForm.value.groupId ? parseInt(tagForm.value.groupId) : null,
+      color: tagForm.value.color
     }
+    if (editingTag.value) {
+      await updateTag(editingTag.value.id, data)
+    } else {
+      await createTag(data)
+    }
+    showTagModal.value = false
+    await loadData()
+  } catch (err) {
+    const error = err as Error
+    alert('保存失败: ' + error.message)
+  }
+}
 
-    async function deleteTag(tag) {
-      if (!confirm('确定删除标签 "' + tag.name + '"？相关文件将移除此标签。')) return
-      try {
-        await apiDeleteTag(tag.id)
-        await loadData()
-      } catch (err) {
-        alert('删除失败: ' + err.message)
-      }
-    }
-
-    return {
-      loading, groups, allTags, ungroupedTags,
-      showGroupModal, editingGroup, groupForm,
-      showTagModal, editingTag, tagForm,
-      loadData, showAddGroup, editGroup, saveGroup, deleteGroup,
-      showAddTag, editTag, saveTag, deleteTag
-    }
+async function deleteTag(tag: Tag): Promise<void> {
+  if (!confirm('确定删除标签 "' + tag.name + '"？相关文件将移除此标签。')) return
+  try {
+    await apiDeleteTag(tag.id)
+    await loadData()
+  } catch (err) {
+    const error = err as Error
+    alert('删除失败: ' + error.message)
   }
 }
 </script>

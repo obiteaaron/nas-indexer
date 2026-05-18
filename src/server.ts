@@ -97,7 +97,7 @@ app.get('*', (req: Request, res: Response, next: NextFunction) => {
 
 app.listen(PORT, async () => {
   await initDatabase();
-  logger.info('\n🚀 NAS Indexer v1.3.1 服务已启动');
+  logger.info('\n🚀 NAS Indexer v1.3.2 服务已启动');
   logger.info('📍 访问地址: http://localhost:%d', PORT);
   logger.info('📁 默认存储目录: %s\n', DEFAULT_STORAGE_PATH);
 

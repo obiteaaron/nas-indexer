@@ -1,0 +1,308 @@
+import type {
+  ApiResponse,
+  Config,
+  StatusResponse,
+  File,
+  FileWithTags,
+  FilesResponse,
+  PathStatus,
+  PreviewResponse,
+  StatisticsResponse,
+  TagGroup,
+  Tag,
+  TagStats,
+  TagWithGroup,
+  Task,
+  Recommendation,
+  Preferences,
+  FileView
+} from '../types'
+
+const API_BASE = '/api'
+
+interface CacheEntry<T> {
+  data: T
+  time: number
+}
+
+const cache = new Map<string, CacheEntry<unknown>>()
+const CACHE_TTL = 5 * 60 * 1000
+
+function clearCache(pattern?: string): void {
+  if (!pattern) {
+    cache.clear()
+    return
+  }
+  for (const key of cache.keys()) {
+    if (key.includes(pattern)) {
+      cache.delete(key)
+    }
+  }
+}
+
+async function request<T>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  const res = await fetch(API_BASE + url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  })
+  return res.json() as Promise<ApiResponse<T>>
+}
+
+async function cachedGet<T>(url: string): Promise<ApiResponse<T>> {
+  const cached = cache.get(url) as CacheEntry<ApiResponse<T>> | undefined
+  if (cached && Date.now() - cached.time < CACHE_TTL) {
+    return cached.data
+  }
+  const data = await request<T>(url)
+  cache.set(url, { data, time: Date.now() })
+  return data
+}
+
+export function getConfig(): Promise<ApiResponse<Config>> {
+  return cachedGet<Config>('/config')
+}
+
+export function saveConfig(data: Partial<Config>): Promise<ApiResponse<void>> {
+  clearCache('/config')
+  return request<void>('/config', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function getStatus(): Promise<ApiResponse<StatusResponse>> {
+  return request<StatusResponse>('/status')
+}
+
+export function scanFiles(): Promise<ApiResponse<{ taskId: string }>> {
+  return request<{ taskId: string }>('/scan', { method: 'POST' })
+}
+
+export function scanSinglePath(path: string): Promise<ApiResponse<{ taskId: string }>> {
+  return request<{ taskId: string }>('/scan/path', {
+    method: 'POST',
+    body: JSON.stringify({ path })
+  })
+}
+
+export function checkPath(path: string): Promise<ApiResponse<PathStatus>> {
+  return request<PathStatus>('/scan/check-path', {
+    method: 'POST',
+    body: JSON.stringify({ path })
+  })
+}
+
+export function checkAllPaths(): Promise<ApiResponse<PathStatus[]>> {
+  return request<PathStatus[]>('/scan/check-all-paths', { method: 'POST' })
+}
+
+export function getFiles(params: Record<string, string | number | undefined> = {}): Promise<ApiResponse<FilesResponse>> {
+  const query = new URLSearchParams(
+    Object.entries(params)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)])
+  ).toString()
+  return request<FilesResponse>('/files?' + query)
+}
+
+export function getFile(id: number): Promise<ApiResponse<FileWithTags>> {
+  return request<FileWithTags>('/files/' + id)
+}
+
+export function openFile(id: number): Promise<ApiResponse<void>> {
+  return request<void>('/files/' + id + '/open', { method: 'POST' })
+}
+
+export function renameFile(id: number, newName: string): Promise<ApiResponse<void>> {
+  return request<void>('/files/' + id + '/rename', {
+    method: 'POST',
+    body: JSON.stringify({ newName })
+  })
+}
+
+export function copyFile(id: number, targetDir: string): Promise<ApiResponse<void>> {
+  return request<void>('/files/' + id + '/copy', {
+    method: 'POST',
+    body: JSON.stringify({ targetDir })
+  })
+}
+
+export function moveFile(id: number, targetDir: string): Promise<ApiResponse<void>> {
+  return request<void>('/files/' + id + '/move', {
+    method: 'POST',
+    body: JSON.stringify({ targetDir })
+  })
+}
+
+export function deleteFile(id: number, permanent: boolean = false): Promise<ApiResponse<void>> {
+  return request<void>('/files/' + id + '?permanent=' + permanent, { method: 'DELETE' })
+}
+
+export function createFolder(parentPath: string, folderName: string): Promise<ApiResponse<void>> {
+  return request<void>('/folder', {
+    method: 'POST',
+    body: JSON.stringify({ parentPath, folderName })
+  })
+}
+
+export function getDirectory(path: string): Promise<ApiResponse<{ files: { name: string; path: string; isDirectory: boolean }[] }>> {
+  return request('/directory?path=' + encodeURIComponent(path))
+}
+
+export function getFavorites(): Promise<ApiResponse<File[]>> {
+  return request<File[]>('/favorites')
+}
+
+export function addFavorite(id: number): Promise<ApiResponse<void>> {
+  return request<void>('/favorites/' + id, { method: 'POST' })
+}
+
+export function removeFavorite(id: number): Promise<ApiResponse<void>> {
+  return request<void>('/favorites/' + id, { method: 'DELETE' })
+}
+
+export function getPreview(id: number): Promise<ApiResponse<PreviewResponse>> {
+  return request<PreviewResponse>('/preview/' + id)
+}
+
+export function getStreamUrl(id: number): string {
+  return API_BASE + '/stream/' + id
+}
+
+export function getStatistics(): Promise<ApiResponse<StatisticsResponse>> {
+  return cachedGet<StatisticsResponse>('/statistics')
+}
+
+export function getCategories(): Promise<ApiResponse<string[]>> {
+  return cachedGet<string[]>('/categories')
+}
+
+export function getSearchHistory(): Promise<ApiResponse<string[]>> {
+  return request<string[]>('/tracking/search-history')
+}
+
+export function clearSearchHistory(): Promise<ApiResponse<void>> {
+  return request<void>('/tracking/search-history', { method: 'DELETE' })
+}
+
+export function getTagGroups(): Promise<ApiResponse<TagGroup[]>> {
+  return cachedGet<TagGroup[]>('/tag-groups')
+}
+
+export function createTagGroup(data: { name: string; color?: string; sortOrder?: number }): Promise<ApiResponse<TagGroup>> {
+  clearCache('/tag-groups')
+  clearCache('/tags')
+  return request<TagGroup>('/tag-groups', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateTagGroup(id: number, data: Partial<TagGroup>): Promise<ApiResponse<TagGroup>> {
+  clearCache('/tag-groups')
+  clearCache('/tags')
+  return request<TagGroup>('/tag-groups/' + id, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export function deleteTagGroup(id: number): Promise<ApiResponse<void>> {
+  clearCache('/tag-groups')
+  clearCache('/tags')
+  return request<void>('/tag-groups/' + id, { method: 'DELETE' })
+}
+
+export function getTags(groupId?: number | null): Promise<ApiResponse<Tag[] | TagWithGroup[]>> {
+  const query = groupId ? '?groupId=' + groupId : ''
+  return cachedGet<Tag[] | TagWithGroup[]>('/tags' + query)
+}
+
+export function createTag(data: { name: string; groupId?: number | null; color?: string; sortOrder?: number }): Promise<ApiResponse<Tag>> {
+  clearCache('/tags')
+  return request<Tag>('/tags', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateTag(id: number, data: Partial<Tag>): Promise<ApiResponse<Tag>> {
+  clearCache('/tags')
+  return request<Tag>('/tags/' + id, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export function deleteTag(id: number): Promise<ApiResponse<void>> {
+  clearCache('/tags')
+  return request<void>('/tags/' + id, { method: 'DELETE' })
+}
+
+export function getTagStats(): Promise<ApiResponse<TagStats[]>> {
+  return request<TagStats[]>('/tags/stats')
+}
+
+export function getFileTags(fileId: number): Promise<ApiResponse<TagWithGroup[]>> {
+  return request<TagWithGroup[]>('/files/' + fileId + '/tags')
+}
+
+export function getFileTagsBatch(fileIds: number[]): Promise<ApiResponse<Record<number, TagWithGroup[]>>> {
+  return request<Record<number, TagWithGroup[]>>('/files/batch/tags?fileIds=' + fileIds.join(','))
+}
+
+export function addFileTag(fileId: number, tagId: number): Promise<ApiResponse<TagWithGroup[]>> {
+  return request<TagWithGroup[]>('/files/' + fileId + '/tags', { method: 'POST', body: JSON.stringify({ tagId }) })
+}
+
+export function removeFileTag(fileId: number, tagId: number): Promise<ApiResponse<TagWithGroup[]>> {
+  return request<TagWithGroup[]>('/files/' + fileId + '/tags/' + tagId, { method: 'DELETE' })
+}
+
+export function batchFileTags(fileIds: number[], tagIds: number[], action: 'add' | 'remove'): Promise<ApiResponse<void>> {
+  return request<void>('/files/batch/tags', { method: 'POST', body: JSON.stringify({ fileIds, tagIds, action }) })
+}
+
+export function getFilesByTags(params: { tagIds: string; matchAll?: boolean; page?: number; pageSize?: number; orderBy?: string; orderDir?: string }): Promise<ApiResponse<FilesResponse>> {
+  const query = new URLSearchParams(
+    Object.entries(params)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)])
+  ).toString()
+  return request<FilesResponse>('/files/by-tags?' + query)
+}
+
+export function recordFileView(fileId: number, data: { playDuration?: number } = {}): Promise<ApiResponse<void>> {
+  return request<void>('/tracking/view', { method: 'POST', body: JSON.stringify({ fileId, ...data }) })
+}
+
+export function recordFilePreview(fileId: number, data: { playDuration?: number } = {}): Promise<ApiResponse<void>> {
+  return request<void>('/tracking/preview', { method: 'POST', body: JSON.stringify({ fileId, ...data }) })
+}
+
+export function recordUserAction(fileId: number | null, actionType: string, data: Record<string, unknown> = {}): Promise<ApiResponse<void>> {
+  return request<void>('/tracking/action', { method: 'POST', body: JSON.stringify({ fileId, actionType, ...data }) })
+}
+
+export function getFileViews(params: { limit?: number } = {}): Promise<ApiResponse<FileView[]>> {
+  const query = new URLSearchParams(
+    Object.entries(params)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)])
+  ).toString()
+  return request<FileView[]>('/tracking/views?' + query)
+}
+
+export function getPreferences(): Promise<ApiResponse<Preferences & { enabled: boolean }>> {
+  return request<Preferences & { enabled: boolean }>('/preferences')
+}
+
+export function clearPreferencesData(): Promise<ApiResponse<void>> {
+  return request<void>('/preferences/clear', { method: 'DELETE' })
+}
+
+export function getRecommendations(params: { type?: string; limit?: number } = {}): Promise<ApiResponse<Recommendation[]>> {
+  const query = new URLSearchParams(
+    Object.entries(params)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)])
+  ).toString()
+  return request<Recommendation[]>('/recommendations?' + query)
+}
+
+export function generateRecommendations(): Promise<ApiResponse<Recommendation[]>> {
+  return request<Recommendation[]>('/recommendations/generate', { method: 'POST' })
+}
+
+export function getTasks(): Promise<ApiResponse<Task[]>> {
+  return request<Task[]>('/scan/tasks')
+}
+
+export function getTaskStreamUrl(): string {
+  return API_BASE + '/scan/tasks/stream'
+}

@@ -27,7 +27,7 @@ router.post('/', async (_req: Request, res: Response): Promise<void> => {
     }
 
     const task = taskManager.createTask('scan');
-    res.json({ success: true, taskId: task.id });
+    res.json({ success: true, data: { taskId: task.id } });
 
     // 异步执行扫描
     (async () => {
@@ -94,7 +94,7 @@ router.post('/path', async (req: Request, res: Response): Promise<void> => {
     }
 
     const task = taskManager.createTask('scan-path');
-    res.json({ success: true, taskId: task.id });
+    res.json({ success: true, data: { taskId: task.id } });
 
     // 异步执行扫描
     (async () => {
@@ -230,7 +230,7 @@ router.post('/check-all-paths', async (_req: Request, res: Response): Promise<vo
 
 // 获取任务列表
 router.get('/tasks', (_req: Request, res: Response): void => {
-  res.json({ success: true, tasks: taskManager.getActiveTasks() });
+  res.json({ success: true, data: taskManager.getActiveTasks() });
 });
 
 // 任务状态 SSE 流

@@ -30,7 +30,7 @@ router.get('/statistics', async (_req: Request, res: Response): Promise<void> =>
 
     res.json({
       success: true,
-      stats: {
+      data: {
         meta: {
           totalFiles: totalStats.totalFiles,
           totalSize: formatSize(totalStats.totalSize),
@@ -57,7 +57,7 @@ router.get('/status', async (_req: Request, res: Response): Promise<void> => {
 
     res.json({
       success: true,
-      status: {
+      data: {
         storagePath,
         hasData,
         totalFiles: totalStats.totalFiles,

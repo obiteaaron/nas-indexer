@@ -18,45 +18,46 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { getPreview, getStreamUrl, recordFilePreview } from '../api'
+import type { FileWithTags } from '../types'
 
-export default {
-  name: 'FilePreview',
-  props: {
-    visible: { type: Boolean, default: false },
-    file: { type: Object, default: null }
-  },
-  emits: ['close'],
-  setup(props, { emit }) {
-    const previewType = ref('')
+interface Props {
+  visible?: boolean
+  file?: FileWithTags | null
+}
 
-    const streamUrl = computed(() => {
-      return props.file ? getStreamUrl(props.file.id) : ''
-    })
+const props = withDefaults(defineProps<Props>(), {
+  visible: false,
+  file: null
+})
 
-    watch(() => props.visible, async (val) => {
-      if (val && props.file) {
-        previewType.value = ''
-        try {
-          const res = await getPreview(props.file.id)
-          if (res.success) {
-            previewType.value = res.data.previewType
-            recordFilePreview(props.file.id).catch(() => {})
-          }
-        } catch (err) {
-          console.error('获取预览失败:', err)
-        }
+const emit = defineEmits<{ close: [] }>()
+
+const previewType = ref<string>('')
+
+const streamUrl = computed(() => {
+  return props.file ? getStreamUrl(props.file.id) : ''
+})
+
+watch(() => props.visible, async (val: boolean) => {
+  if (val && props.file) {
+    previewType.value = ''
+    try {
+      const res = await getPreview(props.file.id)
+      if (res.success && res.data) {
+        previewType.value = res.data.previewType
+        recordFilePreview(props.file.id).catch(() => {})
       }
-    })
-
-    function close() {
-      emit('close')
+    } catch (err) {
+      console.error('获取预览失败:', err)
     }
-
-    return { previewType, streamUrl, close }
   }
+})
+
+function close(): void {
+  emit('close')
 }
 </script>
 

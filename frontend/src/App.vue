@@ -26,89 +26,82 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getStatus, getTaskStreamUrl } from './api'
 import TaskBar from './components/TaskBar.vue'
+import type { StatusResponse, Task } from './types'
 
-export default {
-  name: 'App',
-  components: { TaskBar },
-  setup() {
-    const status = ref(null)
-    const tasks = ref([])
-    const isDark = ref(false)
-    let eventSource = null
+const status = ref<StatusResponse | null>(null)
+const tasks = ref<Task[]>([])
+const isDark = ref(false)
+let eventSource: EventSource | null = null
 
-    async function loadStatus() {
-      try {
-        const res = await getStatus()
-        if (res.success) {
-          status.value = res.status
-        }
-      } catch (err) {
-        console.error('获取状态失败:', err)
-      }
+async function loadStatus(): Promise<void> {
+  try {
+    const res = await getStatus()
+    if (res.success && res.data) {
+      status.value = res.data
     }
-
-    function connectSSE() {
-      if (eventSource) {
-        eventSource.close()
-      }
-
-      eventSource = new EventSource(getTaskStreamUrl())
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          if (data.type === 'tasks-update') {
-            tasks.value = data.tasks
-          }
-        } catch (err) {
-          console.error('解析 SSE 数据失败:', err)
-        }
-      }
-
-      eventSource.onerror = () => {
-        console.warn('SSE 连接断开，将自动重连')
-      }
-    }
-
-    function initTheme() {
-      const savedTheme = localStorage.getItem('theme')
-      if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        isDark.value = true
-        document.documentElement.setAttribute('data-theme', 'dark')
-      }
-    }
-
-    function toggleTheme() {
-      isDark.value = !isDark.value
-      if (isDark.value) {
-        document.documentElement.setAttribute('data-theme', 'dark')
-        localStorage.setItem('theme', 'dark')
-      } else {
-        document.documentElement.removeAttribute('data-theme')
-        localStorage.setItem('theme', 'light')
-      }
-    }
-
-    onMounted(() => {
-      initTheme()
-      loadStatus()
-      connectSSE()
-    })
-
-    onUnmounted(() => {
-      if (eventSource) {
-        eventSource.close()
-        eventSource = null
-      }
-    })
-
-    return { status, tasks, isDark, toggleTheme }
+  } catch (err) {
+    console.error('获取状态失败:', err)
   }
 }
+
+function connectSSE(): void {
+  if (eventSource) {
+    eventSource.close()
+  }
+
+  eventSource = new EventSource(getTaskStreamUrl())
+
+  eventSource.onmessage = (event: MessageEvent) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.type === 'tasks-update') {
+        tasks.value = data.tasks
+      }
+    } catch (err) {
+      console.error('解析 SSE 数据失败:', err)
+    }
+  }
+
+  eventSource.onerror = () => {
+    console.warn('SSE 连接断开，将自动重连')
+  }
+}
+
+function initTheme(): void {
+  const savedTheme = localStorage.getItem('theme')
+  if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    isDark.value = true
+    document.documentElement.setAttribute('data-theme', 'dark')
+  }
+}
+
+function toggleTheme(): void {
+  isDark.value = !isDark.value
+  if (isDark.value) {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    localStorage.setItem('theme', 'dark')
+  } else {
+    document.documentElement.removeAttribute('data-theme')
+    localStorage.setItem('theme', 'light')
+  }
+}
+
+onMounted(() => {
+  initTheme()
+  loadStatus()
+  connectSSE()
+})
+
+onUnmounted(() => {
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+  }
+})
 </script>
 
 <style scoped>

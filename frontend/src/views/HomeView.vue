@@ -3,7 +3,7 @@
     <div class="card">
       <h2 class="section-title">NAS Indexer 文件管理系统</h2>
       <p class="section-desc">扫描、索引、管理您的 NAS 文件</p>
-      
+
       <div class="stats-grid" v-if="stats">
         <div class="stat-card">
           <div class="stat-value">{{ stats.meta.totalFiles }}</div>
@@ -92,106 +92,102 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import FilePreview from '../components/FilePreview.vue'
 import { getStatistics, scanFiles, getPreferences, getRecommendations, generateRecommendations, getFile } from '../api'
+import type { StatisticsResponse, Preferences, Recommendation, FileWithTags } from '../types'
 
-export default {
-  name: 'HomeView',
-  components: { FilePreview },
-  setup() {
-    const stats = ref(null)
-    const showScanConfirm = ref(false)
-    const preferences = ref(null)
-    const recommendations = ref([])
-    const previewFile = ref(null)
+const router = useRouter()
+const stats = ref<StatisticsResponse | null>(null)
+const showScanConfirm = ref(false)
+const preferences = ref<(Preferences & { enabled: boolean }) | null>(null)
+const recommendations = ref<Recommendation[]>([])
+const previewFile = ref<FileWithTags | null>(null)
 
-    onMounted(async () => {
-      loadStats()
-      loadPreferences()
-      loadRecommendations()
-    })
+onMounted(async () => {
+  loadStats()
+  loadPreferences()
+  loadRecommendations()
+})
 
-    async function loadStats() {
-      try {
-        const res = await getStatistics()
-        if (res.success) {
-          stats.value = res.stats
-        }
-      } catch (err) {
-        console.error('获取统计失败:', err)
+async function loadStats(): Promise<void> {
+  try {
+    const res = await getStatistics()
+    if (res.success && res.data) {
+      stats.value = res.data
+    }
+  } catch (err) {
+    console.error('获取统计失败:', err)
+  }
+}
+
+async function loadPreferences(): Promise<void> {
+  try {
+    const res = await getPreferences()
+    if (res.success && res.data && res.data.enabled) {
+      preferences.value = res.data
+    }
+  } catch (err) {
+    console.error('获取偏好失败:', err)
+  }
+}
+
+async function loadRecommendations(): Promise<void> {
+  try {
+    const res = await getRecommendations({ limit: 10 })
+    if (res.success && res.data) {
+      recommendations.value = res.data
+      if (res.data.length === 0) {
+        await refreshRecommendations()
       }
     }
+  } catch (err) {
+    console.error('获取推荐失败:', err)
+  }
+}
 
-    async function loadPreferences() {
-      try {
-        const res = await getPreferences()
-        if (res.success && res.data.enabled) {
-          preferences.value = res.data
-        }
-      } catch (err) {
-        console.error('获取偏好失败:', err)
-      }
+async function refreshRecommendations(): Promise<void> {
+  try {
+    const res = await generateRecommendations()
+    if (res.success && res.data) {
+      recommendations.value = res.data.slice(0, 10)
     }
+  } catch (err) {
+    console.error('生成推荐失败:', err)
+  }
+}
 
-    async function loadRecommendations() {
-      try {
-        const res = await getRecommendations({ limit: 10 })
-        if (res.success) {
-          recommendations.value = res.data
-          if (res.data.length === 0) {
-            await refreshRecommendations()
-          }
-        }
-      } catch (err) {
-        console.error('获取推荐失败:', err)
-      }
+function getCategoryIcon(category?: string): string {
+  const icons: Record<string, string> = {
+    '视频': '🎬', '音频': '🎵', '图片': '🖼️',
+    '文档': '📄', '字幕': '📝', '其他': '📦'
+  }
+  return icons[category || '其他'] || '📦'
+}
+
+async function viewFile(rec: Recommendation): Promise<void> {
+  try {
+    const res = await getFile(rec.file_id)
+    if (res.success && res.data) {
+      previewFile.value = res.data
     }
+  } catch (err) {
+    console.error('获取文件详情失败:', err)
+  }
+}
 
-    async function refreshRecommendations() {
-      try {
-        const res = await generateRecommendations()
-        if (res.success) {
-          recommendations.value = res.data.slice(0, 10)
-        }
-      } catch (err) {
-        console.error('生成推荐失败:', err)
-      }
+async function confirmScan(): Promise<void> {
+  showScanConfirm.value = false
+  try {
+    const res = await scanFiles()
+    if (!res.success) {
+      alert('启动扫描失败：' + res.error)
     }
-
-    function getCategoryIcon(category) {
-      const icons = {
-        '视频': '🎬', '音频': '🎵', '图片': '🖼️',
-        '文档': '📄', '字幕': '📝', '其他': '📦'
-      }
-      return icons[category] || '📦'
-    }
-
-    async function viewFile(rec) {
-      try {
-        const res = await getFile(rec.file_id)
-        if (res.success) {
-          previewFile.value = res.data
-        }
-      } catch (err) {
-        console.error('获取文件详情失败:', err)
-      }
-    }
-
-    async function confirmScan() {
-      showScanConfirm.value = false
-      try {
-        const res = await scanFiles()
-        if (!res.success) {
-          alert('启动扫描失败：' + res.error)
-        }
-      } catch (err) {
-        alert('启动扫描失败：' + err.message)
-      }
-    }
-
-    return { stats, showScanConfirm, confirmScan, preferences, recommendations, previewFile, getCategoryIcon, viewFile, refreshRecommendations }
+  } catch (err) {
+    const error = err as Error
+    alert('启动扫描失败：' + error.message)
   }
 }
 </script>

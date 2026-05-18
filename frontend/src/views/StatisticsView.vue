@@ -16,15 +16,15 @@
     </div>
 
     <div class="charts-row" v-if="stats && stats.categories.length">
-      <ChartCard 
-        title="分类分布（按数量）" 
-        type="doughnut" 
-        :data="categoryCountData" 
+      <ChartCard
+        title="分类分布（按数量）"
+        type="doughnut"
+        :data="categoryCountData"
       />
-      <ChartCard 
-        title="存储占比（按大小）" 
-        type="doughnut" 
-        :data="categorySizeData" 
+      <ChartCard
+        title="存储占比（按大小）"
+        type="doughnut"
+        :data="categorySizeData"
       />
     </div>
 
@@ -59,75 +59,78 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getStatistics } from '../api'
 import ChartCard from '../components/ChartCard.vue'
+import type { StatisticsResponse, StatisticsItem } from '../types'
 
-export default {
-  name: 'StatisticsView',
-  components: { ChartCard },
-  setup() {
-    const stats = ref(null)
+const stats = ref<StatisticsResponse | null>(null)
 
-    const categoryColors = {
-      '视频': '#ef4444',
-      '音频': '#a855f7',
-      '图片': '#22c55e',
-      '文档': '#3b82f6',
-      '字幕': '#f97316',
-      '其他': '#6b7280'
-    }
+const categoryColors: Record<string, string> = {
+  '视频': '#ef4444',
+  '音频': '#a855f7',
+  '图片': '#22c55e',
+  '文档': '#3b82f6',
+  '字幕': '#f97316',
+  '其他': '#6b7280'
+}
 
-    const categoryCountData = computed(() => {
-      if (!stats.value) return null
-      return {
-        labels: stats.value.categories.map(c => c.category),
-        datasets: [{
-          data: stats.value.categories.map(c => c.count),
-          backgroundColor: stats.value.categories.map(c => categoryColors[c.category] || '#6b7280'),
-          borderWidth: 0,
-          hoverOffset: 8
-        }]
-      }
-    })
+const emptyChartData = {
+  labels: [],
+  datasets: [{
+    data: [],
+    backgroundColor: [],
+    borderWidth: 0,
+    hoverOffset: 8
+  }]
+}
 
-    const categorySizeData = computed(() => {
-      if (!stats.value) return null
-      return {
-        labels: stats.value.categories.map(c => c.category),
-        datasets: [{
-          data: stats.value.categories.map(c => c.sizeBytes),
-          backgroundColor: stats.value.categories.map(c => categoryColors[c.category] || '#6b7280'),
-          borderWidth: 0,
-          hoverOffset: 8
-        }]
-      }
-    })
-
-    onMounted(async () => {
-      try {
-        const res = await getStatistics()
-        if (res.success) {
-          stats.value = res.stats
-        }
-      } catch (err) {
-        console.error('获取统计失败:', err)
-      }
-    })
-
-    function getBadgeClass(category) {
-      const map = {
-        '视频': 'video',
-        '图片': 'image',
-        '音频': 'audio',
-        '文档': 'doc'
-      }
-      return map[category] || 'other'
-    }
-
-    return { stats, categoryCountData, categorySizeData, getBadgeClass }
+const categoryCountData = computed(() => {
+  if (!stats.value) return emptyChartData
+  return {
+    labels: stats.value.categories.map(c => c.category),
+    datasets: [{
+      data: stats.value.categories.map(c => c.count),
+      backgroundColor: stats.value.categories.map(c => categoryColors[c.category] || '#6b7280'),
+      borderWidth: 0,
+      hoverOffset: 8
+    }]
   }
+})
+
+const categorySizeData = computed(() => {
+  if (!stats.value) return emptyChartData
+  return {
+    labels: stats.value.categories.map(c => c.category),
+    datasets: [{
+      data: stats.value.categories.map(c => c.sizeBytes ?? 0),
+      backgroundColor: stats.value.categories.map(c => categoryColors[c.category] || '#6b7280'),
+      borderWidth: 0,
+      hoverOffset: 8
+    }]
+  }
+})
+
+onMounted(async () => {
+  try {
+    const res = await getStatistics()
+    if (res.success && res.data) {
+      stats.value = res.data
+    }
+  } catch (err) {
+    console.error('获取统计失败:', err)
+  }
+})
+
+function getBadgeClass(category: string): string {
+  const map: Record<string, string> = {
+    '视频': 'video',
+    '图片': 'image',
+    '音频': 'audio',
+    '文档': 'doc'
+  }
+  return map[category] || 'other'
 }
 </script>
 
