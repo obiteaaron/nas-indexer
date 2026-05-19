@@ -6,7 +6,7 @@
         <nav class="nav">
           <router-link to="/" class="nav-link">首页</router-link>
           <router-link to="/files" class="nav-link">文件列表</router-link>
-          <router-link to="/games" class="nav-link">游戏</router-link>
+          <router-link v-if="config?.gamesEnabled" to="/games" class="nav-link">游戏</router-link>
           <router-link to="/search" class="nav-link">搜索</router-link>
           <router-link to="/statistics" class="nav-link">统计</router-link>
           <router-link to="/tags" class="nav-link">标签管理</router-link>
@@ -29,10 +29,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { getStatus, getTaskStreamUrl } from './api'
+import { getStatus, getConfig, getTaskStreamUrl } from './api'
 import TaskBar from './components/TaskBar.vue'
-import type { StatusResponse, Task } from './types'
+import type { Config, StatusResponse, Task } from './types'
 
+const config = ref<Config | null>(null)
 const status = ref<StatusResponse | null>(null)
 const tasks = ref<Task[]>([])
 const isDark = ref(false)
@@ -46,6 +47,17 @@ async function loadStatus(): Promise<void> {
     }
   } catch (err) {
     console.error('获取状态失败:', err)
+  }
+}
+
+async function loadConfig(): Promise<void> {
+  try {
+    const res = await getConfig()
+    if (res.success && res.data) {
+      config.value = res.data
+    }
+  } catch (err) {
+    console.error('获取配置失败:', err)
   }
 }
 
@@ -93,8 +105,10 @@ function toggleTheme(): void {
 
 onMounted(() => {
   initTheme()
+  loadConfig()
   loadStatus()
   connectSSE()
+  window.addEventListener('config-saved', loadConfig)
 })
 
 onUnmounted(() => {
@@ -102,6 +116,7 @@ onUnmounted(() => {
     eventSource.close()
     eventSource = null
   }
+  window.removeEventListener('config-saved', loadConfig)
 })
 </script>
 
