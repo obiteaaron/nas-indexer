@@ -8,7 +8,7 @@ import { spawn } from 'child_process';
 import multer from 'multer';
 import { database } from '../database';
 import { gameDatabase } from '../games/database';
-import { scrapeGame, scrapeUnscrapedGames } from '../games/scraper';
+import { scrapeGame, scrapeUnscrapedGames, searchSteamCandidates } from '../games/scraper';
 import { runIdentification } from '../games/identifier';
 import { savePoster, deletePoster } from '../games/metadata-manager';
 import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from '../utils';
@@ -401,6 +401,65 @@ router.post('/clear', async (_req: Request, res: Response): Promise<void> => {
   try {
     gameDatabase.clearAllGames();
     res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 搜索 Steam 游戏（返回候选列表供手动选择）
+ */
+router.get('/steam/search', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { q } = req.query;
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
+      res.status(400).json({ success: false, error: '请提供搜索关键词' });
+      return;
+    }
+
+    const candidates = await searchSteamCandidates(q.trim());
+    res.json({ success: true, data: candidates });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 手动绑定 Steam AppID 到游戏并刮削
+ */
+router.post('/:id/bind-steam', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
+    if (!game) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+
+    const { appid } = req.body;
+    if (!appid || typeof appid !== 'number') {
+      res.status(400).json({ success: false, error: '请提供有效的 Steam AppID' });
+      return;
+    }
+
+    // 保存别名映射
+    if (game.original_name) {
+      gameDatabase.saveAlias(game.original_name, String(appid));
+    }
+
+    // 更新 steam_appid
+    gameDatabase.updateGame(game.id, { steam_appid: String(appid) });
+
+    // 执行刮削
+    const result: Game | null = await scrapeGame(game.id, true);
+
+    if (result) {
+      res.json({ success: true, data: result });
+    } else {
+      res.status(500).json({ success: false, error: '刮削失败' });
+    }
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

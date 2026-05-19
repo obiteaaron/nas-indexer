@@ -1,5 +1,18 @@
 # 更新日志
 
+## [v1.4.2] - 2026-05-19
+
+### 新增功能
+- **手动搜索 Steam 游戏** - 游戏详情弹窗新增「搜索 Steam」按钮，可手动搜索并选择正确的游戏
+- **Steam 搜索弹窗** - 输入关键词搜索 Steam，展示候选列表（缩略图、名称、评分、AppID），选中后绑定并自动刮削
+- **绑定 Steam API** - 新增 `GET /games/steam/search` 和 `POST /games/:id/bind-steam` 接口
+
+### Bug 修复
+- **Steam 搜索无结果** - 修复 `storesearch` API 响应无 `success` 字段导致搜索始终返回空的问题
+- **弹窗背景透明** - 修复游戏详情弹窗和 Steam 搜索弹窗背景色 CSS 变量名错误（`--card-bg` → `--bg-card`）
+
+---
+
 ## [v1.4.1] - 2026-05-19
 
 ### UI 改进

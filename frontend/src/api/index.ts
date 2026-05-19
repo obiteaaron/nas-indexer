@@ -18,6 +18,7 @@ import type {
   FileView,
   Game,
   GamesResponse,
+  SteamSearchItem,
   GameStatistics
 } from '../types'
 
@@ -390,4 +391,13 @@ export function identifyGames(scanRoots?: string[]): Promise<ApiResponse<{ games
 export function clearGames(): Promise<ApiResponse<void>> {
   clearCache('/games')
   return request<void>('/games/clear', { method: 'POST' })
+}
+
+export function searchSteamGames(query: string): Promise<ApiResponse<SteamSearchItem[]>> {
+  return request<SteamSearchItem[]>('/games/steam/search?q=' + encodeURIComponent(query))
+}
+
+export function bindSteamGame(id: number, appid: number): Promise<ApiResponse<Game>> {
+  clearCache('/games')
+  return request<Game>('/games/' + id + '/bind-steam', { method: 'POST', body: JSON.stringify({ appid }) })
 }

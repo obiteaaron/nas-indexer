@@ -2,6 +2,16 @@
  * Steam 刮削模块
  */
 
+/**
+ * Steam 搜索结果项
+ */
+export interface SteamSearchItem {
+  id: number;
+  name: string;
+  tiny_image: string;
+  metacritic_score?: number;
+}
+
 import { logger } from '../logger';
 import { gameDatabase } from './database';
 import { writeLocalMetadata, savePoster } from './metadata-manager';
@@ -12,14 +22,13 @@ const STEAM_SEARCH_URL = 'https://store.steampowered.com/api/storesearch/';
 const STEAM_DETAILS_URL = 'https://store.steampowered.com/api/appdetails';
 
 interface SteamSearchResult {
-  success: boolean;
   total: number;
   items: Array<{
     id: number;
     name: string;
     price: { final: number };
     tiny_image: string;
-    metacritic_score?: number;
+    metascore?: string;
   }>;
 }
 
@@ -49,28 +58,52 @@ interface SteamAppDetails {
 }
 
 /**
- * 在 Steam 搜索游戏
+ * 搜索 Steam 游戏，返回完整候选列表（供手动选择）
  */
-async function searchSteamGame(title: string): Promise<number | null> {
+export async function searchSteamCandidates(query: string): Promise<SteamSearchItem[]> {
   try {
-    const searchUrl = `${STEAM_SEARCH_URL}?term=${encodeURIComponent(title)}&l=english&cc=US`;
+    const searchUrl = `${STEAM_SEARCH_URL}?term=${encodeURIComponent(query)}&l=schinese&cc=CN`;
     const response = await fetch(searchUrl);
 
     if (!response.ok) {
-      logger.warn('Steam 搜索请求失败: %s', title);
-      return null;
+      logger.warn('Steam 搜索请求失败: %s', query);
+      return [];
     }
 
     const result = (await response.json()) as SteamSearchResult;
 
-    if (!result.success || !result.items || result.items.length === 0) {
-      logger.info('Steam 搜索无结果: %s', title);
+    if (!result.items || result.items.length === 0) {
+      logger.info('Steam 搜索无结果: %s', query);
+      return [];
+    }
+
+    return result.items.map(item => ({
+      id: item.id,
+      name: item.name,
+      tiny_image: item.tiny_image,
+      metacritic_score: item.metascore ? parseInt(item.metascore) : undefined
+    }));
+  } catch (err) {
+    const error = err as Error;
+    logger.error('Steam 搜索失败: %s - %s', query, error.message);
+    return [];
+  }
+}
+
+/**
+ * 在 Steam 搜索游戏（自动匹配最佳结果）
+ */
+async function searchSteamGame(title: string): Promise<number | null> {
+  try {
+    const candidates = await searchSteamCandidates(title);
+
+    if (candidates.length === 0) {
       return null;
     }
 
     // 找最匹配的结果（名称最接近）
     const cleanTitle = cleanGameName(title).toLowerCase();
-    for (const item of result.items) {
+    for (const item of candidates) {
       const itemName = item.name.toLowerCase();
       // 简单匹配：名称包含或相近
       if (itemName.includes(cleanTitle) || cleanTitle.includes(itemName)) {
@@ -80,7 +113,7 @@ async function searchSteamGame(title: string): Promise<number | null> {
     }
 
     // 默认取第一个结果
-    const firstMatch = result.items[0].id;
+    const firstMatch = candidates[0].id;
     logger.info('Steam 搜索取首个: %s -> appid %d', title, firstMatch);
     return firstMatch;
   } catch (err) {

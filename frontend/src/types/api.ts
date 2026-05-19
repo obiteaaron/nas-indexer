@@ -321,3 +321,10 @@ export interface GameConfig {
   gamesRules?: GameRules;
   gamesScrape?: GameScrapeConfig;
 }
+
+export interface SteamSearchItem {
+  id: number;
+  name: string;
+  tiny_image: string;
+  metacritic_score?: number;
+}
