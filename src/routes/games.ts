@@ -45,7 +45,7 @@ function openDirectory(dirPath: string): void {
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
-    const { genre, year, search, scraped, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
+    const { genre, year, search, scraped, excluded, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
     const offset: number = (parseInt(page as string) - 1) * parseInt(pageSize as string);
     const limit: number = parseInt(pageSize as string);
 
@@ -54,6 +54,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       year: year as string,
       search: search as string,
       scraped: scraped as 'true' | 'false' | undefined,
+      excluded: excluded as 'true' | 'false' | 'only' | undefined,
       orderBy: (orderBy as 'title' | 'release_date' | 'rating' | 'scraped_at') || undefined,
       orderDir: (orderDir as 'ASC' | 'DESC') || undefined,
       limit,
@@ -218,6 +219,38 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 
     gameDatabase.deleteGame(game.id);
     res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 切换游戏排除状态
+ */
+router.post('/:id/exclude', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const updated: Game | null = gameDatabase.toggleExclude(parseInt(req.params.id as string));
+    if (!updated) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 移除所有不存在的游戏目录
+ */
+router.post('/remove-nonexistent', async (_req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const result = gameDatabase.deleteNonexistent();
+    res.json({ success: true, data: result });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

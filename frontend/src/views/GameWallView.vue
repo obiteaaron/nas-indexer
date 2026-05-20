@@ -9,8 +9,11 @@
         <button class="btn btn-secondary" @click="showIdentifyModal = true">
           重新识别
         </button>
-        <button class="btn btn-secondary" @click="scrapeAll" :disabled="scraping">
+        <button class="btn btn-secondary" @click="showBatchScrapeModal = true" :disabled="scraping">
           {{ scraping ? '刮削中...' : '批量刮削' }}
+        </button>
+        <button class="btn btn-secondary" @click="showRemoveNonexistentModal = true">
+          移除不存在目录
         </button>
       </div>
     </div>
@@ -42,6 +45,7 @@
           <option value="">全部状态</option>
           <option value="true">已刮削</option>
           <option value="false">待刮削</option>
+          <option value="excluded">已排除</option>
         </select>
       </div>
       <div class="filter-group">
@@ -57,6 +61,7 @@
       <span class="stat-item">总计 {{ stats.totalGames }} 个游戏</span>
       <span class="stat-item">已刮削 {{ stats.scrapedGames }} 个</span>
       <span class="stat-item">待刮削 {{ stats.unscrapedGames }} 个</span>
+      <span class="stat-item" v-if="stats.excludedGames > 0">已排除 {{ stats.excludedGames }} 个</span>
     </div>
 
     <div class="poster-grid" v-if="games.length">
@@ -67,6 +72,8 @@
         @click="showGameDetail(game)"
         @open="openGameDir"
         @detail="showGameDetail"
+        @exclude="toggleExclude"
+        @delete="deleteSingleGame"
       />
     </div>
 
@@ -221,6 +228,46 @@
         </div>
       </div>
     </div>
+
+    <!-- Batch Scrape Confirm Modal -->
+    <div class="modal-overlay" v-if="showBatchScrapeModal" @click.self="showBatchScrapeModal = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>批量刮削</h3>
+          <button class="modal-close" @click="showBatchScrapeModal = false">✕</button>
+        </div>
+        <div class="modal-body confirm-body">
+          <p>确定要对所有未刮削的游戏执行批量刮削吗？</p>
+          <p class="warning">这将从 Steam 获取元数据和海报，已有元数据的游戏不会被覆盖。</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showBatchScrapeModal = false">取消</button>
+          <button class="btn btn-primary" @click="showBatchScrapeModal = false; scrapeAll()" :disabled="scraping">
+            {{ scraping ? '刮削中...' : '确定' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Remove Nonexistent Confirm Modal -->
+    <div class="modal-overlay" v-if="showRemoveNonexistentModal" @click.self="showRemoveNonexistentModal = false">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>移除不存在目录</h3>
+          <button class="modal-close" @click="showRemoveNonexistentModal = false">✕</button>
+        </div>
+        <div class="modal-body confirm-body">
+          <p>确定要移除所有目录已不存在的游戏吗？</p>
+          <p class="warning">此操作不可撤销，将从数据库中删除对应的游戏记录。</p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showRemoveNonexistentModal = false">取消</button>
+          <button class="btn btn-primary" @click="showRemoveNonexistentModal = false; removeNonexistent()">
+            确定移除
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -232,11 +279,14 @@ import {
   getGameGenres,
   getGameYears,
   openGame,
+  deleteGame,
   scrapeGame as scrapeGameApi,
   scrapeGamesBatch,
   identifyGames as identifyGamesApi,
   searchSteamGames,
-  bindSteamGame
+  bindSteamGame,
+  toggleExcludeGame,
+  removeNonexistentGames
 } from '../api'
 import GameCard from '../components/GameCard.vue'
 import Pagination from '../components/Pagination.vue'
@@ -258,6 +308,8 @@ const selectedSteamItem = ref<SteamSearchItem | null>(null)
 const steamSearching = ref(false)
 const steamSearched = ref(false)
 const bindingSteam = ref(false)
+const showBatchScrapeModal = ref(false)
+const showRemoveNonexistentModal = ref(false)
 
 const page = ref(1)
 const pageSize = ref(50)
@@ -302,11 +354,13 @@ const genresArray = computed(() => {
 async function loadGames(): Promise<void> {
   loading.value = true
   try {
+    const isExcluded = filterScraped.value === 'excluded'
     const res = await getGames({
       search: searchQuery.value,
       genre: filterGenre.value,
       year: filterYear.value,
-      scraped: filterScraped.value,
+      scraped: isExcluded ? undefined : filterScraped.value,
+      excluded: isExcluded ? 'true' : undefined,
       orderBy: orderBy.value,
       orderDir: 'ASC',
       page: page.value,
@@ -460,6 +514,52 @@ async function bindSteamAppid(): Promise<void> {
 
 function showGameDetail(game: Game): void {
   selectedGame.value = game
+}
+
+async function toggleExclude(game: Game): Promise<void> {
+  try {
+    const res = await toggleExcludeGame(game.id)
+    if (res.success && res.data) {
+      const idx = games.value.findIndex(g => g.id === game.id)
+      if (idx >= 0) {
+        games.value[idx] = res.data
+      }
+      if (selectedGame.value?.id === game.id) {
+        selectedGame.value = res.data
+      }
+      loadStats()
+    }
+  } catch (err) {
+    console.error('排除操作失败:', err)
+  }
+}
+
+async function deleteSingleGame(game: Game): Promise<void> {
+  if (!confirm(`确定要删除游戏「${game.title}」吗？此操作不可撤销。`)) return
+  try {
+    const res = await deleteGame(game.id)
+    if (res.success) {
+      games.value = games.value.filter(g => g.id !== game.id)
+      if (selectedGame.value?.id === game.id) {
+        selectedGame.value = null
+      }
+      loadStats()
+    }
+  } catch (err) {
+    console.error('删除游戏失败:', err)
+  }
+}
+
+async function removeNonexistent(): Promise<void> {
+  try {
+    const res = await removeNonexistentGames()
+    if (res.success && res.data) {
+      alert(`已移除 ${res.data.deletedCount} 个不存在的游戏目录`)
+      await refreshGames()
+    }
+  } catch (err) {
+    console.error('移除失败:', err)
+  }
 }
 
 onMounted(() => {
@@ -698,6 +798,12 @@ onMounted(() => {
   color: var(--text-secondary);
   font-size: 14px;
   margin-top: 12px;
+}
+
+.confirm-body .warning {
+  color: #ef4444;
+  font-size: 13px;
+  margin-top: 8px;
 }
 
 /* Steam Search Modal */

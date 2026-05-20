@@ -60,6 +60,7 @@ class GameDatabase {
         metadata_path TEXT,
         scraped_at DATETIME,
         is_manually_edited INTEGER DEFAULT 0,
+        is_excluded INTEGER DEFAULT 0,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME
@@ -71,6 +72,7 @@ class GameDatabase {
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_steam_appid ON games(steam_appid)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_metadata_source ON games(metadata_source)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_release_date ON games(release_date)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_excluded ON games(is_excluded)');
 
     // 别名映射表：文件夹名 → steam_appid
     database.db!.run(`
@@ -211,7 +213,7 @@ class GameDatabase {
   }
 
   getGames(options: GameQueryOptions = {}): Game[] {
-    const { genre, year, search, scraped, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
+    const { genre, year, search, scraped, excluded, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
 
     let sql: string = 'SELECT * FROM games';
     const params: unknown[] = [];
@@ -240,6 +242,12 @@ class GameDatabase {
       params.push('unknown');
     }
 
+    if (excluded === 'true' || excluded === 'only') {
+      conditions.push('is_excluded = 1');
+    } else {
+      conditions.push('is_excluded = 0');
+    }
+
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
@@ -254,7 +262,7 @@ class GameDatabase {
   }
 
   getGameCount(options: GameQueryOptions = {}): number {
-    const { genre, year, search, scraped } = options;
+    const { genre, year, search, scraped, excluded } = options;
 
     let sql: string = 'SELECT COUNT(*) as count FROM games';
     const params: unknown[] = [];
@@ -281,6 +289,12 @@ class GameDatabase {
     } else if (scraped === 'false') {
       conditions.push('metadata_source = ?');
       params.push('unknown');
+    }
+
+    if (excluded === 'true' || excluded === 'only') {
+      conditions.push('is_excluded = 1');
+    } else {
+      conditions.push('is_excluded = 0');
     }
 
     if (conditions.length > 0) {
@@ -334,6 +348,36 @@ class GameDatabase {
     database.save();
   }
 
+  toggleExclude(id: number): Game | null {
+    const game: Game | null = this.getGameById(id);
+    if (!game) return null;
+    const newVal: number = game.is_excluded ? 0 : 1;
+    database.db!.run(
+      'UPDATE games SET is_excluded = ?, updated_at = datetime(\'now\', \'localtime\') WHERE id = ?',
+      [newVal, id]
+    );
+    database.save();
+    return this.getGameById(id);
+  }
+
+  deleteNonexistent(): { deletedCount: number; deletedIds: number[] } {
+    const result: QueryResult[] = database.db!.exec('SELECT id, source_path FROM games');
+    if (result.length === 0) return { deletedCount: 0, deletedIds: [] };
+    const deletedIds: number[] = [];
+    for (const row of result[0].values) {
+      const id: number = row[0] as number;
+      const sourcePath: string = row[1] as string;
+      if (!fs.existsSync(sourcePath)) {
+        database.db!.run('DELETE FROM games WHERE id = ?', [id]);
+        deletedIds.push(id);
+      }
+    }
+    if (deletedIds.length > 0) {
+      database.save();
+    }
+    return { deletedCount: deletedIds.length, deletedIds };
+  }
+
   // === 统计方法 ===
 
   getStatistics(): GameStatistics {
@@ -347,6 +391,11 @@ class GameDatabase {
     const scrapedGames: number = scrapedResult.length > 0 ? (scrapedResult[0].values[0][0] as number) : 0;
 
     const unscrapedGames: number = totalGames - scrapedGames;
+
+    const excludedResult: QueryResult[] = database.db!.exec(
+      'SELECT COUNT(*) as count FROM games WHERE is_excluded = 1'
+    );
+    const excludedGames: number = excludedResult.length > 0 ? (excludedResult[0].values[0][0] as number) : 0;
 
     const yearResult: QueryResult[] = database.db!.exec(`
       SELECT substr(release_date, 1, 4) as year, COUNT(*) as count
@@ -380,7 +429,7 @@ class GameDatabase {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
-    return { totalGames, scrapedGames, unscrapedGames, byYear, byGenre };
+    return { totalGames, scrapedGames, unscrapedGames, excludedGames, byYear, byGenre };
   }
 
   getGenres(): string[] {

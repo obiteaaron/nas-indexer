@@ -367,6 +367,16 @@ export function openGame(id: number): Promise<ApiResponse<void>> {
   return request<void>('/games/' + id + '/open', { method: 'POST' })
 }
 
+export function toggleExcludeGame(id: number): Promise<ApiResponse<Game>> {
+  clearCache('/games')
+  return request<Game>('/games/' + id + '/exclude', { method: 'POST' })
+}
+
+export function removeNonexistentGames(): Promise<ApiResponse<{ deletedCount: number; deletedIds: number[] }>> {
+  clearCache('/games')
+  return request<{ deletedCount: number; deletedIds: number[] }>('/games/remove-nonexistent', { method: 'POST' })
+}
+
 export function getGameFiles(id: number): Promise<ApiResponse<{ files: File[]; gamePath: string }>> {
   return request<{ files: File[]; gamePath: string }>('/games/' + id + '/files')
 }

@@ -1,5 +1,5 @@
 <template>
-  <div class="game-card" @click="$emit('click', game)">
+  <div class="game-card" :class="{ excluded: game.is_excluded }" @click="$emit('click', game)">
     <div class="poster-container">
       <img
         v-if="posterUrl"
@@ -22,6 +22,12 @@
           </button>
           <button class="action-btn" @click.stop="$emit('detail', game)" title="查看详情">
             📋
+          </button>
+          <button class="action-btn" @click.stop="$emit('exclude', game)" :title="game.is_excluded ? '取消排除' : '排除'">
+            {{ game.is_excluded ? '✅' : '🚫' }}
+          </button>
+          <button class="action-btn action-btn-danger" @click.stop="$emit('delete', game)" title="删除">
+            🗑️
           </button>
         </div>
       </div>
@@ -59,6 +65,8 @@ defineEmits<{
   click: [game: Game]
   open: [game: Game]
   detail: [game: Game]
+  exclude: [game: Game]
+  delete: [game: Game]
 }>()
 
 const posterUrl = computed(() => {
@@ -86,6 +94,7 @@ const genres = computed(() => {
 })
 
 const statusClass = computed(() => {
+  if (props.game.is_excluded) return 'status-excluded'
   const source = props.game.metadata_source
   if (source === 'steam') return 'status-scraped'
   if (source === 'local') return 'status-local'
@@ -93,6 +102,7 @@ const statusClass = computed(() => {
 })
 
 const statusText = computed(() => {
+  if (props.game.is_excluded) return '已排除'
   const source = props.game.metadata_source
   if (source === 'steam') return '已刮削'
   if (source === 'local') return '本地'
@@ -272,6 +282,24 @@ function formatYear(dateStr: string): string {
 
 .status-unscraped {
   background: #6b7280;
+  color: white;
+}
+
+.status-excluded {
+  background: #ef4444;
+  color: white;
+}
+
+.game-card.excluded {
+  opacity: 0.5;
+}
+
+.game-card.excluded:hover {
+  opacity: 0.8;
+}
+
+.action-btn-danger:hover {
+  background: #ef4444;
   color: white;
 }
 </style>

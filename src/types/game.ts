@@ -41,6 +41,7 @@ export interface Game {
   metadata_path?: string;
   scraped_at?: string;
   is_manually_edited: number;
+  is_excluded: number;
 
   created_at?: string;
   updated_at?: string;
@@ -76,6 +77,7 @@ export interface GameQueryOptions {
   year?: string;
   search?: string;
   scraped?: string;
+  excluded?: 'true' | 'false' | 'only';
   orderBy?: 'title' | 'rating' | 'release_date' | 'scraped_at';
   orderDir?: 'ASC' | 'DESC';
   limit?: number;
@@ -86,6 +88,7 @@ export interface GameStatistics {
   totalGames: number;
   scrapedGames: number;
   unscrapedGames: number;
+  excludedGames: number;
   byYear: { year: string; count: number }[];
   byGenre: { genre: string; count: number }[];
 }
