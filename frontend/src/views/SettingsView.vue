@@ -229,6 +229,65 @@
             <div class="form-actions">
               <button class="btn btn-primary" @click="save">保存游戏设置</button>
             </div>
+
+            <div class="game-doc-section" v-if="config.gamesEnabled">
+              <h4 class="doc-title" @click="showGameDoc = !showGameDoc">
+                📖 game.json 格式说明
+                <span class="doc-toggle">{{ showGameDoc ? '收起' : '展开' }}</span>
+              </h4>
+              <div v-if="showGameDoc" class="doc-content">
+                <p class="doc-desc">在游戏目录下放置 <code>game.json</code> 文件可手动提供元数据。系统识别时会优先读取此文件，识别优先级最高。</p>
+
+                <h5>字段说明</h5>
+                <table class="doc-table">
+                  <thead>
+                    <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td><code>title</code></td><td>string</td><td>游戏名称（必填）</td></tr>
+                    <tr><td><code>title_en</code></td><td>string</td><td>英文名称</td></tr>
+                    <tr><td><code>original_name</code></td><td>string</td><td>原始文件夹名</td></tr>
+                    <tr><td><code>steam_appid</code></td><td>string</td><td>Steam AppID，设置后可自动关联 Steam 数据</td></tr>
+                    <tr><td><code>developer</code></td><td>string</td><td>开发商</td></tr>
+                    <tr><td><code>publisher</code></td><td>string</td><td>发行商</td></tr>
+                    <tr><td><code>release_date</code></td><td>string</td><td>发行日期，格式 YYYY-MM-DD</td></tr>
+                    <tr><td><code>genres</code></td><td>string[]</td><td>游戏类型，如 ["RPG", "Action"]</td></tr>
+                    <tr><td><code>rating</code></td><td>number</td><td>评分</td></tr>
+                    <tr><td><code>description</code></td><td>string</td><td>详细描述</td></tr>
+                    <tr><td><code>short_description</code></td><td>string</td><td>简短描述</td></tr>
+                    <tr><td><code>languages</code></td><td>string[]</td><td>支持语言，如 ["English", "中文"]</td></tr>
+                    <tr><td><code>tags</code></td><td>string[]</td><td>标签列表</td></tr>
+                    <tr><td><code>notes</code></td><td>string</td><td>备注（仅本地存储）</td></tr>
+                    <tr><td><code>screenshots</code></td><td>string[]</td><td>截图 URL 列表</td></tr>
+                    <tr><td><code>metadata_source</code></td><td>string</td><td>数据来源，如 "local"、"steam"</td></tr>
+                    <tr><td><code>scraped_at</code></td><td>string</td><td>刮削时间，ISO 格式</td></tr>
+                  </tbody>
+                </table>
+
+                <h5>示例</h5>
+                <pre class="doc-code">{
+  "title": "The Witcher 3: Wild Hunt",
+  "title_en": "The Witcher 3: Wild Hunt",
+  "developer": "CD Projekt RED",
+  "publisher": "CD Projekt",
+  "release_date": "2015-05-19",
+  "genres": ["RPG", "Action", "Open World"],
+  "rating": 9.5,
+  "steam_appid": "292030",
+  "languages": ["English", "中文"],
+  "metadata_source": "local"
+}</pre>
+
+                <h5>海报文件</h5>
+                <p class="doc-desc">可在游戏目录下放置以下海报文件，系统会自动识别：</p>
+                <ul class="doc-list">
+                  <li><code>poster-horizontal.jpg</code> — 横版海报（主要展示用）</li>
+                  <li><code>poster-vertical.jpg</code> — 竖版海报</li>
+                  <li><code>poster-banner.jpg</code> — 横幅海报</li>
+                  <li><code>background.jpg</code> — 背景图</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -308,6 +367,7 @@ const status = ref<StatusResponse | null>(null)
 const saving = ref(false)
 const checkingPaths = ref(false)
 const pathStatuses = ref<PathStatus[]>([])
+const showGameDoc = ref(false)
 
 const activeTab = ref('scan')
 const tabs = [
@@ -925,6 +985,118 @@ function getPathStatusTitle(path: string): string {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 0;
+}
+
+.game-doc-section {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.doc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+
+.doc-title:hover {
+  color: var(--accent);
+}
+
+.doc-toggle {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.doc-content {
+  margin-top: 12px;
+}
+
+.doc-content h5 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 16px 0 8px;
+}
+
+.doc-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 8px;
+}
+
+.doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+}
+
+.doc-table th,
+.doc-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border: 1px solid var(--border);
+}
+
+.doc-table th {
+  background: var(--bg);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.doc-table td {
+  color: var(--text-secondary);
+}
+
+.doc-table code {
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.doc-code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-x: auto;
+  color: var(--text);
+  margin: 8px 0;
+}
+
+.doc-list {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding-left: 20px;
+  line-height: 1.8;
+}
+
+.doc-list code {
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.doc-content code {
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--accent);
 }
 
 @media (max-width: 768px) {
