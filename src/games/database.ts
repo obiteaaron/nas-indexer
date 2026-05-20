@@ -20,6 +20,11 @@ class GameDatabase {
   // === 游戏表操作 ===
 
   createGameTables(): void {
+    const existing: QueryResult[] = database.db!.exec(
+      "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='games'"
+    );
+    const isNew: boolean = existing.length === 0 || existing[0].values[0][0] === 0;
+
     database.db!.run(`
       CREATE TABLE IF NOT EXISTS games (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,7 +86,9 @@ class GameDatabase {
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_game_aliases_folder ON game_aliases(folder_name)');
 
     database.save();
-    logger.info('游戏数据库表已创建');
+    if (isNew) {
+      logger.info('游戏数据库表已创建');
+    }
   }
 
   insertGame(gameData: Partial<Game>): number {

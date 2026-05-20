@@ -105,7 +105,7 @@ function loadConfig(): Config {
     const profilesConfigPath: string = path.join(DEFAULT_STORAGE_PATH, 'config.json');
     if (fs.existsSync(profilesConfigPath)) {
       const config: Config = JSON.parse(fs.readFileSync(profilesConfigPath, 'utf-8'));
-      logger.info('从 profiles 目录加载配置: %s', profilesConfigPath);
+      logger.debug('从 profiles 目录加载配置: %s', profilesConfigPath);
       return config;
     }
 

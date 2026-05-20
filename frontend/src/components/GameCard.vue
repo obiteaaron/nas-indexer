@@ -20,8 +20,8 @@
           <button class="action-btn" @click.stop="$emit('open', game)" title="打开目录">
             📂
           </button>
-          <button class="action-btn" @click.stop="$emit('scrape', game)" title="刮削元数据">
-            🔍
+          <button class="action-btn" @click.stop="$emit('detail', game)" title="查看详情">
+            📋
           </button>
         </div>
       </div>
@@ -58,7 +58,7 @@ const props = withDefaults(defineProps<Props>(), {
 defineEmits<{
   click: [game: Game]
   open: [game: Game]
-  scrape: [game: Game]
+  detail: [game: Game]
 }>()
 
 const posterUrl = computed(() => {

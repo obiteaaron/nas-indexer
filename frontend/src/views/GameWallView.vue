@@ -66,7 +66,7 @@
         :game="game"
         @click="showGameDetail(game)"
         @open="openGameDir"
-        @scrape="scrapeGame"
+        @detail="showGameDetail"
       />
     </div>
 
