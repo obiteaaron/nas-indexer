@@ -3,6 +3,7 @@
  */
 
 import fs from 'fs';
+import path from 'path';
 import { database } from '../database';
 import { logger } from '../logger';
 import type { Game, GameQueryOptions, GameStatistics } from '../types';
@@ -376,6 +377,24 @@ class GameDatabase {
       database.save();
     }
     return { deletedCount: deletedIds.length, deletedIds };
+  }
+
+  deleteStaleByScanRoots(scanRoots: string[]): number {
+    const normalizedRoots = scanRoots.map(r => path.resolve(r).replace(/\\/g, '/').toLowerCase());
+    const result: QueryResult[] = database.db!.exec('SELECT id, source_path FROM games');
+    if (result.length === 0) return 0;
+    let count = 0;
+    for (const row of result[0].values) {
+      const id = row[0] as number;
+      const gamePath = path.resolve(row[1] as string).replace(/\\/g, '/').toLowerCase();
+      const isUnderRoot = normalizedRoots.some(root => gamePath.startsWith(root + '/') || gamePath === root);
+      if (!isUnderRoot) {
+        database.db!.run('DELETE FROM games WHERE id = ?', [id]);
+        count++;
+      }
+    }
+    if (count > 0) database.save();
+    return count;
   }
 
   // === 统计方法 ===

@@ -11,7 +11,7 @@ import { gameDatabase } from '../games/database';
 import { scrapeGame, scrapeUnscrapedGames, searchSteamCandidates } from '../games/scraper';
 import { runIdentification } from '../games/identifier';
 import { savePoster, deletePoster } from '../games/metadata-manager';
-import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from '../utils';
+import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
 import type { Game, GameRules, GameScrapeConfig, GameQueryOptions } from '../types';
 
 const router: Router = express.Router();
@@ -258,6 +258,22 @@ router.post('/remove-nonexistent', async (_req: Request, res: Response): Promise
 });
 
 /**
+ * 清理已移除路径下的游戏记录
+ */
+router.post('/cleanup-stale', async (_req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const config = loadConfig();
+    const gameRoots = getGameScanPaths(config);
+    const count = gameDatabase.deleteStaleByScanRoots(gameRoots);
+    res.json({ success: true, data: { deletedCount: count } });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 刮削单个游戏
  */
 router.post('/:id/scrape', async (req: Request, res: Response): Promise<void> => {
@@ -411,9 +427,7 @@ router.post('/identify', async (req: Request, res: Response): Promise<void> => {
     let { scanRoots } = req.body;
 
     if (!scanRoots || scanRoots.length === 0) {
-      scanRoots = (config.gameScanPathsEnabled && config.gameScanPaths && config.gameScanPaths.length > 0)
-        ? config.gameScanPaths
-        : config.scanPaths;
+      scanRoots = getGameScanPaths(config);
     }
 
     const rules: GameRules = config.gamesRules || DEFAULT_GAME_RULES;

@@ -83,14 +83,14 @@ watch(() => props.tasks, (newTasks: Task[], oldTasks: Task[] | undefined) => {
     // 新任务变为 completed，且之前是 running，且未通知过
     if (
       newTask.status === 'completed' &&
-      (!oldTask || oldTask.status === 'running') &&
+      oldTask?.status === 'running' &&
       !notifiedTaskIds.has(newTask.id)
     ) {
       notifiedTaskIds.add(newTask.id)
       sendNotification(newTask)
     }
   }
-}, { deep: true })
+}, { deep: true, immediate: true })
 
 function sendNotification(task: Task): void {
   if ('Notification' in window && Notification.permission === 'granted') {

@@ -32,6 +32,7 @@
                   <button class="btn btn-danger btn-small" @click="removePath(i)">删除</button>
                 </div>
                 <button class="btn btn-secondary btn-small" @click="addPath">添加路径</button>
+                <button class="btn btn-warning btn-small" @click="handleCleanupStaleFiles" style="margin-left: 8px;">清理失效记录</button>
               </div>
             </div>
 
@@ -186,7 +187,7 @@
                 <input type="checkbox" v-model="config.gameScanPathsEnabled">
                 仅扫描指定路径
               </label>
-              <span class="hint">开启后游戏模块只扫描下方配置的路径，关闭则沿用文件扫描路径</span>
+              <span class="hint">开启后游戏模块只扫描下方配置的路径，关闭则沿用文件扫描路径。开启时文件扫描不再触发游戏识别，游戏识别仅在游戏页面手动触发</span>
               <div class="path-list" v-if="config.gameScanPathsEnabled" style="margin-top: 8px;">
                 <div class="path-item" v-for="(p, i) in config.gameScanPaths" :key="i">
                   <input class="input" v-model="config.gameScanPaths![i]">
@@ -358,7 +359,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths } from '../api'
+import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths, cleanupStaleFiles } from '../api'
 import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule, GameRules, GameScrapeConfig } from '../types'
 
 const DEFAULT_GAME_RULES: GameRules = {
@@ -534,6 +535,19 @@ function addGameScanPath(): void {
 
 function removeGameScanPath(index: number): void {
   config.value.gameScanPaths?.splice(index, 1)
+}
+
+async function handleCleanupStaleFiles(): Promise<void> {
+  try {
+    const res = await cleanupStaleFiles()
+    if (res.success) {
+      alert(`清理完成，已删除 ${res.data?.deletedCount ?? 0} 条失效记录`)
+    } else {
+      alert('清理失败：' + res.error)
+    }
+  } catch (err) {
+    alert('清理失败：' + (err as Error).message)
+  }
 }
 
 async function scanPath(index: number): Promise<void> {

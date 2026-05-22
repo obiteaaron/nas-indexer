@@ -154,6 +154,17 @@ function saveConfig(config: Config): boolean {
   return true;
 }
 
+function getFileScanPaths(config: Config): string[] {
+  return config.scanPaths;
+}
+
+function getGameScanPaths(config: Config): string[] {
+  if (config.gameScanPathsEnabled && config.gameScanPaths && config.gameScanPaths.length > 0) {
+    return config.gameScanPaths;
+  }
+  return config.scanPaths;
+}
+
 export {
   PROJECT_ROOT,
   DEFAULT_STORAGE_PATH,
@@ -166,5 +177,7 @@ export {
   ensureStorageDir,
   getDefaultConfig,
   loadConfig,
-  saveConfig
+  saveConfig,
+  getFileScanPaths,
+  getGameScanPaths
 };

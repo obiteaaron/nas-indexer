@@ -377,6 +377,16 @@ export function removeNonexistentGames(): Promise<ApiResponse<{ deletedCount: nu
   return request<{ deletedCount: number; deletedIds: number[] }>('/games/remove-nonexistent', { method: 'POST' })
 }
 
+export function cleanupStaleFiles(): Promise<ApiResponse<{ deletedCount: number }>> {
+  clearCache('/files')
+  return request<{ deletedCount: number }>('/scan/cleanup-stale', { method: 'POST' })
+}
+
+export function cleanupStaleGames(): Promise<ApiResponse<{ deletedCount: number }>> {
+  clearCache('/games')
+  return request<{ deletedCount: number }>('/games/cleanup-stale', { method: 'POST' })
+}
+
 export function getGameFiles(id: number): Promise<ApiResponse<{ files: File[]; gamePath: string }>> {
   return request<{ files: File[]; gamePath: string }>('/games/' + id + '/files')
 }

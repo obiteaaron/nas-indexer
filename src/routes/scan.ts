@@ -6,7 +6,7 @@ import { gameDatabase } from '../games/database';
 import { runIdentification } from '../games/identifier';
 import { scrapeUnscrapedGames } from '../games/scraper';
 import { taskManager } from '../task-manager';
-import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from '../utils';
+import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
 import type { Config, FileExtensionFilter, ScanProgressEvent } from '../types';
 
 const router: Router = express.Router();
@@ -49,17 +49,20 @@ router.post('/', async (_req: Request, res: Response): Promise<void> => {
           }
         );
 
-        // 游戏模块集成：扫描完成后识别游戏
-        console.log('[扫描全部] 文件扫描完成, gamesEnabled:', config.gamesEnabled);
-        if (config.gamesEnabled) {
+        // 游戏模块集成：扫描完成后识别游戏（独立目录模式下跳过，由游戏模块自行管理）
+        console.log('[扫描全部] 文件扫描完成, gamesEnabled:', config.gamesEnabled, 'gameScanPathsEnabled:', config.gameScanPathsEnabled);
+        if (config.gamesEnabled && !config.gameScanPathsEnabled) {
           try {
             gameDatabase.createGameTables();
 
             const rules = config.gamesRules || DEFAULT_GAME_RULES;
             const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
-            const gameRoots = (config.gameScanPathsEnabled && config.gameScanPaths && config.gameScanPaths.length > 0)
-              ? config.gameScanPaths
-              : config.scanPaths;
+            const gameRoots = getGameScanPaths(config);
+
+            const staleGames = gameDatabase.deleteStaleByScanRoots(gameRoots);
+            if (staleGames > 0) {
+              console.log(`[扫描全部] 清理失效游戏记录: ${staleGames} 个`);
+            }
 
             console.log('[扫描全部] 游戏识别规则:', JSON.stringify(rules, null, 2));
             console.log('[扫描全部] 游戏扫描路径:', gameRoots);
@@ -87,7 +90,7 @@ router.post('/', async (_req: Request, res: Response): Promise<void> => {
             console.error('[扫描全部] 游戏识别失败:', gameError.message, gameError.stack);
           }
         } else {
-          console.log('[扫描全部] 游戏模块未启用');
+          console.log('[扫描全部] 游戏模块未启用或使用独立目录，跳过游戏识别');
         }
 
         taskManager.completeTask(task.id, {
@@ -157,9 +160,9 @@ router.post('/path', async (req: Request, res: Response): Promise<void> => {
           }
         );
 
-        // 游戏模块集成：扫描完成后识别游戏
-        console.log(`[单路径扫描] 文件扫描完成, scanPath: ${scanPath}, gamesEnabled: ${config.gamesEnabled}`);
-        if (config.gamesEnabled) {
+        // 游戏模块集成：扫描完成后识别游戏（独立目录模式下跳过，由游戏模块自行管理）
+        console.log(`[单路径扫描] 文件扫描完成, scanPath: ${scanPath}, gamesEnabled: ${config.gamesEnabled}, gameScanPathsEnabled: ${config.gameScanPathsEnabled}`);
+        if (config.gamesEnabled && !config.gameScanPathsEnabled) {
           try {
             gameDatabase.createGameTables();
 
@@ -195,7 +198,7 @@ router.post('/path', async (req: Request, res: Response): Promise<void> => {
             console.error('[单路径扫描] 游戏识别失败:', gameError.message, gameError.stack);
           }
         } else {
-          console.log('[单路径扫描] 游戏模块未启用');
+          console.log('[单路径扫描] 游戏模块未启用或使用独立目录，跳过游戏识别');
         }
 
         taskManager.completeTask(task.id, {
@@ -307,6 +310,19 @@ router.post('/check-all-paths', async (_req: Request, res: Response): Promise<vo
     }));
 
     res.json({ success: true, data: results });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 清理失效文件记录（scan_path 已不在配置中的记录）
+router.post('/cleanup-stale', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    await initDatabase();
+    const config: Config = loadConfig();
+    const count = database.deleteStaleByScanPaths(config.scanPaths || []);
+    res.json({ success: true, data: { deletedCount: count } });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

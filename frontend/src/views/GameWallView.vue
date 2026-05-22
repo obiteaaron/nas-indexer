@@ -15,6 +15,9 @@
         <button class="btn btn-secondary" @click="showRemoveNonexistentModal = true">
           移除不存在目录
         </button>
+        <button class="btn btn-warning" @click="handleCleanupStaleGames">
+          清理已移除路径记录
+        </button>
       </div>
     </div>
 
@@ -286,7 +289,8 @@ import {
   searchSteamGames,
   bindSteamGame,
   toggleExcludeGame,
-  removeNonexistentGames
+  removeNonexistentGames,
+  cleanupStaleGames
 } from '../api'
 import GameCard from '../components/GameCard.vue'
 import Pagination from '../components/Pagination.vue'
@@ -559,6 +563,18 @@ async function removeNonexistent(): Promise<void> {
     }
   } catch (err) {
     console.error('移除失败:', err)
+  }
+}
+
+async function handleCleanupStaleGames(): Promise<void> {
+  try {
+    const res = await cleanupStaleGames()
+    if (res.success) {
+      alert(`清理完成，已删除 ${res.data?.deletedCount ?? 0} 个已移除路径下的游戏记录`)
+      await refreshGames()
+    }
+  } catch (err) {
+    console.error('清理失败:', err)
   }
 }
 

@@ -330,6 +330,18 @@ class Database {
     this.save();
   }
 
+  deleteStaleByScanPaths(currentScanPaths: string[]): number {
+    if (currentScanPaths.length === 0) return 0;
+    const placeholders = currentScanPaths.map(() => '?').join(',');
+    this.db!.run(
+      `DELETE FROM files WHERE scan_path IS NOT NULL AND scan_path NOT IN (${placeholders})`,
+      currentScanPaths
+    );
+    const changes = (this.db! as any).getRowsModified();
+    this.save();
+    return changes;
+  }
+
   getScanPaths(): { path: string; fileCount: number; lastScan: string }[] {
     const result: QueryResult[] = this.db!.exec(`
       SELECT DISTINCT scan_path, COUNT(*) as file_count, MAX(scanned_at) as last_scan

@@ -149,6 +149,11 @@ async function performScanWithDatabase(
 
   logger.info('开始扫描，路径: %s', scanPaths.join(', '));
 
+  const staleCount = database.deleteStaleByScanPaths(scanPaths);
+  if (staleCount > 0) {
+    logger.info('清理失效文件记录: %d 条（scan_path 已不在配置中）', staleCount);
+  }
+
   const scanResults: ScanPathResult[] = [];
   let totalFiles: number = 0;
   let totalSize: number = 0;
