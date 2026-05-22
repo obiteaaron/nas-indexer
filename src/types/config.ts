@@ -32,6 +32,8 @@ export interface Config {
   categoryPathRules?: CategoryPathRule[];
   trackingConfig?: TrackingConfig;
   gamesEnabled?: boolean;
+  gameScanPathsEnabled?: boolean;
+  gameScanPaths?: string[];
   gamesRules?: import('./game').GameRules;
   gamesScrape?: import('./game').GameScrapeConfig;
 }

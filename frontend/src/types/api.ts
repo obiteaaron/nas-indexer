@@ -86,6 +86,8 @@ export interface Config {
   categoryPathRules?: CategoryPathRule[];
   trackingConfig?: TrackingConfig;
   gamesEnabled?: boolean;
+  gameScanPathsEnabled?: boolean;
+  gameScanPaths?: string[];
   gamesRules?: GameRules;
   gamesScrape?: GameScrapeConfig;
   // 前端扩展属性

@@ -57,16 +57,19 @@ router.post('/', async (_req: Request, res: Response): Promise<void> => {
 
             const rules = config.gamesRules || DEFAULT_GAME_RULES;
             const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
+            const gameRoots = (config.gameScanPathsEnabled && config.gameScanPaths && config.gameScanPaths.length > 0)
+              ? config.gameScanPaths
+              : config.scanPaths;
 
             console.log('[扫描全部] 游戏识别规则:', JSON.stringify(rules, null, 2));
-            console.log('[扫描全部] 扫描路径:', config.scanPaths);
+            console.log('[扫描全部] 游戏扫描路径:', gameRoots);
 
             taskManager.updateTask(task.id, {
               progress: 95,
               message: '正在识别游戏目录...'
             });
 
-            const { games, ids } = await runIdentification(config.scanPaths, rules, scrapeConfig);
+            const { games, ids } = await runIdentification(gameRoots, rules, scrapeConfig);
             console.log(`[扫描全部] 游戏识别完成: ${games.length} 个游戏, ${ids.length} 个ID`);
 
             // 自动刮削
@@ -162,15 +165,19 @@ router.post('/path', async (req: Request, res: Response): Promise<void> => {
 
             const rules = config.gamesRules || DEFAULT_GAME_RULES;
             const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
+            const gameRoots = (config.gameScanPathsEnabled && config.gameScanPaths && config.gameScanPaths.length > 0)
+              ? config.gameScanPaths
+              : [scanPath];
 
             console.log('[单路径扫描] 游戏识别规则:', JSON.stringify(rules, null, 2));
+            console.log('[单路径扫描] 游戏扫描路径:', gameRoots);
 
             taskManager.updateTask(task.id, {
               progress: 95,
               message: '正在识别游戏目录...'
             });
 
-            const { games, ids } = await runIdentification([scanPath], rules, scrapeConfig);
+            const { games, ids } = await runIdentification(gameRoots, rules, scrapeConfig);
             console.log(`[单路径扫描] 游戏识别完成: ${games.length} 个游戏, ${ids.length} 个ID`);
 
             // 自动刮削

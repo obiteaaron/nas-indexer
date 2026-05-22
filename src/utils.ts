@@ -93,6 +93,8 @@ function getDefaultConfig(): Config {
     },
     categories: ['电影/视频', '音乐/音频', '文档/资料', '软件/安装包', '图片/照片', '项目/代码', '备份/归档', '其他'],
     gamesEnabled: false,
+    gameScanPathsEnabled: false,
+    gameScanPaths: [],
     gamesRules: DEFAULT_GAME_RULES,
     gamesScrape: DEFAULT_GAME_SCRAPE
   };

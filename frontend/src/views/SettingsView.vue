@@ -182,17 +182,35 @@
             </div>
 
             <div class="form-group" v-if="config.gamesEnabled">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="config.gameScanPathsEnabled">
+                仅扫描指定路径
+              </label>
+              <span class="hint">开启后游戏模块只扫描下方配置的路径，关闭则沿用文件扫描路径</span>
+              <div class="path-list" v-if="config.gameScanPathsEnabled" style="margin-top: 8px;">
+                <div class="path-item" v-for="(p, i) in config.gameScanPaths" :key="i">
+                  <input class="input" v-model="config.gameScanPaths![i]">
+                  <button class="btn btn-danger btn-small" @click="removeGameScanPath(i)">删除</button>
+                </div>
+                <button class="btn btn-secondary btn-small" @click="addGameScanPath">添加路径</button>
+              </div>
+            </div>
+
+            <div class="form-group" v-if="config.gamesEnabled">
               <label>识别规则</label>
               <div class="game-rules-section">
-                <div class="rule-item">
-                  <label>路径前缀匹配</label>
-                  <input class="input" v-model="pathPrefixesStr" placeholder="D:\Games, E:\SteamLibrary">
-                  <span class="hint">路径以这些前缀开头时识别为游戏，逗号分隔</span>
+                <div class="priority-group">
+                  <span class="priority-label">识别优先级 1: 本地元数据</span>
+                  <span class="hint">游戏目录下的 game.json 文件（识别优先级最高，不可在此配置）</span>
+                </div>
+
+                <div class="priority-group">
+                  <span class="priority-label">识别优先级 2: 目录特征匹配</span>
                 </div>
                 <div class="rule-item">
-                  <label>路径关键词匹配</label>
-                  <input class="input" v-model="pathKeywordsStr" placeholder="steamapps, games, game">
-                  <span class="hint">路径包含这些关键词时识别为游戏，逗号分隔</span>
+                  <label>排除路径</label>
+                  <input class="input" v-model="gameExcludePatternsStr" placeholder="$Recycle.Bin, node_modules">
+                  <span class="hint">路径包含这些关键词时排除，优先级最高，逗号分隔</span>
                 </div>
                 <div class="rule-item">
                   <label>目录名特征（正则表达式）</label>
@@ -204,13 +222,22 @@
                   <input class="input" v-model="fileIndicatorsStr" placeholder=".exe, steam_api.dll, game.json">
                   <span class="hint">目录内存在这些文件时识别为游戏，逗号分隔</span>
                 </div>
+
+                <div class="priority-group">
+                  <span class="priority-label">识别优先级 3: 游戏库路径（递归扫描）</span>
+                </div>
                 <div class="rule-item">
-                  <label>排除路径</label>
-                  <input class="input" v-model="gameExcludePatternsStr" placeholder="$Recycle.Bin, node_modules">
-                  <span class="hint">路径包含这些关键词时排除，逗号分隔</span>
+                  <label>路径前缀匹配</label>
+                  <input class="input" v-model="pathPrefixesStr" placeholder="D:\Games, E:\SteamLibrary">
+                  <span class="hint">路径以这些前缀开头时递归扫描子目录，逗号分隔</span>
+                </div>
+                <div class="rule-item">
+                  <label>路径关键词匹配</label>
+                  <input class="input" v-model="pathKeywordsStr" placeholder="steamapps, games, game">
+                  <span class="hint">路径包含这些关键词时递归扫描子目录，逗号分隔</span>
                 </div>
               </div>
-              <span class="hint">识别优先级：排除规则 > 路径前缀 > 路径关键词 > 目录名特征 > 文件特征</span>
+              <span class="hint">识别优先级：本地元数据 > 排除规则 > 目录名特征 > 特征文件 > 路径前缀 > 路径关键词</span>
             </div>
 
             <div class="form-group" v-if="config.gamesEnabled">
@@ -360,6 +387,8 @@ const config = ref<Config>({
   trackingConfig: { trackingEnabled: true, trackingLevel: 'full' },
   thumbnailSizeLimit: 5,
   gamesEnabled: false,
+  gameScanPathsEnabled: false,
+  gameScanPaths: [],
   gamesRules: DEFAULT_GAME_RULES,
   gamesScrape: DEFAULT_GAME_SCRAPE
 })
@@ -464,6 +493,8 @@ async function loadConfig(): Promise<void> {
         trackingConfig: res.data.trackingConfig || { trackingEnabled: true, trackingLevel: 'full' },
         thumbnailSizeLimit: res.data.thumbnailSizeLimit ?? 5,
         gamesEnabled: res.data.gamesEnabled ?? false,
+        gameScanPathsEnabled: res.data.gameScanPathsEnabled ?? false,
+        gameScanPaths: res.data.gameScanPaths || [],
         gamesRules: res.data.gamesRules || DEFAULT_GAME_RULES,
         gamesScrape: res.data.gamesScrape || DEFAULT_GAME_SCRAPE
       }
@@ -494,6 +525,15 @@ function addPath(): void {
 
 function removePath(index: number): void {
   config.value.scanPaths.splice(index, 1)
+}
+
+function addGameScanPath(): void {
+  if (!config.value.gameScanPaths) config.value.gameScanPaths = []
+  config.value.gameScanPaths.push('')
+}
+
+function removeGameScanPath(index: number): void {
+  config.value.gameScanPaths?.splice(index, 1)
 }
 
 async function scanPath(index: number): Promise<void> {
@@ -985,6 +1025,24 @@ function getPathStatusTitle(path: string): string {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 0;
+}
+
+.priority-group {
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--border);
+}
+
+.priority-group:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.priority-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 2px;
 }
 
 .game-doc-section {

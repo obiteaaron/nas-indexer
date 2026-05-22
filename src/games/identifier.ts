@@ -210,7 +210,15 @@ export async function identifyGames(scanRoots: string[], rules: GameRules): Prom
   const games: Partial<Game>[] = [];
   const processedPaths = new Set<string>();
 
-  for (const scanRoot of scanRoots) {
+  // 按路径深度降序排列，子目录先扫描，父目录后扫描
+  const sortedRoots = [...scanRoots].sort((a, b) => {
+    const depthA = path.resolve(a).split(path.sep).length;
+    const depthB = path.resolve(b).split(path.sep).length;
+    return depthB - depthA;
+  });
+  logger.debug('扫描路径按深度排序（深→浅）: %j', sortedRoots);
+
+  for (const scanRoot of sortedRoots) {
     if (!fs.existsSync(scanRoot)) {
       logger.warn('扫描路径不存在: %s', scanRoot);
       continue;

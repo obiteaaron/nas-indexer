@@ -411,7 +411,9 @@ router.post('/identify', async (req: Request, res: Response): Promise<void> => {
     let { scanRoots } = req.body;
 
     if (!scanRoots || scanRoots.length === 0) {
-      scanRoots = config.scanPaths;
+      scanRoots = (config.gameScanPathsEnabled && config.gameScanPaths && config.gameScanPaths.length > 0)
+        ? config.gameScanPaths
+        : config.scanPaths;
     }
 
     const rules: GameRules = config.gamesRules || DEFAULT_GAME_RULES;
