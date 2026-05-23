@@ -7,6 +7,11 @@ import path from 'path';
 import { database } from '../database';
 import { logger } from '../logger';
 import type { Game, GameQueryOptions, GameStatistics } from '../types';
+import {
+  hasLocalMetadata,
+  writeLocalMetadata,
+  readLocalMetadata
+} from './metadata-manager';
 
 interface QueryResult {
   columns: string[];
@@ -355,6 +360,117 @@ class GameDatabase {
     );
     database.save();
     return this.getGameById(id);
+  }
+
+  promoteGame(id: number): { success: boolean; error?: string; game?: Game } {
+    const game: Game | null = this.getGameById(id);
+    if (!game) return { success: false, error: '游戏不存在' };
+
+    const oldPath = game.source_path;
+    const newPath = path.dirname(oldPath);
+    if (newPath === oldPath || newPath === path.parse(oldPath).root) {
+      return { success: false, error: '无法再向上提升，已是根目录' };
+    }
+
+    // 检查父目录是否已有游戏记录
+    const existing: Game | null = this.getGameByPath(newPath);
+    if (existing) {
+      return { success: false, error: `父目录已有游戏记录：${existing.title}（id=${existing.id}）` };
+    }
+
+    const newDirName = path.basename(newPath);
+
+    // === 1. 处理 game.json ===
+    const oldHasGameJson = hasLocalMetadata(oldPath);
+    if (oldHasGameJson) {
+      // 读取旧的 game.json，写入到新目录
+      const meta = readLocalMetadata(oldPath);
+      if (meta) {
+        writeLocalMetadata(newPath, meta);
+        fs.unlinkSync(path.join(oldPath, 'game.json'));
+        logger.info('[提升目录] game.json 已移动: %s -> %s', oldPath, newPath);
+      }
+    } else {
+      // 不存在 game.json，从 DB 创建新的
+      logger.info('[提升目录] 从数据库创建 game.json: %s', newPath);
+    }
+
+    // === 2. 处理海报文件 ===
+    const posterTypes: Array<'horizontal' | 'vertical' | 'banner' | 'background'> = ['horizontal', 'vertical', 'banner', 'background'];
+    const newPosterPaths: Record<string, string | null> = {};
+
+    for (const type of posterTypes) {
+      const dbField = `poster_${type}_path` as keyof Game;
+      const oldPosterPath = game[dbField] as string | undefined;
+
+      // 先检查 DB 记录的路径
+      let actualOldPath: string | null = null;
+      if (oldPosterPath && fs.existsSync(oldPosterPath)) {
+        actualOldPath = oldPosterPath;
+      } else {
+        // DB 路径不存在，检查旧目录下的标准文件名
+        const standardName = {
+          horizontal: 'poster-horizontal.jpg',
+          vertical: 'poster-vertical.jpg',
+          banner: 'poster-banner.jpg',
+          background: 'background.jpg'
+        }[type];
+        const candidate = path.join(oldPath, standardName);
+        if (fs.existsSync(candidate)) {
+          actualOldPath = candidate;
+        }
+      }
+
+      if (actualOldPath) {
+        const standardName = {
+          horizontal: 'poster-horizontal.jpg',
+          vertical: 'poster-vertical.jpg',
+          banner: 'poster-banner.jpg',
+          background: 'background.jpg'
+        }[type];
+        const newPosterPath = path.join(newPath, standardName);
+        fs.renameSync(actualOldPath, newPosterPath);
+        newPosterPaths[`poster_${type}_path`] = newPosterPath;
+        logger.info('[提升目录] 海报已移动: %s -> %s', actualOldPath, newPosterPath);
+      } else {
+        newPosterPaths[`poster_${type}_path`] = null;
+      }
+    }
+
+    // === 3. 更新数据库 ===
+    const updateData: Record<string, unknown> = {
+      source_path: newPath,
+      original_name: newDirName,
+      // title/title_en 保留原值（刮削后的准确标题）
+      metadata_source: 'local',
+      metadata_path: path.join(newPath, 'game.json'),
+      poster_horizontal_path: newPosterPaths.poster_horizontal_path,
+      poster_vertical_path: newPosterPaths.poster_vertical_path,
+      poster_banner_path: newPosterPaths.poster_banner_path,
+      background_path: newPosterPaths.background_path,
+      has_local_poster: Object.values(newPosterPaths).some(v => v !== null) ? 1 : game.has_local_poster
+    };
+
+    const fields: string[] = [];
+    const params: unknown[] = [];
+    for (const [key, value] of Object.entries(updateData)) {
+      fields.push(`${key} = ?`);
+      params.push(value);
+    }
+    fields.push('updated_at = datetime("now", "localtime")');
+    params.push(id);
+
+    database.db!.run(`UPDATE games SET ${fields.join(', ')} WHERE id = ?`, params);
+
+    // 确保新目录的 game.json 包含最新 DB 数据
+    const updatedGame = this.getGameById(id);
+    if (updatedGame) {
+      writeLocalMetadata(newPath, updatedGame);
+    }
+
+    database.save();
+    logger.info('[提升目录] 完成: %s -> %s, id=%d', path.basename(oldPath), newDirName, id);
+    return { success: true, game: updatedGame ?? undefined };
   }
 
   deleteNonexistent(): { deletedCount: number; deletedIds: number[] } {

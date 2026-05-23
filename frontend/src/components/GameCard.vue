@@ -23,6 +23,9 @@
           <button class="action-btn" @click.stop="$emit('detail', game)" title="查看详情">
             📋
           </button>
+          <button class="action-btn" @click.stop="$emit('promote', game)" title="提升一级目录">
+            ⬆️
+          </button>
           <button class="action-btn" @click.stop="$emit('exclude', game)" :title="game.is_excluded ? '取消排除' : '排除'">
             {{ game.is_excluded ? '✅' : '🚫' }}
           </button>
@@ -65,6 +68,7 @@ defineEmits<{
   click: [game: Game]
   open: [game: Game]
   detail: [game: Game]
+  promote: [game: Game]
   exclude: [game: Game]
   delete: [game: Game]
 }>()

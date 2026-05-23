@@ -372,6 +372,11 @@ export function toggleExcludeGame(id: number): Promise<ApiResponse<Game>> {
   return request<Game>('/games/' + id + '/exclude', { method: 'POST' })
 }
 
+export function promoteGame(id: number): Promise<ApiResponse<Game>> {
+  clearCache('/games')
+  return request<Game>('/games/' + id + '/promote', { method: 'POST' })
+}
+
 export function removeNonexistentGames(): Promise<ApiResponse<{ deletedCount: number; deletedIds: number[] }>> {
   clearCache('/games')
   return request<{ deletedCount: number; deletedIds: number[] }>('/games/remove-nonexistent', { method: 'POST' })

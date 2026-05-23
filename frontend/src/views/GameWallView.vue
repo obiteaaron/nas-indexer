@@ -76,6 +76,7 @@
         @open="openGameDir"
         @detail="showGameDetail"
         @exclude="toggleExclude"
+        @promote="promoteGame"
         @delete="deleteSingleGame"
       />
     </div>
@@ -289,6 +290,7 @@ import {
   searchSteamGames,
   bindSteamGame,
   toggleExcludeGame,
+  promoteGame as promoteGameApi,
   removeNonexistentGames,
   cleanupStaleGames
 } from '../api'
@@ -535,6 +537,29 @@ async function toggleExclude(game: Game): Promise<void> {
     }
   } catch (err) {
     console.error('排除操作失败:', err)
+  }
+}
+
+async function promoteGame(game: Game): Promise<void> {
+  const parentPath = game.source_path.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
+  if (!confirm(`将「${game.title}」的游戏目录提升一级至父目录？\n\n当前: ${game.source_path}\n提升后: ${parentPath}`)) return
+  try {
+    const res = await promoteGameApi(game.id)
+    if (res.success && res.data) {
+      const idx = games.value.findIndex(g => g.id === game.id)
+      if (idx >= 0) {
+        games.value[idx] = res.data
+      }
+      if (selectedGame.value?.id === game.id) {
+        selectedGame.value = res.data
+      }
+      loadStats()
+    } else {
+      alert('提升失败: ' + (res as any).error || '未知错误')
+    }
+  } catch (err) {
+    console.error('提升目录失败:', err)
+    alert('提升失败，请查看控制台')
   }
 }
 

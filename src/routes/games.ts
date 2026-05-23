@@ -244,6 +244,24 @@ router.post('/:id/exclude', async (req: Request, res: Response): Promise<void> =
 });
 
 /**
+ * 提升游戏目录至父级
+ */
+router.post('/:id/promote', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const result = gameDatabase.promoteGame(parseInt(req.params.id as string));
+    if (!result.success) {
+      res.status(400).json({ success: false, error: result.error });
+      return;
+    }
+    res.json({ success: true, data: result.game });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 移除所有不存在的游戏目录
  */
 router.post('/remove-nonexistent', async (_req: Request, res: Response): Promise<void> => {
