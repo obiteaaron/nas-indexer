@@ -51,13 +51,24 @@ export interface Game {
   genresArray?: string[];
 }
 
+/**
+ * 游戏识别规则（正则表达式）
+ */
+export interface GameRecognitionRule {
+  pattern: string;      // 正则表达式，匹配目录名
+  levelOffset: number;  // 层级偏移：0=匹配目录本身，1=父目录，2=祖父目录
+  enabled: boolean;     // 启用开关
+  description?: string; // 规则说明（前端显示）
+}
+
+/**
+ * 游戏识别配置
+ */
 export interface GameRules {
-  pathPrefixes: string[];
-  pathKeywords: string[];
-  fileIndicators: string[];
-  excludePatterns: string[];
-  folderPatterns: string[];
-  metadataFile: string;
+  recognitionRules: GameRecognitionRule[];  // 正则规则列表
+  blacklistPatterns: string[];              // 黑名单：匹配的路径跳过识别
+  metadataFile: string;                     // 本地元数据文件名
+  maxScanDepth: number;                     // 递归深度限制
 }
 
 export interface GameScrapeConfig {
@@ -93,13 +104,23 @@ export interface GameStatistics {
   byGenre: { genre: string; count: number }[];
 }
 
+/**
+ * 默认识别规则
+ */
+export const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
+  { pattern: '\\[GOG\\]$',           levelOffset: 0, enabled: true, description: 'GOG 版游戏（目录名结尾）' },
+  { pattern: '\\[Steam\\]$',         levelOffset: 0, enabled: true, description: 'Steam 版游戏（目录名结尾）' },
+  { pattern: '\\[CRACK\\]$',         levelOffset: 0, enabled: true, description: '破解版游戏（目录名结尾）' },
+  { pattern: 'FitGirl.*Repack$',     levelOffset: 1, enabled: true, description: 'FitGirl 压缩包 → 父目录' },
+  { pattern: '/steamapps/',          levelOffset: 0, enabled: true, description: 'Steam 游戏库目录' },
+  { pattern: '/games/',              levelOffset: 0, enabled: true, description: '通用游戏目录名' },
+];
+
 export const DEFAULT_GAME_RULES: GameRules = {
-  pathPrefixes: [],
-  pathKeywords: ['steamapps', 'steam_library', 'steamlibrary', 'games', 'game'],
-  fileIndicators: ['.exe', 'steam_api.dll', 'steam_api64.dll', 'steam_appid.txt'],
-  excludePatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__'],
-  folderPatterns: ['\\[GOG\\]', '\\[Steam\\]'],
-  metadataFile: 'game.json'
+  recognitionRules: DEFAULT_RECOGNITION_RULES,
+  blacklistPatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__'],
+  metadataFile: 'game.json',
+  maxScanDepth: 3
 };
 
 export const DEFAULT_GAME_SCRAPE: GameScrapeConfig = {

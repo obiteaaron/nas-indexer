@@ -206,39 +206,43 @@
                 </div>
 
                 <div class="priority-group">
-                  <span class="priority-label">识别优先级 2: 目录特征匹配</span>
-                </div>
-                <div class="rule-item">
-                  <label>排除路径</label>
-                  <input class="input" v-model="gameExcludePatternsStr" placeholder="$Recycle.Bin, node_modules">
-                  <span class="hint">路径包含这些关键词时排除，优先级最高，逗号分隔</span>
-                </div>
-                <div class="rule-item">
-                  <label>目录名特征（正则表达式）</label>
-                  <input class="input" v-model="folderPatternsStr" placeholder="\[GOG\], \[Steam\]">
-                  <span class="hint">目录名匹配这些模式时识别为游戏，逗号分隔</span>
-                </div>
-                <div class="rule-item">
-                  <label>特征文件</label>
-                  <input class="input" v-model="fileIndicatorsStr" placeholder=".exe, steam_api.dll, game.json">
-                  <span class="hint">目录内存在这些文件时识别为游戏，逗号分隔</span>
+                  <span class="priority-label">识别优先级 2: 正则规则匹配</span>
                 </div>
 
-                <div class="priority-group">
-                  <span class="priority-label">识别优先级 3: 游戏库路径（递归扫描）</span>
-                </div>
                 <div class="rule-item">
-                  <label>路径前缀匹配</label>
-                  <input class="input" v-model="pathPrefixesStr" placeholder="D:\Games, E:\SteamLibrary">
-                  <span class="hint">路径以这些前缀开头时递归扫描子目录，逗号分隔。递归深度最大 3 层</span>
+                  <label>黑名单路径</label>
+                  <input class="input" v-model="gameBlacklistPatternsStr"
+                         placeholder="$Recycle.Bin, System Volume Information, .git">
+                  <span class="hint">包含这些关键词的路径跳过识别，逗号分隔</span>
                 </div>
+
                 <div class="rule-item">
-                  <label>路径关键词匹配</label>
-                  <input class="input" v-model="pathKeywordsStr" placeholder="steamapps, games, game">
-                  <span class="hint">路径包含这些关键词时递归扫描子目录，逗号分隔。递归深度最大 3 层</span>
+                  <label>最大递归深度</label>
+                  <input class="input small" type="number" v-model.number="config.gamesRules!.maxScanDepth" min="1" max="10">
+                  <span class="hint">未匹配规则时递归扫描的最大深度</span>
                 </div>
+
+                <div class="rules-list">
+                  <div class="rule-row" v-for="(rule, i) in config.gamesRules?.recognitionRules" :key="i">
+                    <div class="rule-order">
+                      <button class="btn btn-small order-btn" @click="moveRuleUp(i)" :disabled="i === 0" title="上移">↑</button>
+                      <button class="btn btn-small order-btn" @click="moveRuleDown(i)" :disabled="i === (config.gamesRules?.recognitionRules?.length || 0) - 1" title="下移">↓</button>
+                    </div>
+                    <input class="input pattern-input" v-model="rule.pattern" placeholder="正则表达式">
+                    <input class="input small offset-input" type="number" v-model.number="rule.levelOffset" min="0" max="5">
+                    <span class="offset-label">层偏移</span>
+                    <input type="checkbox" v-model="rule.enabled" class="rule-checkbox">
+                    <input class="input small desc-input" v-model="rule.description" placeholder="说明">
+                    <button class="btn btn-danger btn-small" @click="removeRecognitionRule(i)">删除</button>
+                  </div>
+                  <button class="btn btn-secondary btn-small" @click="addRecognitionRule">添加规则</button>
+                </div>
+
+                <span class="hint">
+                  正则匹配完整路径（如 E:/Games/xxx）。想限制目录名可用 $ 结尾（如 [GOG]$）。
+                  规则从上到下依次执行，首个匹配生效。层偏移：0=匹配目录本身，1=父目录
+                </span>
               </div>
-              <span class="hint">识别优先级：本地元数据 > 排除规则 > 目录名特征 > 特征文件 > 路径前缀 > 路径关键词</span>
             </div>
 
             <div class="form-group" v-if="config.gamesEnabled">
@@ -360,15 +364,22 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths, cleanupStaleFiles } from '../api'
-import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule, GameRules, GameScrapeConfig } from '../types'
+import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule, GameRules, GameScrapeConfig, GameRecognitionRule } from '../types'
+
+const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
+  { pattern: '\\[GOG\\]$',           levelOffset: 0, enabled: true, description: 'GOG 版游戏（目录名结尾）' },
+  { pattern: '\\[Steam\\]$',         levelOffset: 0, enabled: true, description: 'Steam 版游戏（目录名结尾）' },
+  { pattern: '\\[CRACK\\]$',         levelOffset: 0, enabled: true, description: '破解版游戏（目录名结尾）' },
+  { pattern: 'FitGirl.*Repack$',     levelOffset: 1, enabled: true, description: 'FitGirl 压缩包 → 父目录' },
+  { pattern: '/steamapps/',          levelOffset: 0, enabled: true, description: 'Steam 游戏库目录' },
+  { pattern: '/games/',              levelOffset: 0, enabled: true, description: '通用游戏目录名' },
+]
 
 const DEFAULT_GAME_RULES: GameRules = {
-  pathPrefixes: [],
-  pathKeywords: ['steamapps', 'steam_library', 'steamlibrary', 'games', 'game'],
-  fileIndicators: ['.exe', 'steam_api.dll', 'steam_api64.dll', 'steam_appid.txt'],
-  excludePatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__'],
-  folderPatterns: ['\\[GOG\\]', '\\[Steam\\]'],
-  metadataFile: 'game.json'
+  recognitionRules: DEFAULT_RECOGNITION_RULES,
+  blacklistPatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__'],
+  metadataFile: 'game.json',
+  maxScanDepth: 3
 }
 
 const DEFAULT_GAME_SCRAPE: GameScrapeConfig = {
@@ -436,45 +447,50 @@ const blacklistStr = computed({
   }
 })
 
-const pathKeywordsStr = computed({
-  get: () => (config.value.gamesRules?.pathKeywords || []).join(', '),
+const gameBlacklistPatternsStr = computed({
+  get: () => (config.value.gamesRules?.blacklistPatterns || []).join(', '),
   set: (v: string) => {
     if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
-    config.value.gamesRules.pathKeywords = v.split(',').map(s => s.trim()).filter(s => s)
+    config.value.gamesRules.blacklistPatterns = v.split(',').map(s => s.trim()).filter(s => s)
   }
 })
 
-const pathPrefixesStr = computed({
-  get: () => (config.value.gamesRules?.pathPrefixes || []).join(', '),
-  set: (v: string) => {
-    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
-    config.value.gamesRules.pathPrefixes = v.split(',').map(s => s.trim()).filter(s => s)
+function addRecognitionRule(): void {
+  if (!config.value.gamesRules) {
+    config.value.gamesRules = {
+      recognitionRules: [...DEFAULT_RECOGNITION_RULES],
+      blacklistPatterns: [...DEFAULT_GAME_RULES.blacklistPatterns],
+      metadataFile: DEFAULT_GAME_RULES.metadataFile,
+      maxScanDepth: DEFAULT_GAME_RULES.maxScanDepth
+    }
   }
-})
+  config.value.gamesRules.recognitionRules.push({
+    pattern: '',
+    levelOffset: 0,
+    enabled: true,
+    description: ''
+  })
+}
 
-const folderPatternsStr = computed({
-  get: () => (config.value.gamesRules?.folderPatterns || []).join(', '),
-  set: (v: string) => {
-    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
-    config.value.gamesRules.folderPatterns = v.split(',').map(s => s.trim()).filter(s => s)
-  }
-})
+function removeRecognitionRule(index: number): void {
+  config.value.gamesRules?.recognitionRules.splice(index, 1)
+}
 
-const fileIndicatorsStr = computed({
-  get: () => (config.value.gamesRules?.fileIndicators || []).join(', '),
-  set: (v: string) => {
-    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
-    config.value.gamesRules.fileIndicators = v.split(',').map(s => s.trim()).filter(s => s)
-  }
-})
+function moveRuleUp(index: number): void {
+  if (index <= 0 || !config.value.gamesRules?.recognitionRules) return
+  const rules = config.value.gamesRules.recognitionRules
+  const temp = rules[index]
+  rules[index] = rules[index - 1]
+  rules[index - 1] = temp
+}
 
-const gameExcludePatternsStr = computed({
-  get: () => (config.value.gamesRules?.excludePatterns || []).join(', '),
-  set: (v: string) => {
-    if (!config.value.gamesRules) config.value.gamesRules = DEFAULT_GAME_RULES
-    config.value.gamesRules.excludePatterns = v.split(',').map(s => s.trim()).filter(s => s)
-  }
-})
+function moveRuleDown(index: number): void {
+  const rules = config.value.gamesRules?.recognitionRules
+  if (!rules || index >= rules.length - 1) return
+  const temp = rules[index]
+  rules[index] = rules[index + 1]
+  rules[index + 1] = temp
+}
 
 onMounted(async () => {
   await loadConfig()
@@ -496,7 +512,12 @@ async function loadConfig(): Promise<void> {
         gamesEnabled: res.data.gamesEnabled ?? false,
         gameScanPathsEnabled: res.data.gameScanPathsEnabled ?? false,
         gameScanPaths: res.data.gameScanPaths || [],
-        gamesRules: res.data.gamesRules || DEFAULT_GAME_RULES,
+        gamesRules: {
+          recognitionRules: res.data.gamesRules?.recognitionRules || DEFAULT_RECOGNITION_RULES,
+          blacklistPatterns: res.data.gamesRules?.blacklistPatterns || DEFAULT_GAME_RULES.blacklistPatterns,
+          metadataFile: res.data.gamesRules?.metadataFile || DEFAULT_GAME_RULES.metadataFile,
+          maxScanDepth: res.data.gamesRules?.maxScanDepth ?? DEFAULT_GAME_RULES.maxScanDepth
+        },
         gamesScrape: res.data.gamesScrape || DEFAULT_GAME_SCRAPE
       }
 
@@ -1169,6 +1190,64 @@ function getPathStatusTitle(path: string): string {
   border-radius: 3px;
   font-size: 12px;
   color: var(--accent);
+}
+
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rule-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rule-row .pattern-input {
+  flex: 1;
+}
+
+.rule-row .offset-input {
+  width: 50px;
+}
+
+.rule-row .offset-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.rule-row .rule-checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.rule-row .desc-input {
+  width: 100px;
+}
+
+.rule-order {
+  display: flex;
+  gap: 2px;
+}
+
+.order-btn {
+  padding: 2px 6px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.order-btn:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.order-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {

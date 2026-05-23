@@ -2,26 +2,12 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { logger } from './logger';
-import type { Config, GameRules, GameScrapeConfig } from './types';
+import type { Config } from './types';
+import { DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from './types/game';
 
 const PROJECT_ROOT: string = path.join(__dirname, '..');
 const DEFAULT_STORAGE_PATH: string = path.join(PROJECT_ROOT, 'profiles');
 const DEFAULT_CONFIG_FILE: string = path.join(PROJECT_ROOT, 'config.default.json');
-
-const DEFAULT_GAME_RULES: GameRules = {
-  pathPrefixes: [],
-  pathKeywords: ['steamapps', 'steam_library', 'steamlibrary', 'games', 'game'],
-  fileIndicators: ['.exe', 'steam_api.dll', 'steam_api64.dll', 'steam_appid.txt', 'game.json'],
-  excludePatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__', '.cache'],
-  folderPatterns: ['\\[GOG\\]', '\\[Steam\\]', '\\[CRACK\\]'],
-  metadataFile: 'game.json'
-};
-
-const DEFAULT_GAME_SCRAPE: GameScrapeConfig = {
-  autoScrape: true,
-  downloadPosters: true,
-  scrapeOnIdentify: true
-};
 
 let dbInitialized: boolean = false;
 

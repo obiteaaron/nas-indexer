@@ -1,5 +1,5 @@
 /**
- * 游戏识别模块
+ * 游戏识别模块 - 正则规则体系（支持文件和目录匹配）
  */
 
 import fs from 'fs';
@@ -8,7 +8,7 @@ import { logger } from '../logger';
 import { gameDatabase } from './database';
 import { hasLocalMetadata, readLocalMetadata, checkLocalPosters } from './metadata-manager';
 import { cleanGameName } from './name-cleaner';
-import type { Game, GameRules, GameScrapeConfig } from '../types';
+import type { Game, GameRules, GameScrapeConfig, GameRecognitionRule } from '../types';
 
 /**
  * 尝试读取 steam_appid.txt 获取 appid
@@ -30,173 +30,190 @@ function readSteamAppidFile(dirPath: string): string | null {
 }
 
 /**
- * 检查目录是否符合游戏特征
+ * 正则规则匹配结果
  */
-function isGameDirectory(dirPath: string, rules: GameRules): boolean {
-  // 排除规则检查
-  for (const pattern of rules.excludePatterns) {
-    if (dirPath.includes(pattern)) {
-      logger.debug('[游戏识别] 路径被排除规则命中: %s (规则: %s)', dirPath, pattern);
-      return false;
-    }
-  }
-
-  // 目录名特征检查（如 [GOG]、[Steam]）
-  const dirName = path.basename(dirPath);
-  for (const pattern of rules.folderPatterns) {
-    const regex = new RegExp(pattern, 'i');
-    if (regex.test(dirName)) {
-      logger.debug('[游戏识别] 目录名特征匹配: %s (模式: %s)', dirPath, pattern);
-      return true;
-    }
-  }
-
-  // 文件特征检查（.exe、steam_api.dll 等）
-  try {
-    const files = fs.readdirSync(dirPath);
-    for (const indicator of rules.fileIndicators) {
-      if (indicator.startsWith('.')) {
-        if (files.some(f => f.toLowerCase().endsWith(indicator.toLowerCase()))) {
-          logger.debug('[游戏识别] 文件特征匹配(扩展名): %s (特征: %s)', dirPath, indicator);
-          return true;
-        }
-      } else {
-        if (files.some(f => f.toLowerCase() === indicator.toLowerCase())) {
-          logger.debug('[游戏识别] 文件特征匹配(文件名): %s (特征: %s)', dirPath, indicator);
-          return true;
-        }
-      }
-    }
-  } catch (err) {
-    logger.debug('[游戏识别] 目录读取失败: %s', dirPath);
-    return false;
-  }
-
-  logger.debug('[游戏识别] 未匹配任何规则: %s', dirPath);
-  return false;
+interface RuleMatchResult {
+  matched: boolean;
+  gamePath: string | null;
+  rule: GameRecognitionRule | null;
+  matchedPath: string | null;  // 匹配到的原始路径（可能是文件）
+  isFile: boolean;             // 匹配到的是文件还是目录
 }
 
 /**
- * 判断目录是否在游戏库路径内（路径前缀或关键词命中）
- * 用于决定是否需要递归扫描子目录
+ * 正则规则匹配
+ * 匹配任意全路径（文件或目录），不区分类型
  */
-function isGameLibrary(dirPath: string, rules: GameRules): boolean {
-  const normalizedPath = dirPath.replace(/\\/g, '/').toLowerCase();
-
-  for (const prefix of rules.pathPrefixes) {
-    const normalizedPrefix = prefix.replace(/\\/g, '/');
-    if (normalizedPath.startsWith(normalizedPrefix.toLowerCase())) {
-      return true;
+function matchRecognitionRule(
+  entryPath: string,
+  isFile: boolean,
+  rules: GameRules,
+  scanRoot: string
+): RuleMatchResult {
+  // 黑名单检查
+  const normalizedPathLower = entryPath.replace(/\\/g, '/').toLowerCase();
+  for (const blacklist of rules.blacklistPatterns) {
+    if (normalizedPathLower.includes(blacklist.toLowerCase())) {
+      logger.debug('[游戏识别] 黑名单跳过: %s', entryPath);
+      return { matched: false, gamePath: null, rule: null, matchedPath: null, isFile: false };
     }
   }
 
-  if (rules.pathKeywords && rules.pathKeywords.length > 0) {
-    for (const keyword of rules.pathKeywords) {
-      const patterns = [
-        `/${keyword.toLowerCase()}/`,
-        `/${keyword.toLowerCase()}`,
-        `${keyword.toLowerCase()}/`
-      ];
-      for (const pattern of patterns) {
-        if (normalizedPath.includes(pattern)) {
-          return true;
+  const entryName = path.basename(entryPath);
+  const normalizedPath = entryPath.replace(/\\/g, '/');
+
+  // 按顺序执行正则规则（匹配完整路径）
+  for (const rule of rules.recognitionRules) {
+    if (!rule.enabled) continue;
+
+    try {
+      const regex = new RegExp(rule.pattern, 'i');
+      if (regex.test(normalizedPath)) {
+        // 计算层级偏移后的游戏目录
+        // 如果匹配到文件，从文件所在目录开始计算偏移
+        let gamePath = isFile ? path.dirname(entryPath) : entryPath;
+
+        for (let i = 0; i < rule.levelOffset; i++) {
+          const parent = path.dirname(gamePath);
+          // 不能超出扫描根目录
+          if (parent === gamePath || path.resolve(parent) === path.resolve(scanRoot)) {
+            break;
+          }
+          gamePath = parent;
         }
+
+        logger.info('[游戏识别] 正则匹配: %s → 游戏目录: %s (规则: %s, 偏移: %d, 类型: %s)',
+          entryName, path.basename(gamePath), rule.pattern, rule.levelOffset, isFile ? '文件' : '目录');
+
+        return { matched: true, gamePath, rule, matchedPath: entryPath, isFile };
       }
+    } catch (err) {
+      logger.warn('[游戏识别] 正则错误: %s', rule.pattern);
     }
   }
 
-  return false;
+  return { matched: false, gamePath: null, rule: null, matchedPath: null, isFile: false };
 }
 
-const MAX_SCAN_DEPTH = 3;
+/**
+ * 创建游戏记录
+ */
+function createGameRecord(gamePath: string): Partial<Game> {
+  const posters = checkLocalPosters(gamePath);
+  const cleanTitle = cleanGameName(path.basename(gamePath));
+  const appid = readSteamAppidFile(gamePath);
+
+  return {
+    source_path: gamePath,
+    title: cleanTitle,
+    original_name: path.basename(gamePath),
+    steam_appid: appid || undefined,
+    poster_horizontal_path: posters.horizontal || undefined,
+    poster_vertical_path: posters.vertical || undefined,
+    poster_banner_path: posters.banner || undefined,
+    background_path: posters.background || undefined,
+    has_local_poster: posters.horizontal || posters.vertical ? 1 : 0,
+    metadata_source: 'regex',
+    is_manually_edited: 0
+  };
+}
 
 /**
- * 递归扫描目录，识别其中的游戏
+ * 扫描单个路径（文件或目录）
  */
-function scanDirectory(
-  dirPath: string,
+function scanEntry(
+  entryPath: string,
+  isFile: boolean,
   rules: GameRules,
   processedPaths: Set<string>,
-  depth: number
+  depth: number,
+  scanRoot: string
 ): Partial<Game>[] {
   const games: Partial<Game>[] = [];
 
-  if (depth > MAX_SCAN_DEPTH) return games;
+  if (depth > rules.maxScanDepth) return games;
 
-  const normalizedPath = path.resolve(dirPath);
+  const normalizedPath = path.resolve(entryPath);
   if (processedPaths.has(normalizedPath)) return games;
 
-  // 优先级1: game.json 存在
-  if (hasLocalMetadata(dirPath)) {
-    const localMeta = readLocalMetadata(dirPath);
-    if (localMeta) {
-      const posters = checkLocalPosters(dirPath);
-      games.push({
-        source_path: dirPath,
-        title: localMeta.title || path.basename(dirPath),
-        title_en: localMeta.title_en,
-        original_name: path.basename(dirPath),
-        steam_appid: localMeta.steam_appid,
-        poster_horizontal_path: posters.horizontal || undefined,
-        poster_vertical_path: posters.vertical || undefined,
-        poster_banner_path: posters.banner || undefined,
-        background_path: posters.background || undefined,
-        has_local_poster: posters.horizontal || posters.vertical ? 1 : 0,
-        developer: localMeta.developer,
-        publisher: localMeta.publisher,
-        release_date: localMeta.release_date,
-        genres: localMeta.genres ? JSON.stringify(localMeta.genres) : undefined,
-        rating: localMeta.rating,
-        description: localMeta.description,
-        short_description: localMeta.short_description,
-        languages: localMeta.languages ? JSON.stringify(localMeta.languages) : undefined,
-        tags: localMeta.tags ? JSON.stringify(localMeta.tags) : undefined,
-        metadata_source: 'local',
-        metadata_path: path.join(dirPath, 'game.json'),
-        is_manually_edited: 0
-      });
-      processedPaths.add(normalizedPath);
-      logger.info('识别游戏(本地元数据): %s [depth=%d]', localMeta.title || path.basename(dirPath), depth);
-      return games;
+  // 文件不检查 game.json（只有目录可能有）
+  if (!isFile) {
+    // P1: 本地元数据 (game.json)
+    if (hasLocalMetadata(entryPath)) {
+      const localMeta = readLocalMetadata(entryPath);
+      if (localMeta) {
+        const posters = checkLocalPosters(entryPath);
+        games.push({
+          source_path: entryPath,
+          title: localMeta.title || path.basename(entryPath),
+          title_en: localMeta.title_en,
+          original_name: path.basename(entryPath),
+          steam_appid: localMeta.steam_appid,
+          poster_horizontal_path: posters.horizontal || undefined,
+          poster_vertical_path: posters.vertical || undefined,
+          poster_banner_path: posters.banner || undefined,
+          background_path: posters.background || undefined,
+          has_local_poster: posters.horizontal || posters.vertical ? 1 : 0,
+          developer: localMeta.developer,
+          publisher: localMeta.publisher,
+          release_date: localMeta.release_date,
+          genres: localMeta.genres ? JSON.stringify(localMeta.genres) : undefined,
+          rating: localMeta.rating,
+          description: localMeta.description,
+          short_description: localMeta.short_description,
+          languages: localMeta.languages ? JSON.stringify(localMeta.languages) : undefined,
+          tags: localMeta.tags ? JSON.stringify(localMeta.tags) : undefined,
+          metadata_source: 'local',
+          metadata_path: path.join(entryPath, 'game.json'),
+          is_manually_edited: 0
+        });
+        processedPaths.add(normalizedPath);
+        logger.info('识别游戏(本地元数据): %s [depth=%d]', localMeta.title || path.basename(entryPath), depth);
+        return games;
+      }
     }
   }
 
-  // 优先级2: 目录名特征 + 文件特征 → 确认是游戏
-  if (isGameDirectory(dirPath, rules)) {
-    const posters = checkLocalPosters(dirPath);
-    const cleanTitle = cleanGameName(path.basename(dirPath));
-    const appid = readSteamAppidFile(dirPath);
-    games.push({
-      source_path: dirPath,
-      title: cleanTitle,
-      original_name: path.basename(dirPath),
-      steam_appid: appid || undefined,
-      poster_horizontal_path: posters.horizontal || undefined,
-      poster_vertical_path: posters.vertical || undefined,
-      poster_banner_path: posters.banner || undefined,
-      background_path: posters.background || undefined,
-      has_local_poster: posters.horizontal || posters.vertical ? 1 : 0,
-      metadata_source: 'unknown',
-      is_manually_edited: 0
-    });
+  // P2: 正则规则匹配（文件和目录都可以匹配）
+  const matchResult = matchRecognitionRule(entryPath, isFile, rules, scanRoot);
+  if (matchResult.matched && matchResult.gamePath) {
+    const gamePath = matchResult.gamePath;
+    const gamePathNormalized = path.resolve(gamePath);
+
+    // 检查是否已被处理
+    if (processedPaths.has(gamePathNormalized)) {
+      processedPaths.add(normalizedPath);
+      return games;
+    }
+
+    games.push(createGameRecord(gamePath));
+    processedPaths.add(gamePathNormalized);
     processedPaths.add(normalizedPath);
-    logger.info('识别游戏(特征匹配): %s%s [depth=%d]', cleanTitle, appid ? ` (appid: ${appid})` : '', depth);
+
+    // 标记游戏目录下所有内容为已处理（阻止重复识别）
+    try {
+      const entries = fs.readdirSync(gamePath, { withFileTypes: true });
+      for (const entry of entries) {
+        processedPaths.add(path.resolve(path.join(gamePath, entry.name)));
+      }
+    } catch {}
+
+    logger.info('识别游戏(正则匹配): %s [depth=%d]', path.basename(gamePath), depth);
     return games;
   }
 
-  // 优先级3: 路径在游戏库内 → 递归子目录
-  if (isGameLibrary(dirPath, rules)) {
-    logger.debug('[游戏识别] 路径在游戏库内，递归扫描: %s [depth=%d]', dirPath, depth);
+  // P3: 如果是目录且未匹配，递归扫描子内容
+  if (!isFile) {
     try {
-      const subDirs = fs.readdirSync(dirPath, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => path.join(dirPath, dirent.name));
+      const entries = fs.readdirSync(entryPath, { withFileTypes: true });
 
-      for (const subDir of subDirs) {
-        games.push(...scanDirectory(subDir, rules, processedPaths, depth + 1));
+      for (const entry of entries) {
+        const childPath = path.join(entryPath, entry.name);
+        const childIsFile = entry.isFile();
+        games.push(...scanEntry(childPath, childIsFile, rules, processedPaths, depth + 1, scanRoot));
       }
     } catch (err) {
-      logger.debug('[游戏识别] 目录读取失败: %s', dirPath);
+      logger.debug('[游戏识别] 目录读取失败: %s', entryPath);
     }
   }
 
@@ -204,7 +221,7 @@ function scanDirectory(
 }
 
 /**
- * 识别扫描路径下的游戏目录
+ * 识别扫描路径下的游戏
  */
 export async function identifyGames(scanRoots: string[], rules: GameRules): Promise<Partial<Game>[]> {
   const games: Partial<Game>[] = [];
@@ -224,23 +241,25 @@ export async function identifyGames(scanRoots: string[], rules: GameRules): Prom
       continue;
     }
 
-    logger.info('开始识别游戏目录: %s', scanRoot);
+    logger.info('开始识别游戏: %s', scanRoot);
 
-    // 先检查 scanRoot 本身
-    games.push(...scanDirectory(scanRoot, rules, processedPaths, 0));
+    // 扫描根目录本身
+    const rootStat = fs.statSync(scanRoot);
+    games.push(...scanEntry(scanRoot, !rootStat.isDirectory(), rules, processedPaths, 0, scanRoot));
 
-    // 再扫描子目录（depth=1 起）
-    try {
-      const subDirs = fs.readdirSync(scanRoot, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => path.join(scanRoot, dirent.name));
+    // 如果根目录是目录，扫描其子内容
+    if (rootStat.isDirectory()) {
+      try {
+        const entries = fs.readdirSync(scanRoot, { withFileTypes: true });
 
-      for (const subDir of subDirs) {
-        games.push(...scanDirectory(subDir, rules, processedPaths, 1));
+        for (const entry of entries) {
+          const childPath = path.join(scanRoot, entry.name);
+          games.push(...scanEntry(childPath, entry.isFile(), rules, processedPaths, 1, scanRoot));
+        }
+      } catch (err) {
+        const error = err as Error;
+        logger.error('扫描目录失败: %s - %s', scanRoot, error.message);
       }
-    } catch (err) {
-      const error = err as Error;
-      logger.error('扫描目录失败: %s - %s', scanRoot, error.message);
     }
   }
 

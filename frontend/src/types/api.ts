@@ -306,13 +306,18 @@ export interface GameStatistics {
   byGenre: { genre: string; count: number }[];
 }
 
+export interface GameRecognitionRule {
+  pattern: string;
+  levelOffset: number;
+  enabled: boolean;
+  description?: string;
+}
+
 export interface GameRules {
-  pathPrefixes: string[];
-  pathKeywords: string[];
-  fileIndicators: string[];
-  excludePatterns: string[];
-  folderPatterns: string[];
+  recognitionRules: GameRecognitionRule[];
+  blacklistPatterns: string[];
   metadataFile: string;
+  maxScanDepth: number;
 }
 
 export interface GameScrapeConfig {
