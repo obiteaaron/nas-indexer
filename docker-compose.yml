@@ -1,0 +1,28 @@
+services:
+  nas-indexer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nas-indexer:latest
+    container_name: nas-indexer
+    ports:
+      - "3000:3000"
+    volumes:
+      # Database and config persistence
+      - nas-indexer-data:/app/profiles
+      # NAS directories (read-only) - customize paths as needed
+      # Example: - /mnt/nas:/nas:ro
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  nas-indexer-data:
+    name: nas-indexer-data

@@ -1,7 +1,7 @@
 # NAS Indexer Roadmap
 
 > 最后更新：2026-05-23
-> 当前版本：v1.4.5
+> 当前版本：v1.5.0
 
 ---
 
@@ -103,7 +103,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 优先级 | 任务 | 状态 | 说明 |
 |--------|------|------|------|
 | **P0** | TypeScript 迁移 | ✅ | v1.3.2 已完成 |
-| **P1** | Docker 部署 | 待开始 | 提供 Dockerfile 和 docker-compose.yml |
+| **P1** | Docker 部署 | ✅ | 提供 Dockerfile 和 docker-compose.yml |
 | **P1** | 用户认证 | 待开始 | JWT 认证、多用户支持（如需要） |
 
 ---

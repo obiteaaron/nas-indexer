@@ -2,7 +2,7 @@
 
 离线文件索引服务，快速查找和管理你的 NAS 文件库。
 
-**版本: v1.4.5**
+**版本: v1.5.0**
 
 ## 功能
 
@@ -50,6 +50,27 @@ npm start
 ```
 
 访问 http://localhost:3000
+
+## Docker 部署
+
+```bash
+# 构建镜像
+docker build -t nas-indexer .
+
+# 运行容器
+docker run -d -p 3000:3000 -v nas-indexer-data:/app/profiles nas-indexer
+
+# 或使用 docker-compose
+docker compose up -d
+```
+
+挂载 NAS 目录（只读）：
+
+```yaml
+volumes:
+  - nas-indexer-data:/app/profiles
+  - /mnt/nas:/nas:ro  # 替换为你的 NAS 路径
+```
 
 ## 配置
 
