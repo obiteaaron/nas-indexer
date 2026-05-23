@@ -438,39 +438,51 @@ class GameDatabase {
     }
 
     // === 3. 更新数据库 ===
-    const updateData: Record<string, unknown> = {
-      source_path: newPath,
-      original_name: newDirName,
-      // title/title_en 保留原值（刮削后的准确标题）
-      metadata_source: 'local',
-      metadata_path: path.join(newPath, 'game.json'),
-      poster_horizontal_path: newPosterPaths.poster_horizontal_path,
-      poster_vertical_path: newPosterPaths.poster_vertical_path,
-      poster_banner_path: newPosterPaths.poster_banner_path,
-      background_path: newPosterPaths.background_path,
-      has_local_poster: Object.values(newPosterPaths).some(v => v !== null) ? 1 : game.has_local_poster
-    };
+    try {
+      const updateData: Record<string, unknown> = {
+        source_path: newPath,
+        original_name: newDirName,
+        // title/title_en 保留原值（刮削后的准确标题）
+        metadata_source: 'local',
+        metadata_path: path.join(newPath, 'game.json'),
+        poster_horizontal_path: newPosterPaths.poster_horizontal_path ?? null,
+        poster_vertical_path: newPosterPaths.poster_vertical_path ?? null,
+        poster_banner_path: newPosterPaths.poster_banner_path ?? null,
+        background_path: newPosterPaths.background_path ?? null,
+        has_local_poster: Object.values(newPosterPaths).some(v => v !== null) ? 1 : (game.has_local_poster ?? 0)
+      };
 
-    const fields: string[] = [];
-    const params: unknown[] = [];
-    for (const [key, value] of Object.entries(updateData)) {
-      fields.push(`${key} = ?`);
-      params.push(value);
+      logger.debug('[提升目录] 更新数据: %j', updateData);
+
+      const fields: string[] = [];
+      const params: unknown[] = [];
+      for (const [key, value] of Object.entries(updateData)) {
+        // SQLite 不接受 undefined，转换为 null
+        fields.push(`${key} = ?`);
+        params.push(value === undefined ? null : value);
+      }
+      fields.push('updated_at = datetime("now", "localtime")');
+      params.push(id);
+
+      const sql = `UPDATE games SET ${fields.join(', ')} WHERE id = ?`;
+      logger.debug('[提升目录] SQL: %s, params: %j', sql, params);
+      database.db!.run(sql, params);
+
+      // 确保新目录的 game.json 包含最新 DB 数据
+      const updatedGame = this.getGameById(id);
+      if (updatedGame) {
+        writeLocalMetadata(newPath, updatedGame);
+      }
+
+      database.save();
+      logger.info('[提升目录] 完成: %s -> %s, id=%d', path.basename(oldPath), newDirName, id);
+      return { success: true, game: updatedGame ?? undefined };
+    } catch (dbErr) {
+      const error = dbErr instanceof Error ? dbErr : new Error(String(dbErr));
+      logger.error('[提升目录] 数据库更新失败: %s', error.message);
+      logger.error('[提升目录] 错误堆栈: %s', error.stack || '无');
+      return { success: false, error: '数据库更新失败: ' + error.message };
     }
-    fields.push('updated_at = datetime("now", "localtime")');
-    params.push(id);
-
-    database.db!.run(`UPDATE games SET ${fields.join(', ')} WHERE id = ?`, params);
-
-    // 确保新目录的 game.json 包含最新 DB 数据
-    const updatedGame = this.getGameById(id);
-    if (updatedGame) {
-      writeLocalMetadata(newPath, updatedGame);
-    }
-
-    database.save();
-    logger.info('[提升目录] 完成: %s -> %s, id=%d', path.basename(oldPath), newDirName, id);
-    return { success: true, game: updatedGame ?? undefined };
   }
 
   deleteNonexistent(): { deletedCount: number; deletedIds: number[] } {
