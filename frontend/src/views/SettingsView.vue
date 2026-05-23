@@ -230,12 +230,12 @@
                 <div class="rule-item">
                   <label>路径前缀匹配</label>
                   <input class="input" v-model="pathPrefixesStr" placeholder="D:\Games, E:\SteamLibrary">
-                  <span class="hint">路径以这些前缀开头时递归扫描子目录，逗号分隔</span>
+                  <span class="hint">路径以这些前缀开头时递归扫描子目录，逗号分隔。递归深度最大 3 层</span>
                 </div>
                 <div class="rule-item">
                   <label>路径关键词匹配</label>
                   <input class="input" v-model="pathKeywordsStr" placeholder="steamapps, games, game">
-                  <span class="hint">路径包含这些关键词时递归扫描子目录，逗号分隔</span>
+                  <span class="hint">路径包含这些关键词时递归扫描子目录，逗号分隔。递归深度最大 3 层</span>
                 </div>
               </div>
               <span class="hint">识别优先级：本地元数据 > 排除规则 > 目录名特征 > 特征文件 > 路径前缀 > 路径关键词</span>
