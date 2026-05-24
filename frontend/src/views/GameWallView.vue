@@ -52,6 +52,7 @@
           <option value="true">已刮削</option>
           <option value="false">待刮削</option>
           <option value="excluded">已排除</option>
+          <option value="favorite">收藏</option>
         </select>
       </div>
       <div class="filter-group">
@@ -68,6 +69,7 @@
       <span class="stat-item">已刮削 {{ stats.scrapedGames }} 个</span>
       <span class="stat-item">待刮削 {{ stats.unscrapedGames }} 个</span>
       <span class="stat-item" v-if="stats.excludedGames > 0">已排除 {{ stats.excludedGames }} 个</span>
+      <span class="stat-item" v-if="stats.favoriteGames > 0">收藏 {{ stats.favoriteGames }} 个</span>
     </div>
 
     <div class="poster-grid" v-if="games.length">
@@ -81,6 +83,7 @@
         @exclude="toggleExclude"
         @promote="promoteGame"
         @delete="deleteSingleGame"
+        @favorite="toggleFavorite"
       />
     </div>
 
@@ -367,6 +370,7 @@ import {
   searchSteamGames,
   bindSteamGame,
   toggleExcludeGame,
+  toggleFavoriteGame,
   promoteGame as promoteGameApi,
   createGame as createGameApi,
   removeNonexistentGames,
@@ -454,12 +458,14 @@ async function loadGames(): Promise<void> {
   loading.value = true
   try {
     const isExcluded = filterScraped.value === 'excluded'
+    const isFavorite = filterScraped.value === 'favorite'
     const res = await getGames({
       search: searchQuery.value,
       genre: filterGenre.value,
       year: filterYear.value,
-      scraped: isExcluded ? undefined : filterScraped.value,
+      scraped: isExcluded || isFavorite ? undefined : filterScraped.value,
       excluded: isExcluded ? 'true' : undefined,
+      favorite: isFavorite ? 'true' : undefined,
       orderBy: orderBy.value,
       orderDir: 'ASC',
       page: page.value,
@@ -630,6 +636,24 @@ async function toggleExclude(game: Game): Promise<void> {
     }
   } catch (err) {
     console.error('排除操作失败:', err)
+  }
+}
+
+async function toggleFavorite(game: Game): Promise<void> {
+  try {
+    const res = await toggleFavoriteGame(game.id)
+    if (res.success && res.data) {
+      const idx = games.value.findIndex(g => g.id === game.id)
+      if (idx >= 0) {
+        games.value[idx] = res.data
+      }
+      if (selectedGame.value?.id === game.id) {
+        selectedGame.value = res.data
+      }
+      loadStats()
+    }
+  } catch (err) {
+    console.error('收藏操作失败:', err)
   }
 }
 

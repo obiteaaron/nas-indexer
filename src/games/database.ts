@@ -68,6 +68,7 @@ class GameDatabase {
         scraped_at DATETIME,
         is_manually_edited INTEGER DEFAULT 0,
         is_excluded INTEGER DEFAULT 0,
+        is_favorite INTEGER DEFAULT 0,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME
@@ -80,6 +81,16 @@ class GameDatabase {
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_metadata_source ON games(metadata_source)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_release_date ON games(release_date)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_excluded ON games(is_excluded)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_favorite ON games(is_favorite)');
+
+    // 兼容已存在表：检查 is_favorite 列是否存在
+    const colCheck: QueryResult[] = database.db!.exec(
+      "SELECT COUNT(*) as cnt FROM pragma_table_info('games') WHERE name='is_favorite'"
+    );
+    if (colCheck.length === 0 || (colCheck[0].values[0][0] as number) === 0) {
+      database.db!.run('ALTER TABLE games ADD COLUMN is_favorite INTEGER DEFAULT 0');
+      logger.info('游戏数据库: 新增 is_favorite 列');
+    }
 
     // 别名映射表：文件夹名 → steam_appid
     database.db!.run(`
@@ -220,7 +231,7 @@ class GameDatabase {
   }
 
   getGames(options: GameQueryOptions = {}): Game[] {
-    const { genre, year, search, scraped, excluded, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
+    const { genre, year, search, scraped, excluded, favorite, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
 
     let sql: string = 'SELECT * FROM games';
     const params: unknown[] = [];
@@ -253,6 +264,12 @@ class GameDatabase {
       conditions.push('is_excluded = 0');
     }
 
+    if (favorite === 'true') {
+      conditions.push('is_favorite = 1');
+    } else if (favorite === 'false') {
+      conditions.push('is_favorite = 0');
+    }
+
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
@@ -274,7 +291,7 @@ class GameDatabase {
   }
 
   getGameCount(options: GameQueryOptions = {}): number {
-    const { genre, year, search, scraped, excluded } = options;
+    const { genre, year, search, scraped, excluded, favorite } = options;
 
     let sql: string = 'SELECT COUNT(*) as count FROM games';
     const params: unknown[] = [];
@@ -305,6 +322,12 @@ class GameDatabase {
       conditions.push('is_excluded = 1');
     } else {
       conditions.push('is_excluded = 0');
+    }
+
+    if (favorite === 'true') {
+      conditions.push('is_favorite = 1');
+    } else if (favorite === 'false') {
+      conditions.push('is_favorite = 0');
     }
 
     if (conditions.length > 0) {
@@ -364,6 +387,18 @@ class GameDatabase {
     const newVal: number = game.is_excluded ? 0 : 1;
     database.db!.run(
       'UPDATE games SET is_excluded = ?, updated_at = datetime(\'now\', \'localtime\') WHERE id = ?',
+      [newVal, id]
+    );
+    database.save();
+    return this.getGameById(id);
+  }
+
+  toggleFavorite(id: number): Game | null {
+    const game: Game | null = this.getGameById(id);
+    if (!game) return null;
+    const newVal: number = game.is_favorite ? 0 : 1;
+    database.db!.run(
+      'UPDATE games SET is_favorite = ?, updated_at = datetime(\'now\', \'localtime\') WHERE id = ?',
       [newVal, id]
     );
     database.save();
@@ -626,6 +661,11 @@ class GameDatabase {
     );
     const excludedGames: number = excludedResult.length > 0 ? (excludedResult[0].values[0][0] as number) : 0;
 
+    const favoriteResult: QueryResult[] = database.db!.exec(
+      'SELECT COUNT(*) as count FROM games WHERE is_favorite = 1'
+    );
+    const favoriteGames: number = favoriteResult.length > 0 ? (favoriteResult[0].values[0][0] as number) : 0;
+
     const yearResult: QueryResult[] = database.db!.exec(`
       SELECT substr(release_date, 1, 4) as year, COUNT(*) as count
       FROM games
@@ -658,7 +698,7 @@ class GameDatabase {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
-    return { totalGames, scrapedGames, unscrapedGames, excludedGames, byYear, byGenre };
+    return { totalGames, scrapedGames, unscrapedGames, excludedGames, favoriteGames, byYear, byGenre };
   }
 
   getGenres(): string[] {

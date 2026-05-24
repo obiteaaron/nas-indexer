@@ -245,6 +245,24 @@ router.post('/:id/exclude', async (req: Request, res: Response): Promise<void> =
 });
 
 /**
+ * 切换游戏收藏状态
+ */
+router.post('/:id/favorite', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const updated: Game | null = gameDatabase.toggleFavorite(parseInt(req.params.id as string));
+    if (!updated) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 提升游戏目录至父级
  */
 router.post('/:id/promote', async (req: Request, res: Response): Promise<void> => {

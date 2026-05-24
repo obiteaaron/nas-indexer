@@ -1,5 +1,5 @@
 <template>
-  <div class="game-card" :class="{ excluded: game.is_excluded }" @click="$emit('click', game)">
+  <div class="game-card" :class="{ excluded: game.is_excluded, favorited: game.is_favorite }" @click="$emit('click', game)">
     <div class="poster-container">
       <img
         v-if="posterUrl"
@@ -28,6 +28,9 @@
           </button>
           <button class="action-btn" @click.stop="$emit('exclude', game)" :title="game.is_excluded ? '取消排除' : '排除'">
             {{ game.is_excluded ? '✅' : '🚫' }}
+          </button>
+          <button class="action-btn" @click.stop="$emit('favorite', game)" :title="game.is_favorite ? '取消收藏' : '收藏'">
+            {{ game.is_favorite ? '⭐' : '☆' }}
           </button>
           <button class="action-btn action-btn-danger" @click.stop="$emit('delete', game)" title="删除">
             🗑️
@@ -71,6 +74,7 @@ defineEmits<{
   detail: [game: Game]
   promote: [game: Game]
   exclude: [game: Game]
+  favorite: [game: Game]
   delete: [game: Game]
 }>()
 
@@ -313,6 +317,10 @@ function formatYear(dateStr: string): string {
 
 .game-card.excluded:hover {
   opacity: 0.8;
+}
+
+.game-card.favorited {
+  border-left: 3px solid #f59e0b;
 }
 
 .action-btn-danger:hover {
