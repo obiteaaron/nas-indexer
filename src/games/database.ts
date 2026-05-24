@@ -81,16 +81,18 @@ class GameDatabase {
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_metadata_source ON games(metadata_source)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_release_date ON games(release_date)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_excluded ON games(is_excluded)');
-    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_favorite ON games(is_favorite)');
 
     // 兼容已存在表：检查 is_favorite 列是否存在
     const colCheck: QueryResult[] = database.db!.exec(
       "SELECT COUNT(*) as cnt FROM pragma_table_info('games') WHERE name='is_favorite'"
     );
-    if (colCheck.length === 0 || (colCheck[0].values[0][0] as number) === 0) {
+    const hasFavoriteCol = colCheck.length > 0 && (colCheck[0].values[0][0] as number) > 0;
+    if (!hasFavoriteCol) {
       database.db!.run('ALTER TABLE games ADD COLUMN is_favorite INTEGER DEFAULT 0');
       logger.info('游戏数据库: 新增 is_favorite 列');
     }
+    // 列确认存在后再创建索引（新表在 CREATE TABLE 中已包含该列，迁移表通过 ALTER 添加）
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_favorite ON games(is_favorite)');
 
     // 别名映射表：文件夹名 → steam_appid
     database.db!.run(`
