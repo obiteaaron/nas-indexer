@@ -13,7 +13,7 @@ import { runIdentification } from '../games/identifier';
 import { savePoster, deletePoster } from '../games/metadata-manager';
 import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
 import { logger } from '../logger';
-import type { Game, GameRules, GameScrapeConfig, GameQueryOptions } from '../types';
+import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup } from '../types';
 
 const router: Router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -123,6 +123,212 @@ router.get('/years', async (_req: Request, res: Response): Promise<void> => {
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+/**
+ * 获取所有分组
+ */
+router.get('/groups', async (_req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const groups: GameGroup[] = gameDatabase.getGroups();
+    res.json({ success: true, data: groups });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 创建分组
+ */
+router.post('/groups', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const { name, pinned } = req.body;
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      res.status(400).json({ success: false, error: '分组名称不能为空' });
+      return;
+    }
+    const group: GameGroup | null = gameDatabase.createGroup(name, pinned || 0);
+    if (!group) {
+      res.status(400).json({ success: false, error: '创建分组失败' });
+      return;
+    }
+    res.json({ success: true, data: group });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 更新分组
+ */
+router.put('/groups/:id', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
+    if (!group) {
+      res.status(404).json({ success: false, error: '分组不存在' });
+      return;
+    }
+    gameDatabase.updateGroup(group.id, req.body);
+    res.json({ success: true, data: gameDatabase.getGroupById(group.id) });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 删除分组
+ */
+router.delete('/groups/:id', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
+    if (!group) {
+      res.status(404).json({ success: false, error: '分组不存在' });
+      return;
+    }
+    gameDatabase.deleteGroup(group.id);
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 分组排序
+ */
+router.post('/groups/reorder', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const { items }: { items: Array<{ id: number; sort_order: number }> } = req.body;
+    if (!items || !Array.isArray(items)) {
+      res.status(400).json({ success: false, error: 'items 必须为数组' });
+      return;
+    }
+    gameDatabase.reorderGroups(items);
+    res.json({ success: true, data: gameDatabase.getGroups() });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 获取分组内游戏
+ */
+router.get('/groups/:id/games', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
+    if (!group) {
+      res.status(404).json({ success: false, error: '分组不存在' });
+      return;
+    }
+    const games: Game[] = gameDatabase.getGroupGames(group.id);
+    res.json({ success: true, data: games });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 添加游戏到分组
+ */
+router.post('/groups/:id/games', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
+    if (!group) {
+      res.status(404).json({ success: false, error: '分组不存在' });
+      return;
+    }
+    const { game_ids }: { game_ids: number[] } = req.body;
+    if (!game_ids || !Array.isArray(game_ids)) {
+      res.status(400).json({ success: false, error: 'game_ids 必须为数组' });
+      return;
+    }
+    const added: number[] = [];
+    for (const gameId of game_ids) {
+      if (gameDatabase.addGroupGame(group.id, gameId)) {
+        added.push(gameId);
+      }
+    }
+    res.json({ success: true, data: { addedCount: added.length, addedIds: added } });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 从分组移除游戏
+ */
+router.delete('/groups/:id/games/:gameId', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
+    if (!group) {
+      res.status(404).json({ success: false, error: '分组不存在' });
+      return;
+    }
+    gameDatabase.removeGroupGame(group.id, parseInt(req.params.gameId as string));
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 组内游戏排序
+ */
+router.post('/groups/:id/games/reorder', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
+    if (!group) {
+      res.status(404).json({ success: false, error: '分组不存在' });
+      return;
+    }
+    const { items }: { items: Array<{ game_id: number; sort_order: number }> } = req.body;
+    if (!items || !Array.isArray(items)) {
+      res.status(400).json({ success: false, error: 'items 必须为数组' });
+      return;
+    }
+    gameDatabase.reorderGroupGames(group.id, items);
+    res.json({ success: true, data: gameDatabase.getGroupGames(group.id) });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 获取不在分组中的游戏（用于添加弹窗的候选列表）
+ */
+router.get('/groups/:id/games/candidates', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
+    if (!group) {
+      res.status(404).json({ success: false, error: '分组不存在' });
+      return;
+    }
+    const games: Game[] = gameDatabase.getGamesNotInGroup(group.id);
+    res.json({ success: true, data: games });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// === 下面是游戏路由（必须在分组路由之后） ===
 
 /**
  * 获取游戏详情

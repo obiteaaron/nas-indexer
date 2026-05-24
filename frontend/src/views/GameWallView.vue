@@ -1,5 +1,17 @@
 <template>
   <div class="game-wall">
+    <div class="game-wall-layout">
+      <GameGroupSidebar
+        v-if="config.groupsEnabled"
+        :groups="groups"
+        :selectedGroupId="selectedGroupId"
+        @select="selectGroup"
+        @create="showGroupManager = true"
+        @manage="openGroupManager"
+        @delete="confirmDeleteGroup"
+        @reorder="handleReorderGroups"
+      />
+      <div class="game-wall-main">
     <div class="wall-header">
       <h2 class="section-title">游戏海报墙</h2>
       <div class="header-actions">
@@ -352,6 +364,22 @@
         </div>
       </div>
     </div>
+
+    <!-- Group Manager Modal -->
+    <GameGroupManager
+      v-if="showGroupManager"
+      :initialGroups="groups"
+      @close="showGroupManager = false"
+      @refresh="loadGroups"
+    />
+
+    <!-- Active group indicator in header -->
+    <div class="active-group-bar" v-if="selectedGroupId !== null && selectedGroupName">
+      <span class="active-group-label">📁 {{ selectedGroupName }}</span>
+      <button class="btn btn-small" @click="selectedGroupId = null; selectedGroupName = ''; loadGames()">清除筛选</button>
+    </div>
+  </div>
+  </div>
   </div>
 </template>
 
@@ -362,6 +390,9 @@ import {
   getGameStatistics,
   getGameGenres,
   getGameYears,
+  getGameGroups,
+  deleteGameGroup,
+  reorderGameGroups,
   openGame,
   deleteGame,
   scrapeGame as scrapeGameApi,
@@ -374,11 +405,14 @@ import {
   promoteGame as promoteGameApi,
   createGame as createGameApi,
   removeNonexistentGames,
-  cleanupStaleGames
+  cleanupStaleGames,
+  getGroupGames
 } from '../api'
 import GameCard from '../components/GameCard.vue'
+import GameGroupSidebar from '../components/GameGroupSidebar.vue'
+import GameGroupManager from '../components/GameGroupManager.vue'
 import Pagination from '../components/Pagination.vue'
-import type { Game, GameStatistics, SteamSearchItem } from '../types'
+import type { Game, GameStatistics, GameGroup, SteamSearchItem } from '../types'
 
 const games = ref<Game[]>([])
 const stats = ref<GameStatistics | null>(null)
@@ -413,6 +447,13 @@ const addForm = ref({
   short_description: '',
   notes: ''
 })
+
+// Group related state
+const groups = ref<GameGroup[]>([])
+const selectedGroupId = ref<number | null>(null)
+const selectedGroupName = ref('')
+const showGroupManager = ref(false)
+const config = ref({ groupsEnabled: true })
 
 const page = ref(1)
 const pageSize = ref(50)
@@ -457,23 +498,32 @@ const genresArray = computed(() => {
 async function loadGames(): Promise<void> {
   loading.value = true
   try {
-    const isExcluded = filterScraped.value === 'excluded'
-    const isFavorite = filterScraped.value === 'favorite'
-    const res = await getGames({
-      search: searchQuery.value,
-      genre: filterGenre.value,
-      year: filterYear.value,
-      scraped: isExcluded || isFavorite ? undefined : filterScraped.value,
-      excluded: isExcluded ? 'true' : undefined,
-      favorite: isFavorite ? 'true' : undefined,
-      orderBy: orderBy.value,
-      orderDir: 'ASC',
-      page: page.value,
-      pageSize: pageSize.value
-    })
-    if (res.success && res.data) {
-      games.value = res.data.games
-      total.value = res.data.total
+    // If a group is selected, load games from that group
+    if (selectedGroupId.value !== null) {
+      const res = await getGroupGames(selectedGroupId.value)
+      if (res.success && res.data) {
+        games.value = res.data
+        total.value = res.data.length
+      }
+    } else {
+      const isExcluded = filterScraped.value === 'excluded'
+      const isFavorite = filterScraped.value === 'favorite'
+      const res = await getGames({
+        search: searchQuery.value,
+        genre: filterGenre.value,
+        year: filterYear.value,
+        scraped: isExcluded || isFavorite ? undefined : filterScraped.value,
+        excluded: isExcluded ? 'true' : undefined,
+        favorite: isFavorite ? 'true' : undefined,
+        orderBy: orderBy.value,
+        orderDir: 'ASC',
+        page: page.value,
+        pageSize: pageSize.value
+      })
+      if (res.success && res.data) {
+        games.value = res.data.games
+        total.value = res.data.total
+      }
     }
   } catch (err) {
     console.error('加载游戏失败:', err)
@@ -657,6 +707,61 @@ async function toggleFavorite(game: Game): Promise<void> {
   }
 }
 
+// === Group handlers ===
+
+async function loadGroups(): Promise<void> {
+  try {
+    const res = await getGameGroups()
+    if (res.success && res.data) {
+      groups.value = res.data
+    }
+  } catch (err) {
+    console.error('加载分组失败:', err)
+  }
+}
+
+function selectGroup(groupId: number | null): void {
+  selectedGroupId.value = groupId
+  page.value = 1
+  if (groupId !== null) {
+    const group = groups.value.find(g => g.id === groupId)
+    selectedGroupName.value = group?.name || ''
+  } else {
+    selectedGroupName.value = ''
+  }
+  loadGames()
+}
+
+function openGroupManager(group: GameGroup): void {
+  showGroupManager.value = true
+}
+
+async function confirmDeleteGroup(group: GameGroup): Promise<void> {
+  if (!confirm(`确定要删除分组「${group.name}」吗？分组内的游戏不会被删除。`)) return
+  try {
+    await deleteGameGroup(group.id)
+    if (selectedGroupId.value === group.id) {
+      selectedGroupId.value = null
+      selectedGroupName.value = ''
+    }
+    await loadGroups()
+    loadGames()
+  } catch (err) {
+    console.error('删除分组失败:', err)
+  }
+}
+
+async function handleReorderGroups(items: Array<{ id: number; sort_order: number }>): Promise<void> {
+  try {
+    const res = await reorderGameGroups(items)
+    if (res.success && res.data) {
+      groups.value = res.data
+    }
+  } catch (err) {
+    console.error('分组排序失败:', err)
+  }
+}
+
 async function promoteGame(game: Game): Promise<void> {
   const parentPath = game.source_path.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
   if (!confirm(`将「${game.title}」的游戏目录提升一级至父目录？\n\n当前: ${game.source_path}\n提升后: ${parentPath}`)) return
@@ -773,6 +878,7 @@ onMounted(() => {
   loadGames()
   loadStats()
   loadFilters()
+  loadGroups()
   document.addEventListener('keydown', handleEsc)
 })
 
@@ -783,6 +889,7 @@ onBeforeUnmount(() => {
 function handleEsc(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     if (selectedGame.value) { selectedGame.value = null; return }
+    if (showGroupManager.value) { showGroupManager.value = false; return }
     if (showAddGameModal.value) { showAddGameModal.value = false; return }
     if (showSteamSearchModal.value) { showSteamSearchModal.value = false; return }
     if (showIdentifyModal.value) { showIdentifyModal.value = false; return }
@@ -795,6 +902,33 @@ function handleEsc(e: KeyboardEvent): void {
 <style scoped>
 .game-wall {
   padding: 24px;
+}
+
+.game-wall-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.game-wall-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.active-group-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.active-group-label {
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .wall-header {

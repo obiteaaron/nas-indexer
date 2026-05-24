@@ -108,6 +108,27 @@ export interface GameStatistics {
 }
 
 /**
+ * 游戏分组
+ */
+export interface GameGroup {
+  id: number;
+  name: string;
+  pinned: number;
+  sort_order: number;
+  game_count?: number;
+  created_at?: string;
+}
+
+export interface GameGroupItem {
+  id: number;
+  group_id: number;
+  game_id: number;
+  sort_order: number;
+  created_at?: string;
+  game?: Game;
+}
+
+/**
  * 默认识别规则
  */
 export const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [

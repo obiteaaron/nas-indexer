@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { database } from '../database';
 import { logger } from '../logger';
-import type { Game, GameQueryOptions, GameStatistics } from '../types';
+import type { Game, GameQueryOptions, GameStatistics, GameGroup } from '../types';
 import {
   hasLocalMetadata,
   writeLocalMetadata,
@@ -106,6 +106,33 @@ class GameDatabase {
       )
     `);
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_game_aliases_folder ON game_aliases(folder_name)');
+
+    // 游戏分组表
+    database.db!.run(`
+      CREATE TABLE IF NOT EXISTS game_groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        pinned INTEGER DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_game_groups_pinned ON game_groups(pinned)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_game_groups_sort_order ON game_groups(sort_order)');
+
+    // 分组-游戏关联表
+    database.db!.run(`
+      CREATE TABLE IF NOT EXISTS game_group_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL,
+        game_id INTEGER NOT NULL,
+        sort_order INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(group_id, game_id)
+      )
+    `);
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_group_items_group ON game_group_items(group_id)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_group_items_game ON game_group_items(game_id)');
 
     database.save();
     if (isNew) {
@@ -643,6 +670,155 @@ class GameDatabase {
     }
     if (count > 0) database.save();
     return count;
+  }
+
+  // === 游戏分组 ===
+
+  createGroup(name: string, pinned: number = 0): GameGroup | null {
+    if (!name || name.trim().length === 0) return null;
+
+    // 获取最大 sort_order
+    const maxResult: QueryResult[] = database.db!.exec('SELECT MAX(sort_order) as max_order FROM game_groups');
+    const maxOrder: number = maxResult.length > 0 && maxResult[0].values[0][0] ? (maxResult[0].values[0][0] as number) : 0;
+
+    database.db!.run(
+      'INSERT INTO game_groups (name, pinned, sort_order) VALUES (?, ?, ?)',
+      [name.trim(), pinned ? 1 : 0, maxOrder + 1]
+    );
+    database.save();
+
+    const idResult: QueryResult[] = database.db!.exec('SELECT MAX(id) as id FROM game_groups');
+    const newId = (idResult[0]?.values[0][0] as number) || 0;
+    return this.getGroupById(newId);
+  }
+
+  getGroupById(id: number): GameGroup | null {
+    const result: QueryResult[] = database.db!.exec('SELECT * FROM game_groups WHERE id = ?', [id]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    const cols = result[0].columns;
+    const row = result[0].values[0];
+    const group: Record<string, unknown> = {};
+    cols.forEach((col, i) => { group[col] = row[i]; });
+    return group as unknown as GameGroup;
+  }
+
+  getGroups(): GameGroup[] {
+    const result: QueryResult[] = database.db!.exec(`
+      SELECT g.*, COUNT(gi.game_id) as game_count
+      FROM game_groups g
+      LEFT JOIN game_group_items gi ON g.id = gi.group_id
+      GROUP BY g.id
+      ORDER BY g.pinned DESC, g.sort_order ASC
+    `);
+    if (result.length === 0) return [];
+    return result[0].values.map(row => {
+      const cols = result[0].columns;
+      const obj: Record<string, unknown> = {};
+      cols.forEach((col, i) => { obj[col] = row[i]; });
+      return obj as unknown as GameGroup;
+    });
+  }
+
+  updateGroup(id: number, data: { name?: string; pinned?: number; sort_order?: number }): boolean {
+    const fields: string[] = [];
+    const params: unknown[] = [];
+
+    if (data.name !== undefined) {
+      fields.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.pinned !== undefined) {
+      fields.push('pinned = ?');
+      params.push(data.pinned ? 1 : 0);
+    }
+    if (data.sort_order !== undefined) {
+      fields.push('sort_order = ?');
+      params.push(data.sort_order);
+    }
+
+    if (fields.length === 0) return false;
+
+    params.push(id);
+    database.db!.run(`UPDATE game_groups SET ${fields.join(', ')} WHERE id = ?`, params);
+    database.save();
+    return true;
+  }
+
+  deleteGroup(id: number): boolean {
+    database.db!.run('DELETE FROM game_group_items WHERE group_id = ?', [id]);
+    database.db!.run('DELETE FROM game_groups WHERE id = ?', [id]);
+    database.save();
+    return true;
+  }
+
+  reorderGroups(items: { id: number; sort_order: number }[]): void {
+    for (const item of items) {
+      database.db!.run('UPDATE game_groups SET sort_order = ? WHERE id = ?', [item.sort_order, item.id]);
+    }
+    database.save();
+  }
+
+  // === 分组游戏管理 ===
+
+  addGroupGame(groupId: number, gameId: number, sortOrder?: number): boolean {
+    try {
+      const maxResult: QueryResult[] = database.db!.exec('SELECT MAX(sort_order) as max_order FROM game_group_items WHERE group_id = ?', [groupId]);
+      const maxOrder: number = maxResult.length > 0 && maxResult[0].values[0][0] ? (maxResult[0].values[0][0] as number) : 0;
+      database.db!.run(
+        'INSERT OR IGNORE INTO game_group_items (group_id, game_id, sort_order) VALUES (?, ?, ?)',
+        [groupId, gameId, sortOrder ?? maxOrder + 1]
+      );
+      database.save();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  removeGroupGame(groupId: number, gameId: number): boolean {
+    database.db!.run('DELETE FROM game_group_items WHERE group_id = ? AND game_id = ?', [groupId, gameId]);
+    database.save();
+    return true;
+  }
+
+  getGroupGames(groupId: number): Game[] {
+    const result: QueryResult[] = database.db!.exec(`
+      SELECT g.* FROM games g
+      INNER JOIN game_group_items gi ON g.id = gi.game_id
+      WHERE gi.group_id = ?
+      ORDER BY gi.sort_order ASC
+    `, [groupId]);
+    if (result.length === 0) return [];
+    return result[0].values.map(row => this.rowToGame(result[0], row));
+  }
+
+  getGamesNotInGroup(groupId: number): Game[] {
+    const result: QueryResult[] = database.db!.exec(`
+      SELECT * FROM games
+      WHERE id NOT IN (SELECT game_id FROM game_group_items WHERE group_id = ?)
+        AND is_excluded = 0
+      ORDER BY title ASC
+    `, [groupId]);
+    if (result.length === 0) return [];
+    return result[0].values.map(row => this.rowToGame(result[0], row));
+  }
+
+  reorderGroupGames(groupId: number, items: { game_id: number; sort_order: number }[]): void {
+    for (const item of items) {
+      database.db!.run(
+        'UPDATE game_group_items SET sort_order = ? WHERE group_id = ? AND game_id = ?',
+        [item.sort_order, groupId, item.game_id]
+      );
+    }
+    database.save();
+  }
+
+  isGameInGroup(groupId: number, gameId: number): boolean {
+    const result: QueryResult[] = database.db!.exec(
+      'SELECT 1 FROM game_group_items WHERE group_id = ? AND game_id = ?',
+      [groupId, gameId]
+    );
+    return result.length > 0 && result[0].values.length > 0;
   }
 
   // === 统计方法 ===

@@ -309,6 +309,24 @@ export interface GameStatistics {
   byGenre: { genre: string; count: number }[];
 }
 
+export interface GameGroup {
+  id: number;
+  name: string;
+  pinned: number;
+  sort_order: number;
+  game_count?: number;
+  created_at?: string;
+}
+
+export interface GameGroupItem {
+  id: number;
+  group_id: number;
+  game_id: number;
+  sort_order: number;
+  created_at?: string;
+  game?: Game;
+}
+
 export interface GameRecognitionRule {
   pattern: string;
   levelOffset: number;

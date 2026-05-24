@@ -19,7 +19,8 @@ import type {
   Game,
   GamesResponse,
   SteamSearchItem,
-  GameStatistics
+  GameStatistics,
+  GameGroup
 } from '../types'
 
 const API_BASE = '/api'
@@ -449,4 +450,56 @@ export function searchSteamGames(query: string): Promise<ApiResponse<SteamSearch
 export function bindSteamGame(id: number, appid: number): Promise<ApiResponse<Game>> {
   clearCache('/games')
   return request<Game>('/games/' + id + '/bind-steam', { method: 'POST', body: JSON.stringify({ appid }) })
+}
+
+// === 游戏分组 API ===
+
+export function getGameGroups(): Promise<ApiResponse<GameGroup[]>> {
+  return cachedGet<GameGroup[]>('/games/groups')
+}
+
+export function createGameGroup(data: { name: string; pinned?: number }): Promise<ApiResponse<GameGroup>> {
+  clearCache('/games')
+  return request<GameGroup>('/games/groups', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateGameGroup(id: number, data: { name?: string; pinned?: number; sort_order?: number }): Promise<ApiResponse<GameGroup>> {
+  clearCache('/games')
+  return request<GameGroup>('/games/groups/' + id, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export function deleteGameGroup(id: number): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/groups/' + id, { method: 'DELETE' })
+}
+
+export function reorderGameGroups(items: Array<{ id: number; sort_order: number }>): Promise<ApiResponse<GameGroup[]>> {
+  clearCache('/games')
+  return request<GameGroup[]>('/games/groups/reorder', { method: 'POST', body: JSON.stringify({ items }) })
+}
+
+export function getGroupGames(groupId: number): Promise<ApiResponse<Game[]>> {
+  return request<Game[]>('/games/groups/' + groupId + '/games')
+}
+
+export function addGamesToGroup(groupId: number, gameIds: number[]): Promise<ApiResponse<{ addedCount: number; addedIds: number[] }>> {
+  clearCache('/games')
+  return request<{ addedCount: number; addedIds: number[] }>('/games/groups/' + groupId + '/games', {
+    method: 'POST',
+    body: JSON.stringify({ game_ids: gameIds })
+  })
+}
+
+export function removeGameFromGroup(groupId: number, gameId: number): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/groups/' + groupId + '/games/' + gameId, { method: 'DELETE' })
+}
+
+export function reorderGroupGames(groupId: number, items: Array<{ game_id: number; sort_order: number }>): Promise<ApiResponse<Game[]>> {
+  clearCache('/games')
+  return request<Game[]>('/games/groups/' + groupId + '/games/reorder', { method: 'POST', body: JSON.stringify({ items }) })
+}
+
+export function getGamesNotInGroup(groupId: number): Promise<ApiResponse<Game[]>> {
+  return request<Game[]>('/games/groups/' + groupId + '/games/candidates')
 }
