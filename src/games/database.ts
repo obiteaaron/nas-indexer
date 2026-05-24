@@ -259,9 +259,9 @@ class GameDatabase {
 
     // 按年份排序时：无年份的放最后，有新到旧
     if (orderBy === 'release_date') {
-      sql += ' ORDER BY CASE WHEN release_date IS NULL OR release_date = \'\' THEN 1 ELSE 0 END ASC, release_date DESC';
+      sql += ' ORDER BY CASE WHEN release_date IS NULL OR release_date = \'\' THEN 1 ELSE 0 END ASC, release_date DESC LIMIT ? OFFSET ?';
     } else {
-      sql += ` ORDER BY ${orderBy} ${orderDir}`;
+      sql += ` ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`;
     }
     params.push(limit, offset);
 
