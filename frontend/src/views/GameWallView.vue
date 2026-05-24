@@ -943,7 +943,7 @@ onMounted(() => {
 }
 
 .info-value.rating {
-  background: var(--accent);
+  background: #f59e0b;
   color: white;
   padding: 2px 8px;
   border-radius: 4px;
