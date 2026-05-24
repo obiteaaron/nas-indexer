@@ -257,7 +257,12 @@ class GameDatabase {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
 
-    sql += ` ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`;
+    // 按年份排序时：无年份的放最后，有新到旧
+    if (orderBy === 'release_date') {
+      sql += ' ORDER BY CASE WHEN release_date IS NULL OR release_date = \'\' THEN 1 ELSE 0 END ASC, release_date DESC';
+    } else {
+      sql += ` ORDER BY ${orderBy} ${orderDir}`;
+    }
     params.push(limit, offset);
 
     const result: QueryResult[] = database.db!.exec(sql, params);

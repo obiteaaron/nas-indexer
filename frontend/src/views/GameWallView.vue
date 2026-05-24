@@ -58,7 +58,7 @@
         <select v-model="orderBy" class="filter-select" @change="loadGames">
           <option value="title">按名称</option>
           <option value="rating">按评分</option>
-          <option value="release_date">按年份</option>
+          <option value="release_date">按年份（新→旧）</option>
         </select>
       </div>
     </div>

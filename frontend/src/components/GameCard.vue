@@ -45,6 +45,7 @@
         <span class="genre-tag" v-for="genre in genres.slice(0, 3)" :key="genre">{{ genre }}</span>
       </div>
       <div class="game-status">
+        <span class="rating-badge" v-if="game.rating">{{ game.rating }}</span>
         <span class="status-badge" :class="statusClass">{{ statusText }}</span>
       </div>
     </div>
@@ -265,6 +266,18 @@ function formatYear(dateStr: string): string {
 
 .game-status {
   margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rating-badge {
+  background: #f59e0b;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
 }
 
 .status-badge {
