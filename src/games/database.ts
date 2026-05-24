@@ -10,7 +10,8 @@ import type { Game, GameQueryOptions, GameStatistics } from '../types';
 import {
   hasLocalMetadata,
   writeLocalMetadata,
-  readLocalMetadata
+  readLocalMetadata,
+  checkLocalPosters
 } from './metadata-manager';
 
 interface QueryResult {
@@ -482,6 +483,85 @@ class GameDatabase {
       logger.error('[提升目录] 数据库更新失败: %s', error.message);
       logger.error('[提升目录] 错误堆栈: %s', error.stack || '无');
       return { success: false, error: '数据库更新失败: ' + error.message };
+    }
+  }
+
+  createManualGame(data: {
+    source_path: string;
+    title: string;
+    title_en?: string;
+    steam_appid?: string;
+    developer?: string;
+    publisher?: string;
+    release_date?: string;
+    genres?: string;
+    short_description?: string;
+    notes?: string;
+  }): { success: boolean; error?: string; id?: number; game?: Game } {
+    const { source_path, title } = data;
+
+    if (!source_path || !title) {
+      return { success: false, error: 'source_path 和 title 为必填项' };
+    }
+
+    if (!fs.existsSync(source_path)) {
+      return { success: false, error: '目录不存在: ' + source_path };
+    }
+
+    // 检查是否已有该路径的游戏记录
+    const existing = this.getGameByPath(source_path);
+    if (existing) {
+      return { success: false, error: `该路径已有游戏记录: ${existing.title}（id=${existing.id}）` };
+    }
+
+    const posters = checkLocalPosters(source_path);
+    const hasPoster = posters.horizontal || posters.vertical ? 1 : 0;
+
+    try {
+      const insertSql = `
+        INSERT INTO games (
+          source_path, title, title_en, original_name, steam_appid,
+          poster_horizontal_path, poster_vertical_path, poster_banner_path,
+          background_path, has_local_poster,
+          developer, publisher, release_date, genres,
+          short_description, notes,
+          metadata_source, metadata_path
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)
+      `;
+      const params = [
+        source_path,
+        title,
+        data.title_en || null,
+        path.basename(source_path),
+        data.steam_appid || null,
+        posters.horizontal,
+        posters.vertical,
+        posters.banner,
+        posters.background,
+        hasPoster,
+        data.developer || null,
+        data.publisher || null,
+        data.release_date || null,
+        data.genres || null,
+        data.short_description || null,
+        data.notes || null,
+        path.join(source_path, 'game.json')
+      ];
+
+      database.db!.run(insertSql, params);
+
+      // 创建 game.json
+      writeLocalMetadata(source_path, this.getGameById((database.db!.exec('SELECT MAX(id) as id FROM games')[0].values[0][0]) as number)!);
+
+      database.save();
+      logger.info('[手动添加] 游戏创建成功: %s', title);
+      const newId = (database.db!.exec('SELECT MAX(id) as id FROM games')[0].values[0][0]) as number;
+      const newGame = this.getGameById(newId);
+      return { success: true, id: newId, game: newGame ?? undefined };
+    } catch (dbErr) {
+      const error = dbErr instanceof Error ? dbErr : new Error(String(dbErr));
+      logger.error('[手动添加] 创建失败: %s', error.message);
+      return { success: false, error: '数据库写入失败: ' + error.message };
     }
   }
 

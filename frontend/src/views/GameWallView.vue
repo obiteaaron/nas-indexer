@@ -6,6 +6,9 @@
         <button class="btn btn-primary" @click="refreshGames" :disabled="loading">
           {{ loading ? '加载中...' : '刷新' }}
         </button>
+        <button class="btn btn-secondary" @click="showAddGameModal = true">
+          手动添加
+        </button>
         <button class="btn btn-secondary" @click="showIdentifyModal = true">
           重新识别
         </button>
@@ -272,6 +275,80 @@
         </div>
       </div>
     </div>
+
+    <!-- Add Game Modal -->
+    <div class="modal-overlay" v-if="showAddGameModal" @click.self="showAddGameModal = false">
+      <div class="modal-content add-game-modal">
+        <div class="modal-header">
+          <h3>手动添加游戏</h3>
+          <button class="modal-close" @click="showAddGameModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label">游戏路径 <span class="required">*</span></label>
+            <input v-model="addForm.source_path" class="input" placeholder="E:\Games\游戏名称" />
+            <span class="hint">游戏所在目录的绝对路径</span>
+          </div>
+          <div class="form-row">
+            <label class="form-label">游戏名称 <span class="required">*</span></label>
+            <input v-model="addForm.title" class="input" placeholder="塞尔达传说：旷野之息" />
+          </div>
+          <div class="form-row-inline">
+            <div class="form-row half">
+              <label class="form-label">英文名</label>
+              <input v-model="addForm.title_en" class="input" placeholder="Zelda: Breath of the Wild" />
+            </div>
+            <div class="form-row half">
+              <label class="form-label">Steam AppID</label>
+              <input v-model="addForm.steam_appid" class="input" type="number" placeholder="782330" />
+              <span class="hint">填写后自动刮削</span>
+            </div>
+          </div>
+          <div class="form-row-inline">
+            <div class="form-row half">
+              <label class="form-label">开发商</label>
+              <input v-model="addForm.developer" class="input" placeholder="Nintendo" />
+            </div>
+            <div class="form-row half">
+              <label class="form-label">发行商</label>
+              <input v-model="addForm.publisher" class="input" placeholder="Nintendo" />
+            </div>
+          </div>
+          <div class="form-row-inline">
+            <div class="form-row half">
+              <label class="form-label">发行日期</label>
+              <input v-model="addForm.release_date" class="input" placeholder="2017-03-03" />
+            </div>
+            <div class="form-row half">
+              <label class="form-label">类型</label>
+              <input v-model="addForm.genres" class="input" placeholder="动作, 冒险, RPG" />
+              <span class="hint">逗号分隔</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <a class="toggle-more" @click="showMoreFields = !showMoreFields">
+              {{ showMoreFields ? '收起扩展字段 ▲' : '展开扩展字段 ▼' }}
+            </a>
+          </div>
+          <div v-if="showMoreFields">
+            <div class="form-row">
+              <label class="form-label">简介</label>
+              <textarea v-model="addForm.short_description" class="textarea" rows="2" placeholder="简短介绍..."></textarea>
+            </div>
+            <div class="form-row">
+              <label class="form-label">备注</label>
+              <textarea v-model="addForm.notes" class="textarea" rows="2" placeholder="备注信息..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showAddGameModal = false">取消</button>
+          <button class="btn btn-primary" @click="submitAddGame" :disabled="addingGame">
+            {{ addingGame ? '添加中...' : '确认添加' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -291,6 +368,7 @@ import {
   bindSteamGame,
   toggleExcludeGame,
   promoteGame as promoteGameApi,
+  createGame as createGameApi,
   removeNonexistentGames,
   cleanupStaleGames
 } from '../api'
@@ -316,6 +394,21 @@ const steamSearched = ref(false)
 const bindingSteam = ref(false)
 const showBatchScrapeModal = ref(false)
 const showRemoveNonexistentModal = ref(false)
+const showAddGameModal = ref(false)
+const addingGame = ref(false)
+const showMoreFields = ref(false)
+const addForm = ref({
+  source_path: '',
+  title: '',
+  title_en: '',
+  steam_appid: '',
+  developer: '',
+  publisher: '',
+  release_date: '',
+  genres: '',
+  short_description: '',
+  notes: ''
+})
 
 const page = ref(1)
 const pageSize = ref(50)
@@ -577,6 +670,55 @@ async function deleteSingleGame(game: Game): Promise<void> {
   } catch (err) {
     console.error('删除游戏失败:', err)
   }
+}
+
+async function submitAddGame(): Promise<void> {
+  if (!addForm.value.source_path.trim()) {
+    alert('请输入游戏路径')
+    return
+  }
+  if (!addForm.value.title.trim()) {
+    alert('请输入游戏名称')
+    return
+  }
+
+  addingGame.value = true
+  try {
+    const genresStr = addForm.value.genres
+      ? JSON.stringify(addForm.value.genres.split(',').map(s => s.trim()).filter(s => s))
+      : undefined
+    const res = await createGameApi({
+      source_path: addForm.value.source_path.trim(),
+      title: addForm.value.title.trim(),
+      title_en: addForm.value.title_en.trim() || undefined,
+      steam_appid: addForm.value.steam_appid.trim() || undefined,
+      developer: addForm.value.developer.trim() || undefined,
+      publisher: addForm.value.publisher.trim() || undefined,
+      release_date: addForm.value.release_date.trim() || undefined,
+      genres: genresStr,
+      short_description: addForm.value.short_description.trim() || undefined,
+      notes: addForm.value.notes.trim() || undefined
+    })
+    if (res.success && res.data) {
+      const hadSteamAppid = addForm.value.steam_appid.trim()
+      showAddGameModal.value = false
+      addForm.value = {
+        source_path: '', title: '', title_en: '', steam_appid: '',
+        developer: '', publisher: '', release_date: '', genres: '',
+        short_description: '', notes: ''
+      }
+      await refreshGames()
+      if (hadSteamAppid) {
+        // 自动刮削在后台进行，等待刷新后显示
+      }
+    } else {
+      alert('添加失败: ' + (res as any).error || '未知错误')
+    }
+  } catch (err) {
+    console.error('添加游戏失败:', err)
+    alert('添加失败，请查看控制台')
+  }
+  addingGame.value = false
 }
 
 async function removeNonexistent(): Promise<void> {
@@ -924,5 +1066,76 @@ onMounted(() => {
   text-align: center;
   padding: 24px;
   color: var(--text-secondary);
+}
+
+/* Add Game Modal */
+.add-game-modal {
+  max-width: 520px;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.form-label .required {
+  color: #ef4444;
+}
+
+.form-row .input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.form-row .hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.form-row .textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.form-row-inline {
+  display: flex;
+  gap: 12px;
+}
+
+.form-row-inline .form-row.half {
+  flex: 1;
+}
+
+.toggle-more {
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-more:hover {
+  text-decoration: underline;
 }
 </style>

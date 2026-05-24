@@ -372,6 +372,25 @@ export function toggleExcludeGame(id: number): Promise<ApiResponse<Game>> {
   return request<Game>('/games/' + id + '/exclude', { method: 'POST' })
 }
 
+export function createGame(data: {
+  source_path: string;
+  title: string;
+  title_en?: string;
+  steam_appid?: string;
+  developer?: string;
+  publisher?: string;
+  release_date?: string;
+  genres?: string;
+  short_description?: string;
+  notes?: string;
+}): Promise<ApiResponse<Game>> {
+  clearCache('/games')
+  return request<Game>('/games/create', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
+}
+
 export function promoteGame(id: number): Promise<ApiResponse<Game>> {
   clearCache('/games')
   return request<Game>('/games/' + id + '/promote', { method: 'POST' })

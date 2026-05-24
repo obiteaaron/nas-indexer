@@ -208,16 +208,16 @@ function formatYear(dateStr: string): string {
 
 .game-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .action-btn {
   background: rgba(255, 255, 255, 0.9);
   border: none;
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: 6px;
+  padding: 6px 8px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   transition: background 0.2s;
 }
 

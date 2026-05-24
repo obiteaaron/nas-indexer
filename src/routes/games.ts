@@ -12,6 +12,7 @@ import { scrapeGame, scrapeUnscrapedGames, searchSteamCandidates } from '../game
 import { runIdentification } from '../games/identifier';
 import { savePoster, deletePoster } from '../games/metadata-manager';
 import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
+import { logger } from '../logger';
 import type { Game, GameRules, GameScrapeConfig, GameQueryOptions } from '../types';
 
 const router: Router = express.Router();
@@ -454,6 +455,40 @@ router.post('/identify', async (req: Request, res: Response): Promise<void> => {
     const { games, ids } = await runIdentification(scanRoots, rules, scrapeConfig);
 
     res.json({ success: true, data: { gamesCount: games.length, ids } });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 手动创建游戏
+ */
+router.post('/create', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const { source_path, title, title_en, steam_appid, developer, publisher, release_date, genres, short_description, notes } = req.body;
+    const result = gameDatabase.createManualGame({
+      source_path,
+      title,
+      title_en,
+      steam_appid: steam_appid ? String(steam_appid) : undefined,
+      developer,
+      publisher,
+      release_date,
+      genres,
+      short_description,
+      notes
+    });
+    if (!result.success) {
+      res.status(400).json({ success: false, error: result.error });
+      return;
+    }
+    // 如果提供了 steam_appid，自动刮削
+    if (steam_appid && result.game) {
+      scrapeGame(result.game.id, true).catch(err => logger.warn('自动刮削失败: %s', err.message));
+    }
+    res.json({ success: true, data: result.game });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });
