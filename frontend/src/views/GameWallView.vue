@@ -353,7 +353,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   getGames,
   getGameStatistics,
@@ -749,7 +749,23 @@ onMounted(() => {
   loadGames()
   loadStats()
   loadFilters()
+  document.addEventListener('keydown', handleEsc)
 })
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleEsc)
+})
+
+function handleEsc(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    if (selectedGame.value) { selectedGame.value = null; return }
+    if (showAddGameModal.value) { showAddGameModal.value = false; return }
+    if (showSteamSearchModal.value) { showSteamSearchModal.value = false; return }
+    if (showIdentifyModal.value) { showIdentifyModal.value = false; return }
+    if (showBatchScrapeModal.value) { showBatchScrapeModal.value = false; return }
+    if (showRemoveNonexistentModal.value) { showRemoveNonexistentModal.value = false }
+  }
+}
 </script>
 
 <style scoped>
@@ -948,6 +964,8 @@ onMounted(() => {
   padding: 2px 8px;
   border-radius: 4px;
   font-weight: bold;
+  flex: 0 0 auto;
+  display: inline-block;
 }
 
 .info-value.link {

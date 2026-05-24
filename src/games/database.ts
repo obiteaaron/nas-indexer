@@ -257,9 +257,11 @@ class GameDatabase {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
 
-    // 按年份排序时：无年份的放最后，有新到旧
+    // 按年份排序时：无年份的放最后，新到旧
     if (orderBy === 'release_date') {
       sql += ' ORDER BY CASE WHEN release_date IS NULL OR release_date = \'\' THEN 1 ELSE 0 END ASC, release_date DESC LIMIT ? OFFSET ?';
+    } else if (orderBy === 'rating') {
+      sql += ' ORDER BY CASE WHEN rating IS NULL THEN 1 ELSE 0 END ASC, rating DESC LIMIT ? OFFSET ?';
     } else {
       sql += ` ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`;
     }
