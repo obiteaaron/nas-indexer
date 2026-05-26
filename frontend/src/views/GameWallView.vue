@@ -5,7 +5,10 @@
         v-if="config.groupsEnabled"
         :groups="groups"
         :selectedGroupId="selectedGroupId"
+        :isFavoriteFilter="isFavoriteFilter"
+        :favoriteCount="stats?.favoriteGames || 0"
         @select="selectGroup"
+        @favorite="toggleFavoriteFilter"
         @create="showGroupManager = true"
         @manage="openGroupManager"
         @delete="confirmDeleteGroup"
@@ -64,7 +67,6 @@
           <option value="true">已刮削</option>
           <option value="false">待刮削</option>
           <option value="excluded">已排除</option>
-          <option value="favorite">收藏</option>
         </select>
       </div>
       <div class="filter-group">
@@ -373,10 +375,11 @@
       @refresh="loadGroups"
     />
 
-    <!-- Active group indicator in header -->
-    <div class="active-group-bar" v-if="selectedGroupId !== null && selectedGroupName">
-      <span class="active-group-label">📁 {{ selectedGroupName }}</span>
-      <button class="btn btn-small" @click="selectedGroupId = null; selectedGroupName = ''; loadGames()">清除筛选</button>
+    <!-- Active filter indicator in header -->
+    <div class="active-group-bar" v-if="(selectedGroupId !== null && selectedGroupName) || isFavoriteFilter">
+      <span class="active-group-label" v-if="isFavoriteFilter">⭐ 收藏</span>
+      <span class="active-group-label" v-else-if="selectedGroupId !== null && selectedGroupName">📁 {{ selectedGroupName }}</span>
+      <button class="btn btn-small" @click="clearGroupFilter">清除筛选</button>
     </div>
   </div>
   </div>
@@ -454,6 +457,7 @@ const selectedGroupId = ref<number | null>(null)
 const selectedGroupName = ref('')
 const showGroupManager = ref(false)
 const config = ref({ groupsEnabled: true })
+const isFavoriteFilter = ref(false)
 
 const page = ref(1)
 const pageSize = ref(50)
@@ -499,7 +503,7 @@ async function loadGames(): Promise<void> {
   loading.value = true
   try {
     const isExcluded = filterScraped.value === 'excluded'
-    const isFavorite = filterScraped.value === 'favorite'
+    const isFavorite = isFavoriteFilter.value
 
     if (selectedGroupId.value !== null) {
       // 分组选中时：调用 getGroupGames 并传入筛选参数
@@ -734,6 +738,10 @@ async function loadGroups(): Promise<void> {
 
 function selectGroup(groupId: number | null): void {
   selectedGroupId.value = groupId
+  // 点击"全部游戏"时，也清除收藏筛选
+  if (groupId === null) {
+    isFavoriteFilter.value = false
+  }
   page.value = 1
   if (groupId !== null) {
     const group = groups.value.find(g => g.id === groupId)
@@ -741,6 +749,20 @@ function selectGroup(groupId: number | null): void {
   } else {
     selectedGroupName.value = ''
   }
+  loadGames()
+}
+
+function toggleFavoriteFilter(): void {
+  isFavoriteFilter.value = !isFavoriteFilter.value
+  page.value = 1
+  loadGames()
+}
+
+function clearGroupFilter(): void {
+  selectedGroupId.value = null
+  selectedGroupName.value = ''
+  isFavoriteFilter.value = false
+  page.value = 1
   loadGames()
 }
 

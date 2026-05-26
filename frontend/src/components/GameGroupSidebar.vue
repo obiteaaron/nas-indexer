@@ -5,9 +5,23 @@
       <button class="btn-add-group" @click="$emit('create')" title="新建分组">+</button>
     </div>
     <div class="sidebar-list">
+      <!-- 快捷入口 -->
+      <div class="quick-access">
+        <div
+          class="quick-item"
+          :class="{ active: isFavoriteFilter }"
+          @click="$emit('favorite')"
+        >
+          <span class="quick-icon">⭐</span>
+          <span class="quick-name">收藏</span>
+          <span class="quick-count" v-if="favoriteCount">{{ favoriteCount }}</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <!-- 分组列表 -->
       <div
         class="group-item"
-        :class="{ active: selectedGroupId === null }"
+        :class="{ active: selectedGroupId === null && !isFavoriteFilter }"
         @click="$emit('select', null)"
       >
         <span class="group-icon">🎮</span>
@@ -53,12 +67,15 @@ import type { GameGroup } from '../types'
 interface Props {
   groups: GameGroup[]
   selectedGroupId: number | null
+  isFavoriteFilter: boolean
+  favoriteCount: number
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
   select: [groupId: number | null]
+  favorite: []
   create: []
   manage: [group: GameGroup]
   delete: [group: GameGroup]
@@ -162,6 +179,70 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+}
+
+.quick-access {
+  padding: 0 0 4px 0;
+}
+
+.quick-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  gap: 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  margin: 0 8px;
+  border: 1px solid var(--border);
+}
+
+.quick-item:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  border-color: var(--accent);
+}
+
+.quick-item.active {
+  background: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.quick-item.active .quick-icon,
+.quick-item.active .quick-name,
+.quick-item.active .quick-count {
+  color: white;
+}
+
+.quick-item.active .quick-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.quick-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.quick-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.quick-count {
+  background: var(--border);
+  color: var(--text);
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 16px;
 }
 
 .sortable-list {

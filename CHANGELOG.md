@@ -23,6 +23,9 @@
   - 更新分组：`PUT /groups/:id` → `POST /groups/update/:id`
   - 删除分组：`DELETE /groups/:id` → `POST /groups/delete/:id`
 
+### UI改进
+- **游戏收藏快捷入口** - 收藏筛选从状态下拉框移至分组侧边栏顶部快捷区，概念更清晰
+
 ## [v1.5.2] - 2026-05-24
 
 ### 新增功能
