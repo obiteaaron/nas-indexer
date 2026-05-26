@@ -164,7 +164,7 @@ router.post('/groups', async (req: Request, res: Response): Promise<void> => {
 /**
  * 更新分组
  */
-router.put('/groups/:id', async (req: Request, res: Response): Promise<void> => {
+router.post('/groups/update/:id', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
     const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
@@ -183,7 +183,7 @@ router.put('/groups/:id', async (req: Request, res: Response): Promise<void> => 
 /**
  * 删除分组
  */
-router.delete('/groups/:id', async (req: Request, res: Response): Promise<void> => {
+router.post('/groups/delete/:id', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
     const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
@@ -292,7 +292,7 @@ router.post('/groups/:id/games', async (req: Request, res: Response): Promise<vo
 /**
  * 从分组移除游戏
  */
-router.delete('/groups/:id/games/:gameId', async (req: Request, res: Response): Promise<void> => {
+router.post('/groups/:id/games/remove/:gameId', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
     const group: GameGroup | null = gameDatabase.getGroupById(parseInt(req.params.id as string));
@@ -408,7 +408,7 @@ router.get('/:id/files', async (req: Request, res: Response): Promise<void> => {
 /**
  * 更新游戏元数据
  */
-router.put('/:id', async (req: Request, res: Response): Promise<void> => {
+router.post('/update/:id', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
     const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
@@ -439,7 +439,7 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
 /**
  * 删除游戏
  */
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+router.post('/delete/:id', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
     const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
@@ -639,7 +639,7 @@ router.post('/:id/poster/:type', upload.single('poster'), async (req: Request, r
 /**
  * 删除海报
  */
-router.delete('/:id/poster/:type', async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/poster/delete/:type', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
     const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));

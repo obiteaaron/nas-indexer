@@ -1,5 +1,28 @@
 # 更新日志
 
+## [v1.5.3] - 2026-05-27
+
+### 技术改进
+- **HTTP API路由前缀重构** - 统一所有路由模块使用独立完整前缀，避免共享 `/api` 前缀导致的路由覆盖风险
+  - `tags.ts` 挂载前缀改为 `/api/tags`
+  - `preview.ts` 挂载前缀改为 `/api/preview`
+  - `recommendations.ts` 挂载前缀改为 `/api/recommendations`
+  - `stats.ts` 挂载前缀改为 `/api/stats`
+- **文件标签路由整合** - `/files/:id/tags` 相关路由从 `tags.ts` 移至 `files.ts`，路由结构更清晰
+- **路由路径命名优化** - 修复路径段重复问题，采用语义化后缀命名
+  - 标签列表：`/api/tags/tags` → `/api/tags/list`
+  - 创建标签：`/api/tags/tags` → `/api/tags/create`
+  - 推荐列表：`/api/recommendations/recommendations` → `/api/recommendations/list`
+- **HTTP方法统一** - 弃用 RESTful PUT/DELETE，全部采用 POST + 动词化 URL
+  - 删除文件：`DELETE /:id` → `POST /delete/:id`
+  - 移除收藏：`DELETE /favorites/:id` → `POST /favorites/remove/:id`
+  - 更新标签：`PUT /:id` → `POST /update/:id`
+  - 删除标签：`DELETE /:id` → `POST /delete/:id`
+  - 更新游戏：`PUT /:id` → `POST /update/:id`
+  - 删除游戏：`DELETE /:id` → `POST /delete/:id`
+  - 更新分组：`PUT /groups/:id` → `POST /groups/update/:id`
+  - 删除分组：`DELETE /groups/:id` → `POST /groups/delete/:id`
+
 ## [v1.5.2] - 2026-05-24
 
 ### 新增功能

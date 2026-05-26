@@ -25,7 +25,7 @@ router.get('/preferences', async (_req: Request, res: Response): Promise<void> =
 });
 
 // 清除偏好数据
-router.delete('/preferences/clear', async (_req: Request, res: Response): Promise<void> => {
+router.post('/preferences/clear', async (_req: Request, res: Response): Promise<void> => {
   await initDatabase();
   try {
     database.clearPreferencesData();
@@ -37,7 +37,7 @@ router.delete('/preferences/clear', async (_req: Request, res: Response): Promis
 });
 
 // 获取推荐列表
-router.get('/recommendations', async (req: Request, res: Response): Promise<void> => {
+router.get('/list', async (req: Request, res: Response): Promise<void> => {
   await initDatabase();
   try {
     const type: string | null = (req.query.type as string) || null;
@@ -55,7 +55,7 @@ router.get('/recommendations', async (req: Request, res: Response): Promise<void
 });
 
 // 生成推荐
-router.post('/recommendations/generate', async (_req: Request, res: Response): Promise<void> => {
+router.post('/generate', async (_req: Request, res: Response): Promise<void> => {
   await initDatabase();
   try {
     const recs: Recommendation[] = database.generateRecommendations();

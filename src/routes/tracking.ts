@@ -26,7 +26,7 @@ router.get('/search-history', async (_req: Request, res: Response): Promise<void
   }
 });
 
-router.delete('/search-history', async (_req: Request, res: Response): Promise<void> => {
+router.post('/search-history/clear', async (_req: Request, res: Response): Promise<void> => {
   await ensureDb();
   try {
     database.clearSearchHistory();

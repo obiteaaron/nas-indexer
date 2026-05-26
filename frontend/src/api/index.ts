@@ -73,7 +73,7 @@ export function saveConfig(data: Partial<Config>): Promise<ApiResponse<void>> {
 }
 
 export function getStatus(): Promise<ApiResponse<StatusResponse>> {
-  return request<StatusResponse>('/status')
+  return request<StatusResponse>('/stats/status')
 }
 
 export function scanFiles(): Promise<ApiResponse<{ taskId: string }>> {
@@ -137,7 +137,7 @@ export function moveFile(id: number, targetDir: string): Promise<ApiResponse<voi
 }
 
 export function deleteFile(id: number, permanent: boolean = false): Promise<ApiResponse<void>> {
-  return request<void>('/files/' + id + '?permanent=' + permanent, { method: 'DELETE' })
+  return request<void>('/files/delete/' + id, { method: 'POST', body: JSON.stringify({ permanent }) })
 }
 
 export function createFolder(parentPath: string, folderName: string): Promise<ApiResponse<void>> {
@@ -160,7 +160,7 @@ export function addFavorite(id: number): Promise<ApiResponse<void>> {
 }
 
 export function removeFavorite(id: number): Promise<ApiResponse<void>> {
-  return request<void>('/favorites/' + id, { method: 'DELETE' })
+  return request<void>('/files/favorites/remove/' + id, { method: 'POST' })
 }
 
 export function getPreview(id: number): Promise<ApiResponse<PreviewResponse>> {
@@ -168,15 +168,15 @@ export function getPreview(id: number): Promise<ApiResponse<PreviewResponse>> {
 }
 
 export function getStreamUrl(id: number): string {
-  return API_BASE + '/stream/' + id
+  return API_BASE + '/preview/stream/' + id
 }
 
 export function getStatistics(): Promise<ApiResponse<StatisticsResponse>> {
-  return cachedGet<StatisticsResponse>('/statistics')
+  return cachedGet<StatisticsResponse>('/stats/statistics')
 }
 
 export function getCategories(): Promise<ApiResponse<string[]>> {
-  return cachedGet<string[]>('/categories')
+  return cachedGet<string[]>('/tags/categories')
 }
 
 export function getSearchHistory(): Promise<ApiResponse<string[]>> {
@@ -184,49 +184,49 @@ export function getSearchHistory(): Promise<ApiResponse<string[]>> {
 }
 
 export function clearSearchHistory(): Promise<ApiResponse<void>> {
-  return request<void>('/tracking/search-history', { method: 'DELETE' })
+  return request<void>('/tracking/search-history/clear', { method: 'POST' })
 }
 
 export function getTagGroups(): Promise<ApiResponse<TagGroup[]>> {
-  return cachedGet<TagGroup[]>('/tag-groups')
+  return cachedGet<TagGroup[]>('/tags/tag-groups')
 }
 
 export function createTagGroup(data: { name: string; color?: string; sortOrder?: number }): Promise<ApiResponse<TagGroup>> {
-  clearCache('/tag-groups')
+  clearCache('/tags/tag-groups')
   clearCache('/tags')
-  return request<TagGroup>('/tag-groups', { method: 'POST', body: JSON.stringify(data) })
+  return request<TagGroup>('/tags/tag-groups', { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function updateTagGroup(id: number, data: Partial<TagGroup>): Promise<ApiResponse<TagGroup>> {
-  clearCache('/tag-groups')
+  clearCache('/tags/tag-groups')
   clearCache('/tags')
-  return request<TagGroup>('/tag-groups/' + id, { method: 'PUT', body: JSON.stringify(data) })
+  return request<TagGroup>('/tags/tag-groups/update/' + id, { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function deleteTagGroup(id: number): Promise<ApiResponse<void>> {
-  clearCache('/tag-groups')
+  clearCache('/tags/tag-groups')
   clearCache('/tags')
-  return request<void>('/tag-groups/' + id, { method: 'DELETE' })
+  return request<void>('/tags/tag-groups/delete/' + id, { method: 'POST' })
 }
 
 export function getTags(groupId?: number | null): Promise<ApiResponse<Tag[] | TagWithGroup[]>> {
   const query = groupId ? '?groupId=' + groupId : ''
-  return cachedGet<Tag[] | TagWithGroup[]>('/tags' + query)
+  return cachedGet<Tag[] | TagWithGroup[]>('/tags/list' + query)
 }
 
 export function createTag(data: { name: string; groupId?: number | null; color?: string; sortOrder?: number }): Promise<ApiResponse<Tag>> {
   clearCache('/tags')
-  return request<Tag>('/tags', { method: 'POST', body: JSON.stringify(data) })
+  return request<Tag>('/tags/create', { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function updateTag(id: number, data: Partial<Tag>): Promise<ApiResponse<Tag>> {
   clearCache('/tags')
-  return request<Tag>('/tags/' + id, { method: 'PUT', body: JSON.stringify(data) })
+  return request<Tag>('/tags/update/' + id, { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function deleteTag(id: number): Promise<ApiResponse<void>> {
   clearCache('/tags')
-  return request<void>('/tags/' + id, { method: 'DELETE' })
+  return request<void>('/tags/delete/' + id, { method: 'POST' })
 }
 
 export function getTagStats(): Promise<ApiResponse<TagStats[]>> {
@@ -246,7 +246,7 @@ export function addFileTag(fileId: number, tagId: number): Promise<ApiResponse<T
 }
 
 export function removeFileTag(fileId: number, tagId: number): Promise<ApiResponse<TagWithGroup[]>> {
-  return request<TagWithGroup[]>('/files/' + fileId + '/tags/' + tagId, { method: 'DELETE' })
+  return request<TagWithGroup[]>('/files/' + fileId + '/tags/remove/' + tagId, { method: 'POST' })
 }
 
 export function batchFileTags(fileIds: number[], tagIds: number[], action: 'add' | 'remove'): Promise<ApiResponse<void>> {
@@ -284,11 +284,11 @@ export function getFileViews(params: { limit?: number } = {}): Promise<ApiRespon
 }
 
 export function getPreferences(): Promise<ApiResponse<Preferences & { enabled: boolean }>> {
-  return request<Preferences & { enabled: boolean }>('/preferences')
+  return request<Preferences & { enabled: boolean }>('/recommendations/preferences')
 }
 
 export function clearPreferencesData(): Promise<ApiResponse<void>> {
-  return request<void>('/preferences/clear', { method: 'DELETE' })
+  return request<void>('/recommendations/preferences/clear', { method: 'POST' })
 }
 
 export function getRecommendations(params: { type?: string; limit?: number } = {}): Promise<ApiResponse<Recommendation[]>> {
@@ -297,7 +297,7 @@ export function getRecommendations(params: { type?: string; limit?: number } = {
       .filter(([_, v]) => v !== undefined)
       .map(([k, v]) => [k, String(v)])
   ).toString()
-  return request<Recommendation[]>('/recommendations?' + query)
+  return request<Recommendation[]>('/recommendations/list?' + query)
 }
 
 export function generateRecommendations(): Promise<ApiResponse<Recommendation[]>> {
@@ -329,12 +329,12 @@ export function getGame(id: number): Promise<ApiResponse<Game>> {
 
 export function updateGame(id: number, data: Partial<Game>): Promise<ApiResponse<Game>> {
   clearCache('/games')
-  return request<Game>('/games/' + id, { method: 'PUT', body: JSON.stringify(data) })
+  return request<Game>('/games/update/' + id, { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function deleteGame(id: number): Promise<ApiResponse<void>> {
   clearCache('/games')
-  return request<void>('/games/' + id, { method: 'DELETE' })
+  return request<void>('/games/delete/' + id, { method: 'POST' })
 }
 
 export function scrapeGame(id: number, downloadPosters: boolean = true): Promise<ApiResponse<Game>> {
@@ -361,7 +361,7 @@ export function uploadGamePoster(id: number, type: 'horizontal' | 'vertical' | '
 
 export function deleteGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background'): Promise<ApiResponse<void>> {
   clearCache('/games')
-  return request<void>('/games/' + id + '/poster/' + type, { method: 'DELETE' })
+  return request<void>('/games/' + id + '/poster/delete/' + type, { method: 'POST' })
 }
 
 export function openGame(id: number): Promise<ApiResponse<void>> {
@@ -465,12 +465,12 @@ export function createGameGroup(data: { name: string; pinned?: number }): Promis
 
 export function updateGameGroup(id: number, data: { name?: string; pinned?: number; sort_order?: number }): Promise<ApiResponse<GameGroup>> {
   clearCache('/games')
-  return request<GameGroup>('/games/groups/' + id, { method: 'PUT', body: JSON.stringify(data) })
+  return request<GameGroup>('/games/groups/update/' + id, { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function deleteGameGroup(id: number): Promise<ApiResponse<void>> {
   clearCache('/games')
-  return request<void>('/games/groups/' + id, { method: 'DELETE' })
+  return request<void>('/games/groups/delete/' + id, { method: 'POST' })
 }
 
 export function reorderGameGroups(items: Array<{ id: number; sort_order: number }>): Promise<ApiResponse<GameGroup[]>> {
@@ -498,7 +498,7 @@ export function addGamesToGroup(groupId: number, gameIds: number[]): Promise<Api
 
 export function removeGameFromGroup(groupId: number, gameId: number): Promise<ApiResponse<void>> {
   clearCache('/games')
-  return request<void>('/games/groups/' + groupId + '/games/' + gameId, { method: 'DELETE' })
+  return request<void>('/games/groups/' + groupId + '/games/remove/' + gameId, { method: 'POST' })
 }
 
 export function reorderGroupGames(groupId: number, items: Array<{ game_id: number; sort_order: number }>): Promise<ApiResponse<Game[]>> {

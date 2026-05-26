@@ -128,11 +128,11 @@ app.use('/api/config', configRouter);
 app.use('/api/scan', scanRouter);
 app.use('/api/files', filesRouter);
 app.use('/api/games', gamesRouter);
-app.use('/api', tagsRouter);
-app.use('/api', previewRouter);
-app.use('/api', recommendationsRouter);
+app.use('/api/tags', tagsRouter);
+app.use('/api/preview', previewRouter);
+app.use('/api/recommendations', recommendationsRouter);
 app.use('/api/tracking', trackingRouter);
-app.use('/api', statsRouter);
+app.use('/api/stats', statsRouter);
 
 // Static files - serve Vue frontend
 const frontendPath: string = path.join(PROJECT_ROOT, 'frontend', 'dist');

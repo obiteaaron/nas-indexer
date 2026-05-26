@@ -208,7 +208,7 @@ router.post('/:id/move', async (req: Request, res: Response): Promise<void> => {
 });
 
 // 删除文件
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+router.post('/delete/:id', async (req: Request, res: Response): Promise<void> => {
   await initDatabase();
   try {
     const file: File | null = database.getFileById(parseInt(req.params.id as string));
@@ -217,8 +217,8 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { permanent } = req.query;
-    const result = fileOps.deleteFile(file.path, permanent === 'true');
+    const { permanent } = req.body;
+    const result = fileOps.deleteFile(file.path, permanent === true);
     res.json(result);
   } catch (err) {
     const error = err as Error;
@@ -291,7 +291,7 @@ router.post('/favorites/:id', async (req: Request, res: Response): Promise<void>
 });
 
 // 删除收藏
-router.delete('/favorites/:id', async (req: Request, res: Response): Promise<void> => {
+router.post('/favorites/remove/:id', async (req: Request, res: Response): Promise<void> => {
   await initDatabase();
   try {
     database.removeFavorite(parseInt(req.params.id as string));
@@ -318,6 +318,92 @@ router.get('/batch/tags', async (req: Request, res: Response): Promise<void> => 
     }
     const tagsMap = database.getFileTagsBatch(fileIdArray);
     res.json({ success: true, data: tagsMap });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 批量操作文件标签
+router.post('/batch/tags', async (req: Request, res: Response): Promise<void> => {
+  await initDatabase();
+  try {
+    const { fileIds, tagIds, action } = req.body;
+    if (!fileIds || !fileIds.length || !tagIds || !tagIds.length) {
+      res.status(400).json({ success: false, error: '请提供文件ID和标签ID' });
+      return;
+    }
+    if (action === 'add') {
+      database.batchAddFileTags(fileIds, tagIds);
+    } else if (action === 'remove') {
+      database.batchRemoveFileTags(fileIds, tagIds);
+    } else {
+      res.status(400).json({ success: false, error: '无效的操作类型' });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 获取文件标签
+router.get('/:id/tags', async (req: Request, res: Response): Promise<void> => {
+  await initDatabase();
+  try {
+    const fileId: number = parseInt(req.params.id as string);
+    const file = database.getFileById(fileId);
+    if (!file) {
+      res.status(404).json({ success: false, error: '文件不存在' });
+      return;
+    }
+    const tags = database.getFileTags(fileId);
+    res.json({ success: true, data: tags });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 添加文件标签
+router.post('/:id/tags', async (req: Request, res: Response): Promise<void> => {
+  await initDatabase();
+  try {
+    const fileId: number = parseInt(req.params.id as string);
+    const file = database.getFileById(fileId);
+    if (!file) {
+      res.status(404).json({ success: false, error: '文件不存在' });
+      return;
+    }
+    const { tagId } = req.body;
+    if (!tagId) {
+      res.status(400).json({ success: false, error: '请提供标签ID' });
+      return;
+    }
+    database.addFileTag(fileId, tagId);
+    const tags = database.getFileTags(fileId);
+    res.json({ success: true, data: tags });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 移除文件标签
+router.post('/:id/tags/remove/:tagId', async (req: Request, res: Response): Promise<void> => {
+  await initDatabase();
+  try {
+    const fileId: number = parseInt(req.params.id as string);
+    const tagId: number = parseInt(req.params.tagId as string);
+    const file = database.getFileById(fileId);
+    if (!file) {
+      res.status(404).json({ success: false, error: '文件不存在' });
+      return;
+    }
+    database.removeFileTag(fileId, tagId);
+    const tags = database.getFileTags(fileId);
+    res.json({ success: true, data: tags });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

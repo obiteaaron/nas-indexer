@@ -7,7 +7,7 @@ import type { File } from '../types';
 const router: Router = express.Router();
 
 // 获取预览信息
-router.get('/preview/:id', async (req: Request, res: Response): Promise<void> => {
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   await initDatabase();
   try {
     const file: File | null = database.getFileById(parseInt(req.params.id as string));
@@ -24,7 +24,7 @@ router.get('/preview/:id', async (req: Request, res: Response): Promise<void> =>
         name: file.name,
         ext: file.ext,
         previewType,
-        previewUrl: `/api/stream/${file.id}`
+        previewUrl: `/api/preview/stream/${file.id}`
       }
     });
   } catch (err) {
