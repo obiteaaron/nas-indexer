@@ -478,8 +478,14 @@ export function reorderGameGroups(items: Array<{ id: number; sort_order: number 
   return request<GameGroup[]>('/games/groups/reorder', { method: 'POST', body: JSON.stringify({ items }) })
 }
 
-export function getGroupGames(groupId: number): Promise<ApiResponse<Game[]>> {
-  return request<Game[]>('/games/groups/' + groupId + '/games')
+export function getGroupGames(groupId: number, params: Record<string, string | number | undefined> = {}): Promise<ApiResponse<GamesResponse>> {
+  const query = new URLSearchParams(
+    Object.entries(params)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)])
+  ).toString()
+  clearCache('/games')
+  return request<GamesResponse>('/games/groups/' + groupId + '/games?' + query)
 }
 
 export function addGamesToGroup(groupId: number, gameIds: number[]): Promise<ApiResponse<{ addedCount: number; addedIds: number[] }>> {

@@ -781,15 +781,121 @@ class GameDatabase {
     return true;
   }
 
-  getGroupGames(groupId: number): Game[] {
-    const result: QueryResult[] = database.db!.exec(`
+  getGroupGames(groupId: number, options: GameQueryOptions = {}): Game[] {
+    const { genre, year, search, scraped, excluded, favorite, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
+
+    let sql: string = `
       SELECT g.* FROM games g
       INNER JOIN game_group_items gi ON g.id = gi.game_id
       WHERE gi.group_id = ?
-      ORDER BY gi.sort_order ASC
-    `, [groupId]);
+    `;
+    const params: unknown[] = [groupId];
+    const conditions: string[] = [];
+
+    if (genre) {
+      conditions.push('g.genres LIKE ?');
+      params.push(`%${genre}%`);
+    }
+
+    if (year) {
+      conditions.push('g.release_date LIKE ?');
+      params.push(`${year}%`);
+    }
+
+    if (search) {
+      conditions.push('(g.title LIKE ? OR g.title_en LIKE ? OR g.original_name LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (scraped === 'true') {
+      conditions.push('(g.scraped_at IS NOT NULL OR g.metadata_source = \'local\')');
+    } else if (scraped === 'false') {
+      conditions.push('(g.scraped_at IS NULL AND g.metadata_source != \'local\')');
+    }
+
+    // 分组内游戏默认不显示已排除的，除非明确筛选
+    if (excluded === 'true' || excluded === 'only') {
+      conditions.push('g.is_excluded = 1');
+    } else {
+      conditions.push('g.is_excluded = 0');
+    }
+
+    if (favorite === 'true') {
+      conditions.push('g.is_favorite = 1');
+    } else if (favorite === 'false') {
+      conditions.push('g.is_favorite = 0');
+    }
+
+    if (conditions.length > 0) {
+      sql += ' AND ' + conditions.join(' AND ');
+    }
+
+    // 按年份排序时：无年份的放最后，新到旧
+    if (orderBy === 'release_date') {
+      sql += ' ORDER BY CASE WHEN g.release_date IS NULL OR g.release_date = \'\' THEN 1 ELSE 0 END ASC, g.release_date DESC LIMIT ? OFFSET ?';
+    } else if (orderBy === 'rating') {
+      sql += ' ORDER BY CASE WHEN g.rating IS NULL THEN 1 ELSE 0 END ASC, g.rating DESC LIMIT ? OFFSET ?';
+    } else {
+      sql += ` ORDER BY gi.sort_order ASC, g.${orderBy} ${orderDir} LIMIT ? OFFSET ?`;
+    }
+    params.push(limit, offset);
+
+    const result: QueryResult[] = database.db!.exec(sql, params);
     if (result.length === 0) return [];
     return result[0].values.map(row => this.rowToGame(result[0], row));
+  }
+
+  getGroupGameCount(groupId: number, options: GameQueryOptions = {}): number {
+    const { genre, year, search, scraped, excluded, favorite } = options;
+
+    let sql: string = `
+      SELECT COUNT(*) as count FROM games g
+      INNER JOIN game_group_items gi ON g.id = gi.game_id
+      WHERE gi.group_id = ?
+    `;
+    const params: unknown[] = [groupId];
+    const conditions: string[] = [];
+
+    if (genre) {
+      conditions.push('g.genres LIKE ?');
+      params.push(`%${genre}%`);
+    }
+
+    if (year) {
+      conditions.push('g.release_date LIKE ?');
+      params.push(`${year}%`);
+    }
+
+    if (search) {
+      conditions.push('(g.title LIKE ? OR g.title_en LIKE ? OR g.original_name LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    if (scraped === 'true') {
+      conditions.push('(g.scraped_at IS NOT NULL OR g.metadata_source = \'local\')');
+    } else if (scraped === 'false') {
+      conditions.push('(g.scraped_at IS NULL AND g.metadata_source != \'local\')');
+    }
+
+    if (excluded === 'true' || excluded === 'only') {
+      conditions.push('g.is_excluded = 1');
+    } else {
+      conditions.push('g.is_excluded = 0');
+    }
+
+    if (favorite === 'true') {
+      conditions.push('g.is_favorite = 1');
+    } else if (favorite === 'false') {
+      conditions.push('g.is_favorite = 0');
+    }
+
+    if (conditions.length > 0) {
+      sql += ' AND ' + conditions.join(' AND ');
+    }
+
+    const result: QueryResult[] = database.db!.exec(sql, params);
+    if (result.length === 0) return 0;
+    return result[0].values[0][0] as number;
   }
 
   getGamesNotInGroup(groupId: number): Game[] {

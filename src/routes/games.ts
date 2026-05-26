@@ -229,8 +229,31 @@ router.get('/groups/:id/games', async (req: Request, res: Response): Promise<voi
       res.status(404).json({ success: false, error: '分组不存在' });
       return;
     }
-    const games: Game[] = gameDatabase.getGroupGames(group.id);
-    res.json({ success: true, data: games });
+    const { genre, year, search, scraped, excluded, favorite, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
+    const options: GameQueryOptions = {
+      genre: genre as string,
+      year: year as string,
+      search: search as string,
+      scraped: scraped as 'true' | 'false' | undefined,
+      excluded: excluded as 'true' | 'false' | 'only' | undefined,
+      favorite: favorite as 'true' | 'false' | undefined,
+      orderBy: orderBy as 'title' | 'rating' | 'release_date',
+      orderDir: orderDir as 'ASC' | 'DESC',
+      limit: parseInt(pageSize as string),
+      offset: (parseInt(page as string) - 1) * parseInt(pageSize as string)
+    };
+    const games: Game[] = gameDatabase.getGroupGames(group.id, options);
+    const total: number = gameDatabase.getGroupGameCount(group.id, options);
+    res.json({
+      success: true,
+      data: {
+        games,
+        total,
+        page: parseInt(page as string),
+        pageSize: parseInt(pageSize as string),
+        totalPages: Math.ceil(total / parseInt(pageSize as string))
+      }
+    });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

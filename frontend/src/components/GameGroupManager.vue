@@ -194,7 +194,7 @@ async function loadGroupGames(groupId: number) {
     getGamesNotInGroup(groupId)
   ])
   if (gamesRes.success && gamesRes.data) {
-    groupGames.value = gamesRes.data
+    groupGames.value = gamesRes.data.games
   }
   if (candidatesRes.success && candidatesRes.data) {
     candidateGames.value = candidatesRes.data

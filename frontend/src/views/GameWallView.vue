@@ -498,16 +498,28 @@ const genresArray = computed(() => {
 async function loadGames(): Promise<void> {
   loading.value = true
   try {
-    // If a group is selected, load games from that group
+    const isExcluded = filterScraped.value === 'excluded'
+    const isFavorite = filterScraped.value === 'favorite'
+
     if (selectedGroupId.value !== null) {
-      const res = await getGroupGames(selectedGroupId.value)
+      // 分组选中时：调用 getGroupGames 并传入筛选参数
+      const res = await getGroupGames(selectedGroupId.value, {
+        search: searchQuery.value,
+        genre: filterGenre.value,
+        year: filterYear.value,
+        scraped: isExcluded || isFavorite ? undefined : filterScraped.value,
+        excluded: isExcluded ? 'true' : undefined,
+        favorite: isFavorite ? 'true' : undefined,
+        orderBy: orderBy.value,
+        orderDir: 'ASC',
+        page: page.value,
+        pageSize: pageSize.value
+      })
       if (res.success && res.data) {
-        games.value = res.data
-        total.value = res.data.length
+        games.value = res.data.games
+        total.value = res.data.total
       }
     } else {
-      const isExcluded = filterScraped.value === 'excluded'
-      const isFavorite = filterScraped.value === 'favorite'
       const res = await getGames({
         search: searchQuery.value,
         genre: filterGenre.value,
