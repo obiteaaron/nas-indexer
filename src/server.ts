@@ -9,6 +9,7 @@ import { runIdentification } from './games/identifier';
 import { scrapeUnscrapedGames } from './games/scraper';
 import { logger } from './logger';
 import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from './utils';
+import { ensureGamesDirs } from './games/storage';
 import type { Config, FileExtensionFilter, ScanProgressEvent } from './types';
 
 // 路由模块
@@ -152,6 +153,7 @@ app.listen(PORT, async () => {
 
   const config: Config = loadConfig();
   const storagePath: string = getStoragePath(config);
+  ensureGamesDirs(storagePath);
   logger.info('📂 当前存储目录: %s', storagePath);
 
   scheduleScan(config);
