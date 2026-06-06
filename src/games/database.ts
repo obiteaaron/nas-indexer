@@ -45,10 +45,7 @@ class GameDatabase {
 
         poster_url TEXT,
         cover_url TEXT,
-        poster_horizontal_path TEXT,
-        poster_vertical_path TEXT,
-        poster_banner_path TEXT,
-        background_path TEXT,
+        
         has_local_poster INTEGER DEFAULT 0,
 
         developer TEXT,
@@ -64,7 +61,7 @@ class GameDatabase {
         screenshots TEXT,
 
         metadata_source TEXT DEFAULT 'unknown',
-        metadata_path TEXT,
+        
         scraped_at DATETIME,
         is_manually_edited INTEGER DEFAULT 0,
         is_excluded INTEGER DEFAULT 0,
@@ -149,10 +146,7 @@ class GameDatabase {
       steam_appid = null,
       poster_url = null,
       cover_url = null,
-      poster_horizontal_path = null,
-      poster_vertical_path = null,
-      poster_banner_path = null,
-      background_path = null,
+      
       has_local_poster = 0,
       developer = null,
       publisher = null,
@@ -166,7 +160,7 @@ class GameDatabase {
       notes = null,
       screenshots = null,
       metadata_source = 'unknown',
-      metadata_path = null,
+      
       scraped_at = null,
       is_manually_edited = 0
     } = gameData;
@@ -190,20 +184,17 @@ class GameDatabase {
         database.db!.run(`
           UPDATE games SET
             title = ?, title_en = ?, original_name = ?, steam_appid = ?,
-            poster_url = ?, cover_url = ?, poster_horizontal_path = ?, poster_vertical_path = ?,
-            poster_banner_path = ?, background_path = ?, has_local_poster = ?,
+            poster_url = ?, cover_url = ?, has_local_poster = ?,
             developer = ?, publisher = ?, release_date = ?, genres = ?, rating = ?,
             description = ?, short_description = ?, languages = ?, tags = ?, notes = ?,
-            screenshots = ?, metadata_source = ?, metadata_path = ?, scraped_at = ?,
             is_manually_edited = ?, updated_at = datetime('now', 'localtime')
           WHERE id = ?
         `, [
           title, title_en, original_name, steam_appid,
-          poster_url, cover_url, poster_horizontal_path, poster_vertical_path,
-          poster_banner_path, background_path, has_local_poster,
+          poster_url, cover_url, has_local_poster,
           developer, publisher, release_date, genres, rating,
           description, short_description, languages, tags, notes,
-          screenshots, metadata_source, metadata_path, scraped_at,
+          screenshots, metadata_source, scraped_at,
           is_manually_edited, existing.id
         ]);
         database.save();
@@ -213,21 +204,19 @@ class GameDatabase {
         const insertSql = `
           INSERT INTO games (
             source_path, title, title_en, original_name, steam_appid,
-            poster_url, cover_url, poster_horizontal_path, poster_vertical_path,
-            poster_banner_path, background_path, has_local_poster,
+            poster_url, cover_url, has_local_poster,
             developer, publisher, release_date, genres, rating,
             description, short_description, languages, tags, notes,
-            screenshots, metadata_source, metadata_path, scraped_at,
+            screenshots, metadata_source, scraped_at,
             is_manually_edited
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (\?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, ?, ?, ?)
         `;
         const insertParams = [
           source_path, title, title_en, original_name, steam_appid,
-          poster_url, cover_url, poster_horizontal_path, poster_vertical_path,
-          poster_banner_path, background_path, has_local_poster,
+          poster_url, cover_url, has_local_poster,
           developer, publisher, release_date, genres, rating,
           description, short_description, languages, tags, notes,
-          screenshots, metadata_source, metadata_path, scraped_at,
+          screenshots, metadata_source, scraped_at,
           is_manually_edited
         ];
         logger.debug('INSERT 参数数量: %d', insertParams.length);
@@ -374,11 +363,9 @@ class GameDatabase {
 
     const allowedFields = [
       'title', 'title_en', 'original_name', 'steam_appid',
-      'poster_url', 'cover_url', 'poster_horizontal_path', 'poster_vertical_path',
-      'poster_banner_path', 'background_path', 'has_local_poster',
+      'poster_url', 'cover_url', 'has_local_poster',
       'developer', 'publisher', 'release_date', 'genres', 'rating',
       'description', 'short_description', 'languages', 'tags', 'notes',
-      'screenshots', 'metadata_source', 'metadata_path', 'scraped_at',
       'is_manually_edited'
     ];
 
@@ -516,11 +503,6 @@ class GameDatabase {
         original_name: newDirName,
         // title/title_en 保留原值（刮削后的准确标题）
         metadata_source: 'local',
-        metadata_path: path.join(newPath, 'game.json'),
-        poster_horizontal_path: newPosterPaths.poster_horizontal_path ?? null,
-        poster_vertical_path: newPosterPaths.poster_vertical_path ?? null,
-        poster_banner_path: newPosterPaths.poster_banner_path ?? null,
-        background_path: newPosterPaths.background_path ?? null,
         has_local_poster: Object.values(newPosterPaths).some(v => v !== null) ? 1 : (game.has_local_poster ?? 0)
       };
 
@@ -592,12 +574,11 @@ class GameDatabase {
       const insertSql = `
         INSERT INTO games (
           source_path, title, title_en, original_name, steam_appid,
-          poster_horizontal_path, poster_vertical_path, poster_banner_path,
-          background_path, has_local_poster,
+            has_local_poster,
           developer, publisher, release_date, genres,
           short_description, notes,
-          metadata_source, metadata_path
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)
+            metadata_source
+        ) VALUES (\?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, 'manual', ?)
       `;
       const params = [
         source_path,
@@ -1069,12 +1050,8 @@ class GameDatabase {
     }
 
     // 计算本地海报路径
-    if (game.poster_horizontal_path) {
-      game.posterLocal = game.poster_horizontal_path;
-    } else if (game.poster_vertical_path) {
-      game.posterLocal = game.poster_vertical_path;
-    }
-
+    // Poster paths are now derived from storage functions
+    // posterLocal is calculated dynamically when needed
     return game;
   }
 }

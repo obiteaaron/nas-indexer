@@ -5,7 +5,7 @@ import AdmZip from 'adm-zip';
 import { logger } from '../logger';
 import { getBackupDir } from './storage';
 import { database } from '../database';
-import { gameDatabase } from './database';
+
 
 export interface BackupInfo {
   filename: string;
