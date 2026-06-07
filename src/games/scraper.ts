@@ -265,8 +265,6 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
   // 更新数据库
   gameDatabase.updateGame(gameId, updateData);
 
-  // 写入本地 game.json
-
   logger.info('刮削完成: %s (appid %d)', game.title, appid);
   return gameDatabase.getGameById(gameId);
 }

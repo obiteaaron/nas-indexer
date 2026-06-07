@@ -54,11 +54,12 @@ class GameDatabase {
         screenshots TEXT,
 
         metadata_source TEXT DEFAULT 'unknown',
-        
+
         scraped_at DATETIME,
         is_manually_edited INTEGER DEFAULT 0,
         is_excluded INTEGER DEFAULT 0,
         is_favorite INTEGER DEFAULT 0,
+        is_root_manually_marked INTEGER DEFAULT 0,
 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME
@@ -83,6 +84,16 @@ class GameDatabase {
     }
     // 列确认存在后再创建索引（新表在 CREATE TABLE 中已包含该列，迁移表通过 ALTER 添加）
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_favorite ON games(is_favorite)');
+
+    // 兼容已存在表：检查 is_root_manually_marked 列是否存在
+    const rootMarkedCheck: QueryResult[] = database.db!.exec(
+      "SELECT COUNT(*) as cnt FROM pragma_table_info('games') WHERE name='is_root_manually_marked'"
+    );
+    const hasRootMarkedCol = rootMarkedCheck.length > 0 && (rootMarkedCheck[0].values[0][0] as number) > 0;
+    if (!hasRootMarkedCol) {
+      database.db!.run('ALTER TABLE games ADD COLUMN is_root_manually_marked INTEGER DEFAULT 0');
+      logger.info('游戏数据库: 新增 is_root_manually_marked 列（P0手动优先级标记）');
+    }
 
     // 别名映射表：文件夹名 → steam_appid
     database.db!.run(`
@@ -179,6 +190,7 @@ class GameDatabase {
             poster_url = ?, cover_url = ?,
             developer = ?, publisher = ?, release_date = ?, genres = ?, rating = ?,
             description = ?, short_description = ?, languages = ?, tags = ?, notes = ?,
+            screenshots = ?, metadata_source = ?, scraped_at = ?,
             is_manually_edited = ?, updated_at = datetime('now', 'localtime')
           WHERE id = ?
         `, [
@@ -358,7 +370,7 @@ class GameDatabase {
       'poster_url', 'cover_url',
       'developer', 'publisher', 'release_date', 'genres', 'rating',
       'description', 'short_description', 'languages', 'tags', 'notes',
-      'is_manually_edited'
+      'is_manually_edited', 'is_root_manually_marked'
     ];
 
     for (const field of allowedFields) {
@@ -416,25 +428,33 @@ class GameDatabase {
   promoteGame(id: number): { success: boolean; error?: string; game?: Game } {
     const game: Game | null = this.getGameById(id);
     if (!game) return { success: false, error: '游戏不存在' };
-    const oldPath = game.source_path;    const newPath = path.dirname(oldPath);    if (newPath === oldPath || newPath === path.parse(oldPath).root) {
-      return { success: false, error: '无法再向上提升' };    }
+    const oldPath = game.source_path;
+    const newPath = path.dirname(oldPath);
+    if (newPath === oldPath || newPath === path.parse(oldPath).root) {
+      return { success: false, error: '无法再向上提升' };
+    }
 
-    const existing: Game | null = this.getGameByPath(newPath);    if (existing) {
-      return { success: false, error: `父目录已有游戏记录：${existing.title}（id=${existing.id}）` };    }
+    const existing: Game | null = this.getGameByPath(newPath);
+    if (existing) {
+      return { success: false, error: `父目录已有游戏记录：${existing.title}（id=${existing.id}）` };
+    }
 
     const newDirName = path.basename(newPath);
     try {
+      // 提升目录并标记为用户已确认（P0优先级）
       database.db!.run(
-        'UPDATE games SET source_path = ?, original_name = ?, updated_at = datetime("now", "localtime") WHERE id = ?',
+        'UPDATE games SET source_path = ?, original_name = ?, is_root_manually_marked = 1, updated_at = datetime("now", "localtime") WHERE id = ?',
         [newPath, newDirName, id]
       );
       database.save();
       const updatedGame = this.getGameById(id);
-      logger.info('[提升目录] 完成: %s -> %s, id=%d', path.basename(oldPath), newDirName, id);
-      return { success: true, game: updatedGame ?? undefined };    } catch (dbErr) {
+      logger.info('[提升目录-P0] 完成: %s -> %s (已标记为用户确认), id=%d', path.basename(oldPath), newDirName, id);
+      return { success: true, game: updatedGame ?? undefined };
+    } catch (dbErr) {
       const error = dbErr instanceof Error ? dbErr : new Error(String(dbErr));
       logger.error('[提升目录] 数据库更新失败: %s', error.message);
-      return { success: false, error: '数据库更新失败: ' + error.message };    }
+      return { success: false, error: '数据库更新失败: ' + error.message };
+    }
   }
 
   createManualGame(data: {
@@ -452,27 +472,34 @@ class GameDatabase {
     const { source_path, title } = data;
 
     if (!source_path || !title) {
-      return { success: false, error: 'source_path 和 title 为必填项' };    }
+      return { success: false, error: 'source_path 和 title 为必填项' };
+    }
 
     if (!fs.existsSync(source_path)) {
-      return { success: false, error: '目录不存在: ' + source_path };    }
+      return { success: false, error: '目录不存在: ' + source_path };
+    }
 
-    const existing = this.getGameByPath(source_path);    if (existing) {
-      return { success: false, error: `该路径已有游戏记录: ${existing.title}（id=${existing.id}）` };    }
+    const existing = this.getGameByPath(source_path);
+    if (existing) {
+      return { success: false, error: `该路径已有游戏记录: ${existing.title}（id=${existing.id}）` };
+    }
 
     try {
+      // 手动添加时标记为用户已确认（P0优先级）
       database.db!.run(
-        'INSERT INTO games (source_path, title, title_en, original_name, steam_appid, developer, publisher, release_date, genres, short_description, notes, metadata_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "manual")',
+        'INSERT INTO games (source_path, title, title_en, original_name, steam_appid, developer, publisher, release_date, genres, short_description, notes, metadata_source, is_root_manually_marked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "manual", 1)',
         [source_path, title, data.title_en || null, path.basename(source_path), data.steam_appid || null, data.developer || null, data.publisher || null, data.release_date || null, data.genres || null, data.short_description || null, data.notes || null]
       );
       database.save();
       const newId = (database.db!.exec('SELECT MAX(id) as id FROM games')[0].values[0][0]) as number;
       const newGame = this.getGameById(newId);
-      logger.info('[手动添加] 游戏创建成功: %s', title);
-      return { success: true, id: newId, game: newGame ?? undefined };    } catch (dbErr) {
+      logger.info('[手动添加-P0] 游戏创建成功 (已标记为用户确认): %s', title);
+      return { success: true, id: newId, game: newGame ?? undefined };
+    } catch (dbErr) {
       const error = dbErr instanceof Error ? dbErr : new Error(String(dbErr));
       logger.error('[手动添加] 创建失败: %s', error.message);
-      return { success: false, error: '数据库写入失败: ' + error.message };    }
+      return { success: false, error: '数据库写入失败: ' + error.message };
+    }
   }
 
   deleteNonexistent(): { deletedCount: number; deletedIds: number[] } {
@@ -851,6 +878,22 @@ class GameDatabase {
     `);
     if (result.length === 0) return [];
     return result[0].values.map(row => row[0] as string);
+  }
+
+  // === P0手动优先级辅助方法 ===
+
+  /**
+   * 查询指定路径前缀下的所有游戏（用于子目录检查）
+   * 例如：查询 "E:\Games\Elden Ring" 可找到 "E:\Games\Elden Ring\Elden Ring"
+   */
+  getGamesByPathPrefix(prefixPath: string): Game[] {
+    const normalizedPrefix = prefixPath.replace(/\\/g, '/');
+    const result: QueryResult[] = database.db!.exec(
+      'SELECT * FROM games WHERE source_path LIKE ?',
+      [normalizedPrefix + '/%']
+    );
+    if (result.length === 0 || result[0].values.length === 0) return [];
+    return result[0].values.map(row => this.rowToGame(result[0], row));
   }
 
   // === 别名映射操作 ===

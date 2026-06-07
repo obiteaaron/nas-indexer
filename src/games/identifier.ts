@@ -16,7 +16,7 @@ import { cleanGameName } from './name-cleaner';
 import type { Game, GameRules, GameScrapeConfig, GameRecognitionRule, HeuristicRulesConfig } from '../types';
 
 /**
- * P1: 向上查找steam_appid.txt文件
+ * P0: 向上查找steam_appid.txt文件
  * Steam游戏的steam_appid.txt通常在游戏根目录，可作为锚点
  */
 function findSteamAppidUpward(startDir: string, stopAtRoot: string): string | null {
@@ -34,6 +34,36 @@ function findSteamAppidUpward(startDir: string, stopAtRoot: string): string | nu
   }
 
   return null;
+}
+
+/**
+ * P0辅助：检查父目录是否已被用户确认
+ * 用于跳过已确认游戏的子目录
+ */
+function checkParentConfirmed(dirPath: string, stopAt: string): boolean {
+  let current = path.dirname(dirPath);
+  while (current !== stopAt && current !== path.dirname(current)) {
+    const game = gameDatabase.getGameByPath(current);
+    if (game && game.is_root_manually_marked === 1) {
+      logger.debug('[P0检查] 父目录已确认: %s', current);
+      return true;
+    }
+    current = path.dirname(current);
+  }
+  return false;
+}
+
+/**
+ * P0辅助：检查子目录是否已被用户确认
+ * 用于跳过已确认游戏的父目录（避免重复识别）
+ */
+function checkChildConfirmed(parentPath: string): boolean {
+  const results = gameDatabase.getGamesByPathPrefix(parentPath);
+  const hasConfirmed = results.some(g => g.is_root_manually_marked === 1);
+  if (hasConfirmed) {
+    logger.debug('[P0检查] 子目录已确认: %s', parentPath);
+  }
+  return hasConfirmed;
 }
 
 /**
@@ -323,10 +353,31 @@ function scanEntry(
   const normalizedPath = path.resolve(entryPath);
   if (processedPaths.has(normalizedPath)) return games;
 
-  // 文件不检查 game.json（只有目录可能有）
-  // 文件不检查 game.json（新设计不使用本地元数据）
+  // === P0: 用户确认优先级检查（最高优先级） ===
 
-  // P2: 正则规则匹配（文件和目录都可以匹配）
+  // 1. 此目录本身已被用户确认 → 跳过
+  const existing = gameDatabase.getGameByPath(normalizedPath);
+  if (existing && existing.is_root_manually_marked === 1) {
+    logger.debug('[P0] 路径已确认，跳过: %s', normalizedPath);
+    processedPaths.add(normalizedPath);
+    return games;
+  }
+
+  // 2. 父目录已被用户确认 → 跳过子目录
+  if (!isFile && checkParentConfirmed(normalizedPath, scanRoot)) {
+    logger.debug('[P0] 父目录已确认，跳过子目录: %s', normalizedPath);
+    processedPaths.add(normalizedPath);
+    return games;
+  }
+
+  // 3. 子目录已被用户确认 → 跳过父目录（避免重复识别）
+  if (!isFile && checkChildConfirmed(normalizedPath)) {
+    logger.debug('[P0] 子目录已确认，跳过父目录: %s', normalizedPath);
+    processedPaths.add(normalizedPath);
+    return games;
+  }
+
+  // === P1/P2/P3: 自动识别逻辑 ===
   const matchResult = matchRecognitionRule(entryPath, isFile, rules, scanRoot);
   if (matchResult.matched && matchResult.gamePath) {
     const gamePath = matchResult.gamePath;

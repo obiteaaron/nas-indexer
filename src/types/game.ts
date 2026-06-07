@@ -38,6 +38,7 @@ export interface Game {
   is_manually_edited: number;
   is_excluded: number;
   is_favorite: number;
+  is_root_manually_marked: number;  // P0手动优先级标记
 
   created_at?: string;
   updated_at?: string;

@@ -3,6 +3,18 @@
 ## [v1.5.3] - 2026-06-08
 
 ### 技术改进
+- **P0手动优先级标记** - 替代game.json本地元数据机制，实现游戏根目录人工界定功能
+  - 新增数据库字段 `is_root_manually_marked`
+  - 手动添加/提升目录时自动标记为1（用户已确认）
+  - 扫描逻辑三维度检查：目录本身、父目录、子目录是否已确认
+  - 已确认目录跳过P1/P2/P3自动识别
+- **移除game.json遗留代码** - 清理routes/games.ts和scraper.ts中的game.json写入逻辑
+- **修复数据库插入错误** - 修正insertGame方法UPDATE语句参数数量不匹配问题
+- **新增P0数据库测试** - 添加tests/games/p0-database.test.ts验证标记逻辑
+
+## [v1.5.3] - 2026-06-08（上午提交）
+
+### 技术改进
 - **游戏元数据集中存储** - 完成游戏海报集中存储到 profiles/games/posters/{game_id}/
 - **移除冗余字段** - 移除数据库中的 has_local_poster 字段，通过文件系统动态检查海报存在性
 - **Backup API** - 添加游戏数据备份/恢复功能（create/list/restore/delete）

@@ -424,15 +424,6 @@ router.post('/update/:id', async (req: Request, res: Response): Promise<void> =>
     const updateData: Partial<Game> = req.body;
     gameDatabase.updateGame(game.id, updateData);
 
-    // 如果有本地元数据，同步更新 game.json
-    if (game.source_path && game.metadata_source === 'local') {
-      const updatedGame = gameDatabase.getGameById(game.id);
-      if (updatedGame) {
-        const { writeLocalMetadata } = require('../games/poster-service');
-        writeLocalMetadata(game.source_path, updatedGame);
-      }
-    }
-
     res.json({ success: true, data: gameDatabase.getGameById(game.id) });
   } catch (err) {
     const error = err as Error;
