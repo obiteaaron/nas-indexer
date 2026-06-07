@@ -1,5 +1,10 @@
 /**
  * 游戏识别模块 - 正则规则体系（支持文件和目录匹配）
+ *
+ * 游戏根目录识别优先级：
+ * P1: steam_appid.txt向上查找（Steam游戏锚点）
+ * P2: 启发式规则 + 层级偏移自适应
+ * P3: 配置的levelOffset
  */
 
 import fs from 'fs';
@@ -9,6 +14,171 @@ import { gameDatabase } from './database';
 // metadata-manager no longer used - game.json removed from design
 import { cleanGameName } from './name-cleaner';
 import type { Game, GameRules, GameScrapeConfig, GameRecognitionRule } from '../types';
+
+/**
+ * P1: 向上查找steam_appid.txt文件
+ * Steam游戏的steam_appid.txt通常在游戏根目录，可作为锚点
+ */
+function findSteamAppidUpward(startDir: string, stopAtRoot: string): string | null {
+  let current = startDir;
+  const stopAt = path.resolve(stopAtRoot);
+
+  // 向上查找，不超过扫描根目录
+  while (current !== stopAt && current !== path.dirname(current)) {
+    const appidPath = path.join(current, 'steam_appid.txt');
+    if (fs.existsSync(appidPath)) {
+      logger.debug('[智能识别] 找到steam_appid.txt锚点: %s', current);
+      return current;
+    }
+    current = path.dirname(current);
+  }
+
+  return null;
+}
+
+/**
+ * P2: 启发式规则判断游戏根目录（含层级偏移自适应）
+ * 根据目录结构和exe位置自动判断
+ */
+function findHeuristicRoot(initialGameDir: string, exePath: string, scanRoot: string): string {
+  const exeName = path.basename(exePath, '.exe').toLowerCase();
+  const exeDir = path.dirname(exePath);
+  const exeDirName = path.basename(exeDir).toLowerCase();
+
+  // 规则1：exe所在目录名与exe名相同（如 Game/Game.exe）
+  // 通常需要向上提升1级到父目录
+  if (exeDirName === exeName || exeDirName === exeName.replace(/[^a-z0-9]/g, '')) {
+    const parent = path.dirname(exeDir);
+    if (parent !== exeDir && path.resolve(parent) !== path.resolve(scanRoot)) {
+      logger.debug('[智能识别] exe目录名与exe名相同，向上提升1级: %s → %s', exeDir, parent);
+      return parent;
+    }
+  }
+
+  // 规则2：标准子目录层级偏移
+  // 这些目录通常是游戏根目录下的标准子结构
+  const subdirRules = [
+    { patterns: ['binaries', 'binary', 'bin', 'win32', 'win64'], offset: 1 },
+    { patterns: ['redist', 'support', 'common'], offset: 1 },
+    { patterns: ['data', 'assets', 'resources'], offset: 0 },  // 这些可能就是根目录
+  ];
+
+  const normalizedPath = exePath.replace(/\\/g, '/').toLowerCase();
+  for (const rule of subdirRules) {
+    for (const pattern of rule.patterns) {
+      if (normalizedPath.includes(`/${pattern}/`)) {
+        let result = exeDir;
+        for (let i = 0; i < rule.offset; i++) {
+          const parent = path.dirname(result);
+          if (parent === result || path.resolve(parent) === path.resolve(scanRoot)) {
+            break;
+          }
+          result = parent;
+        }
+        if (result !== exeDir) {
+          logger.debug('[智能识别] 标准子目录%s，向上提升%d级: %s → %s',
+            pattern, rule.offset, exeDir, result);
+          return result;
+        }
+      }
+    }
+  }
+
+  // 规则3：目录大小启发（游戏根目录通常较大）
+  // 如果exeDir很小（<100MB），可能只是子目录，向上查找
+  try {
+    const exeDirSize = getDirectorySize(exeDir);
+    if (exeDirSize < 100 * 1024 * 1024) { // < 100MB
+      const parent = path.dirname(exeDir);
+      if (parent !== exeDir && path.resolve(parent) !== path.resolve(scanRoot)) {
+        const parentSize = getDirectorySize(parent);
+        // 父目录明显更大，可能是根目录
+        if (parentSize > exeDirSize * 5) {
+          logger.debug('[智能识别] exe目录过小(%dMB)，父目录更大(%dMB)，向上提升: %s → %s',
+            Math.round(exeDirSize / 1024 / 1024), Math.round(parentSize / 1024 / 1024),
+            exeDir, parent);
+          return parent;
+        }
+      }
+    }
+  } catch {
+    // 忽略大小计算错误
+  }
+
+  return initialGameDir;
+}
+
+/**
+ * 获取目录大小（粗略估算）
+ */
+function getDirectorySize(dirPath: string): number {
+  let size = 0;
+  try {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isFile()) {
+        try {
+          size += fs.statSync(fullPath).size;
+        } catch {}
+      } else if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        // 只扫描一层，避免递归过深
+        try {
+          const subEntries = fs.readdirSync(fullPath, { withFileTypes: true });
+          for (const subEntry of subEntries) {
+            if (subEntry.isFile()) {
+              try {
+                size += fs.statSync(path.join(fullPath, subEntry.name)).size;
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  return size;
+}
+
+/**
+ * 智能层级偏移：整合P1、P2、P3逻辑
+ */
+function smartLevelOffset(
+  initialGameDir: string,
+  matchedPath: string,
+  rule: GameRecognitionRule,
+  scanRoot: string
+): string {
+  // P1: Steam锚点优先级最高
+  const steamRoot = findSteamAppidUpward(initialGameDir, scanRoot);
+  if (steamRoot) {
+    logger.info('[智能识别] P1成功 - steam_appid.txt锚点: %s', steamRoot);
+    return steamRoot;
+  }
+
+  // P2: 启发式规则（含自适应）
+  const heuristicRoot = findHeuristicRoot(initialGameDir, matchedPath, scanRoot);
+  if (heuristicRoot !== initialGameDir) {
+    logger.info('[智能识别] P2成功 - 启发式判断: %s', heuristicRoot);
+    return heuristicRoot;
+  }
+
+  // P3: 配置的levelOffset（兜底）
+  let result = initialGameDir;
+  for (let i = 0; i < rule.levelOffset; i++) {
+    const parent = path.dirname(result);
+    if (parent === result || path.resolve(parent) === path.resolve(scanRoot)) {
+      break;
+    }
+    result = parent;
+  }
+
+  if (result !== initialGameDir) {
+    logger.info('[智能识别] P3成功 - 配置levelOffset=%d: %s → %s',
+      rule.levelOffset, initialGameDir, result);
+  }
+
+  return result;
+}
 
 /**
  * 尝试读取 steam_appid.txt 获取 appid
@@ -84,6 +254,9 @@ function matchRecognitionRule(
 
         logger.info('[游戏识别] 正则匹配: %s → 游戏目录: %s (规则: %s, 偏移: %d, 类型: %s)',
           entryName, path.basename(gamePath), rule.pattern, rule.levelOffset, isFile ? '文件' : '目录');
+
+        // 智能层级偏移（P1/P2/P3）
+        gamePath = smartLevelOffset(gamePath, entryPath, rule, scanRoot);
 
         return { matched: true, gamePath, rule, matchedPath: entryPath, isFile };
       }

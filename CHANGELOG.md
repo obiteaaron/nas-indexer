@@ -1,12 +1,16 @@
 # 更新日志
 
-## [v1.5.3] - 2026-06-07
+## [v1.5.3] - 2026-06-08
 
 ### 技术改进
 - **游戏元数据集中存储** - 完成游戏海报集中存储到 profiles/games/posters/{game_id}/
 - **移除冗余字段** - 移除数据库中的 has_local_poster 字段，通过文件系统动态检查海报存在性
 - **Backup API** - 添加游戏数据备份/恢复功能（create/list/restore/delete）
 - **Poster API规范化** - 修正海报上传/删除/redownload API路径，符合设计方案规范
+- **游戏根目录智能识别** - 新增三级优先级识别逻辑：
+  - P1: steam_appid.txt向上查找（Steam游戏锚点）
+  - P2: 启发式规则 + 层级偏移自适应（exe目录名、标准子目录、目录大小）
+  - P3: 配置levelOffset（兜底方案）
 - **清理冗余代码** - 移除未使用的 poster.ts 和 migration.ts 文件
 
 ### Bug 修复
