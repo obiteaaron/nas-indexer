@@ -190,18 +190,63 @@ function markGameRootManually(gameId: number, newRoot?: string): boolean {
 修改 `identifier.ts` 的 `scanEntry`：
 
 ```typescript
-function scanEntry(...) {
-  // P0: 检查是否已手动标记
+function scanEntry(entryPath, isFile, rules, processedPaths, depth, scanRoot) {
+  const normalizedPath = path.resolve(entryPath);
+
+  // === P0: 用户确认优先级检查 ===
+  
+  // 1. 此目录本身已被用户确认（路径精确匹配）
   const existing = gameDatabase.getGameByPath(normalizedPath);
   if (existing && existing.is_root_manually_marked === 1) {
-    // 用户已确认，跳过自动识别
-    logger.debug('[识别-P0] 已手动标记，跳过: %s', normalizedPath);
-    return games;
+    logger.debug('[P0] 已确认，跳过: %s', normalizedPath);
+    processedPaths.add(normalizedPath);
+    return [];
   }
 
-  // P1/P2/P3: 自动识别逻辑
-  // ...
+  // 2. 父目录已被用户确认（向上查找匹配）
+  if (!isFile && checkParentConfirmed(normalizedPath, scanRoot)) {
+    logger.debug('[P0] 父目录已确认，跳过子目录: %s', normalizedPath);
+    processedPaths.add(normalizedPath);
+    return [];
+  }
+
+  // 3. 子目录已被用户确认（查询LIKE匹配）
+  if (!isFile && checkChildConfirmed(normalizedPath)) {
+    logger.debug('[P0] 子目录已确认，跳过父目录: %s', normalizedPath);
+    processedPaths.add(normalizedPath);
+    return [];
+  }
+
+  // === P1/P2/P3自动识别 ===
+  // ...原有逻辑
 }
+
+// 向上查找已确认的父目录
+function checkParentConfirmed(path: string, stopAt: string): boolean {
+  let current = path.dirname(path);
+  while (current !== stopAt && current !== path.dirname(current)) {
+    const game = gameDatabase.getGameByPath(current);
+    if (game && game.is_root_manually_marked === 1) {
+      return true;
+    }
+    current = path.dirname(current);
+  }
+  return false;
+}
+
+// 查询是否有已确认的子目录
+function checkChildConfirmed(parentPath: string): boolean {
+  const results = database.db.exec(
+    'SELECT id FROM games WHERE source_path LIKE ? AND is_root_manually_marked = 1',
+    [parentPath.replace(/\\/g, '/') + '/%']
+  );
+  return results.length > 0 && results[0].values.length > 0;
+}
+```
+
+**关键**：
+- 通过数据库路径查询实现"已知用户决策"
+- 三种匹配方式：精确匹配、向上查找、LIKE查询子目录
 ```
 
 ---
