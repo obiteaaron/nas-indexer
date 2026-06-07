@@ -10,8 +10,8 @@ import { database } from '../database';
 import { gameDatabase } from '../games/database';
 import { scrapeGame, scrapeUnscrapedGames, searchSteamCandidates } from '../games/scraper';
 import { runIdentification } from '../games/identifier';
-import { savePoster, deletePoster } from '../games/metadata-manager';
-import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
+import { PosterService } from '../games/poster-service';
+import { initDatabase, loadConfig, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
 import { logger } from '../logger';
 import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup } from '../types';
 
@@ -424,7 +424,7 @@ router.post('/update/:id', async (req: Request, res: Response): Promise<void> =>
     if (game.source_path && game.metadata_source === 'local') {
       const updatedGame = gameDatabase.getGameById(game.id);
       if (updatedGame) {
-        const { writeLocalMetadata } = require('../games/metadata-manager');
+        const { writeLocalMetadata } = require('../games/poster-service');
         writeLocalMetadata(game.source_path, updatedGame);
       }
     }
@@ -626,10 +626,10 @@ router.post('/:id/poster/:type', upload.single('poster'), async (req: Request, r
       return;
     }
 
-    const posterPath: string = savePoster(game.source_path, type, req.file.buffer);
-    gameDatabase.updatePosterPath(game.id, type, posterPath);
+    const config = loadConfig(); const storagePath = getStoragePath(config); new PosterService(storagePath).saveFromBuffer(game.id, type, req.file.buffer);
+    gameDatabase.updateGame(game.id, { has_local_poster: 1 });
 
-    res.json({ success: true, data: { posterPath } });
+    res.json({ success: true });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });
@@ -649,8 +649,7 @@ router.post('/:id/poster/delete/:type', async (req: Request, res: Response): Pro
     }
 
     const type: 'horizontal' | 'vertical' | 'banner' | 'background' = req.params.type as 'horizontal' | 'vertical' | 'banner' | 'background';
-    deletePoster(game.source_path, type);
-    gameDatabase.updateGame(game.id, { [`poster_${type}_path`]: undefined, has_local_poster: 0 });
+    const config = loadConfig(); const storagePath = getStoragePath(config); new PosterService(storagePath).deletePoster(game.id, type);
 
     res.json({ success: true });
   } catch (err) {

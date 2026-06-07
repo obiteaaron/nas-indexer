@@ -57,6 +57,16 @@ export class PosterService {
   }
 
   /**
+   * Save poster from buffer (upload)
+   */
+  saveFromBuffer(gameId: number, type: PosterType, buffer: Buffer): void {
+    ensurePosterDir(this.basePath, gameId);
+    const destPath = this.getPosterPath(gameId, type);
+    fs.writeFileSync(destPath, buffer);
+    logger.info('Saved poster from buffer: gameId=%d type=%s', gameId, type);
+  }
+
+  /**
    * Delete single poster
    */
   deletePoster(gameId: number, type: PosterType): boolean {
