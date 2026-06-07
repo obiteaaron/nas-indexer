@@ -7,12 +7,7 @@ import path from 'path';
 import { database } from '../database';
 import { logger } from '../logger';
 import type { Game, GameQueryOptions, GameStatistics, GameGroup } from '../types';
-import {
-  hasLocalMetadata,
-  writeLocalMetadata,
-  readLocalMetadata,
-  checkLocalPosters
-} from './metadata-manager';
+// metadata-manager no longer used - game.json removed from design
 
 interface QueryResult {
   columns: string[];
@@ -424,119 +419,25 @@ class GameDatabase {
   promoteGame(id: number): { success: boolean; error?: string; game?: Game } {
     const game: Game | null = this.getGameById(id);
     if (!game) return { success: false, error: '游戏不存在' };
+    const oldPath = game.source_path;    const newPath = path.dirname(oldPath);    if (newPath === oldPath || newPath === path.parse(oldPath).root) {
+      return { success: false, error: '无法再向上提升' };    }
 
-    const oldPath = game.source_path;
-    const newPath = path.dirname(oldPath);
-    if (newPath === oldPath || newPath === path.parse(oldPath).root) {
-      return { success: false, error: '无法再向上提升，已是根目录' };
-    }
-
-    // 检查父目录是否已有游戏记录
-    const existing: Game | null = this.getGameByPath(newPath);
-    if (existing) {
-      return { success: false, error: `父目录已有游戏记录：${existing.title}（id=${existing.id}）` };
-    }
+    const existing: Game | null = this.getGameByPath(newPath);    if (existing) {
+      return { success: false, error: `父目录已有游戏记录：${existing.title}（id=${existing.id}）` };    }
 
     const newDirName = path.basename(newPath);
-
-    // === 1. 处理 game.json ===
-    const oldHasGameJson = hasLocalMetadata(oldPath);
-    if (oldHasGameJson) {
-      // 读取旧的 game.json，写入到新目录
-      const meta = readLocalMetadata(oldPath);
-      if (meta) {
-        writeLocalMetadata(newPath, meta);
-        fs.unlinkSync(path.join(oldPath, 'game.json'));
-        logger.info('[提升目录] game.json 已移动: %s -> %s', oldPath, newPath);
-      }
-    } else {
-      // 不存在 game.json，从 DB 创建新的
-      logger.info('[提升目录] 从数据库创建 game.json: %s', newPath);
-    }
-
-    // === 2. 处理海报文件 ===
-    const posterTypes: Array<'horizontal' | 'vertical' | 'banner' | 'background'> = ['horizontal', 'vertical', 'banner', 'background'];
-    const newPosterPaths: Record<string, string | null> = {};
-
-    for (const type of posterTypes) {
-      const dbField = `poster_${type}_path` as keyof Game;
-      const oldPosterPath = game[dbField] as string | undefined;
-
-      // 先检查 DB 记录的路径
-      let actualOldPath: string | null = null;
-      if (oldPosterPath && fs.existsSync(oldPosterPath)) {
-        actualOldPath = oldPosterPath;
-      } else {
-        // DB 路径不存在，检查旧目录下的标准文件名
-        const standardName = {
-          horizontal: 'poster-horizontal.jpg',
-          vertical: 'poster-vertical.jpg',
-          banner: 'poster-banner.jpg',
-          background: 'background.jpg'
-        }[type];
-        const candidate = path.join(oldPath, standardName);
-        if (fs.existsSync(candidate)) {
-          actualOldPath = candidate;
-        }
-      }
-
-      if (actualOldPath) {
-        const standardName = {
-          horizontal: 'poster-horizontal.jpg',
-          vertical: 'poster-vertical.jpg',
-          banner: 'poster-banner.jpg',
-          background: 'background.jpg'
-        }[type];
-        const newPosterPath = path.join(newPath, standardName);
-        fs.renameSync(actualOldPath, newPosterPath);
-        newPosterPaths[`poster_${type}_path`] = newPosterPath;
-        logger.info('[提升目录] 海报已移动: %s -> %s', actualOldPath, newPosterPath);
-      } else {
-        newPosterPaths[`poster_${type}_path`] = null;
-      }
-    }
-
-    // === 3. 更新数据库 ===
     try {
-      const updateData: Record<string, unknown> = {
-        source_path: newPath,
-        original_name: newDirName,
-        // title/title_en 保留原值（刮削后的准确标题）
-        metadata_source: 'local',
-        has_local_poster: Object.values(newPosterPaths).some(v => v !== null) ? 1 : (game.has_local_poster ?? 0)
-      };
-
-      logger.debug('[提升目录] 更新数据: %j', updateData);
-
-      const fields: string[] = [];
-      const params: unknown[] = [];
-      for (const [key, value] of Object.entries(updateData)) {
-        // SQLite 不接受 undefined，转换为 null
-        fields.push(`${key} = ?`);
-        params.push(value === undefined ? null : value);
-      }
-      fields.push('updated_at = datetime("now", "localtime")');
-      params.push(id);
-
-      const sql = `UPDATE games SET ${fields.join(', ')} WHERE id = ?`;
-      logger.debug('[提升目录] SQL: %s, params: %j', sql, params);
-      database.db!.run(sql, params);
-
-      // 确保新目录的 game.json 包含最新 DB 数据
-      const updatedGame = this.getGameById(id);
-      if (updatedGame) {
-        writeLocalMetadata(newPath, updatedGame);
-      }
-
+      database.db!.run(
+        'UPDATE games SET source_path = ?, original_name = ?, updated_at = datetime("now", "localtime") WHERE id = ?',
+        [newPath, newDirName, id]
+      );
       database.save();
+      const updatedGame = this.getGameById(id);
       logger.info('[提升目录] 完成: %s -> %s, id=%d', path.basename(oldPath), newDirName, id);
-      return { success: true, game: updatedGame ?? undefined };
-    } catch (dbErr) {
+      return { success: true, game: updatedGame ?? undefined };    } catch (dbErr) {
       const error = dbErr instanceof Error ? dbErr : new Error(String(dbErr));
       logger.error('[提升目录] 数据库更新失败: %s', error.message);
-      logger.error('[提升目录] 错误堆栈: %s', error.stack || '无');
-      return { success: false, error: '数据库更新失败: ' + error.message };
-    }
+      return { success: false, error: '数据库更新失败: ' + error.message };    }
   }
 
   createManualGame(data: {
@@ -554,67 +455,27 @@ class GameDatabase {
     const { source_path, title } = data;
 
     if (!source_path || !title) {
-      return { success: false, error: 'source_path 和 title 为必填项' };
-    }
+      return { success: false, error: 'source_path 和 title 为必填项' };    }
 
     if (!fs.existsSync(source_path)) {
-      return { success: false, error: '目录不存在: ' + source_path };
-    }
+      return { success: false, error: '目录不存在: ' + source_path };    }
 
-    // 检查是否已有该路径的游戏记录
-    const existing = this.getGameByPath(source_path);
-    if (existing) {
-      return { success: false, error: `该路径已有游戏记录: ${existing.title}（id=${existing.id}）` };
-    }
-
-    const posters = checkLocalPosters(source_path);
-    const hasPoster = posters.horizontal || posters.vertical ? 1 : 0;
+    const existing = this.getGameByPath(source_path);    if (existing) {
+      return { success: false, error: `该路径已有游戏记录: ${existing.title}（id=${existing.id}）` };    }
 
     try {
-      const insertSql = `
-        INSERT INTO games (
-          source_path, title, title_en, original_name, steam_appid,
-            has_local_poster,
-          developer, publisher, release_date, genres,
-          short_description, notes,
-            metadata_source
-        ) VALUES (\?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, 'manual', ?)
-      `;
-      const params = [
-        source_path,
-        title,
-        data.title_en || null,
-        path.basename(source_path),
-        data.steam_appid || null,
-        posters.horizontal,
-        posters.vertical,
-        posters.banner,
-        posters.background,
-        hasPoster,
-        data.developer || null,
-        data.publisher || null,
-        data.release_date || null,
-        data.genres || null,
-        data.short_description || null,
-        data.notes || null,
-        path.join(source_path, 'game.json')
-      ];
-
-      database.db!.run(insertSql, params);
-
-      // 创建 game.json
-      writeLocalMetadata(source_path, this.getGameById((database.db!.exec('SELECT MAX(id) as id FROM games')[0].values[0][0]) as number)!);
-
+      database.db!.run(
+        'INSERT INTO games (source_path, title, title_en, original_name, steam_appid, developer, publisher, release_date, genres, short_description, notes, metadata_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "manual")',
+        [source_path, title, data.title_en || null, path.basename(source_path), data.steam_appid || null, data.developer || null, data.publisher || null, data.release_date || null, data.genres || null, data.short_description || null, data.notes || null]
+      );
       database.save();
-      logger.info('[手动添加] 游戏创建成功: %s', title);
       const newId = (database.db!.exec('SELECT MAX(id) as id FROM games')[0].values[0][0]) as number;
       const newGame = this.getGameById(newId);
-      return { success: true, id: newId, game: newGame ?? undefined };
-    } catch (dbErr) {
+      logger.info('[手动添加] 游戏创建成功: %s', title);
+      return { success: true, id: newId, game: newGame ?? undefined };    } catch (dbErr) {
       const error = dbErr instanceof Error ? dbErr : new Error(String(dbErr));
       logger.error('[手动添加] 创建失败: %s', error.message);
-      return { success: false, error: '数据库写入失败: ' + error.message };
-    }
+      return { success: false, error: '数据库写入失败: ' + error.message };    }
   }
 
   deleteNonexistent(): { deletedCount: number; deletedIds: number[] } {
@@ -1025,11 +886,6 @@ class GameDatabase {
     return null;
   }
 
-  updatePosterPath(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background', filePath: string): void {
-    const field = `poster_${type}_path`;
-    database.db!.run(`UPDATE games SET ${field} = ?, has_local_poster = 1, updated_at = datetime('now', 'localtime') WHERE id = ?`, [filePath, id]);
-    database.save();
-  }
 
   private rowToGame(resultMeta: QueryResult, row: unknown[]): Game {
     const obj: Record<string, unknown> = {};

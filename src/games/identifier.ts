@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { logger } from '../logger';
 import { gameDatabase } from './database';
-import { hasLocalMetadata, readLocalMetadata, checkLocalPosters } from './metadata-manager';
+// metadata-manager no longer used - game.json removed from design
 import { cleanGameName } from './name-cleaner';
 import type { Game, GameRules, GameScrapeConfig, GameRecognitionRule } from '../types';
 
@@ -99,7 +99,6 @@ function matchRecognitionRule(
  * 创建游戏记录
  */
 function createGameRecord(gamePath: string): Partial<Game> {
-  const posters = checkLocalPosters(gamePath);
   const cleanTitle = cleanGameName(path.basename(gamePath));
   const appid = readSteamAppidFile(gamePath);
 
@@ -108,11 +107,6 @@ function createGameRecord(gamePath: string): Partial<Game> {
     title: cleanTitle,
     original_name: path.basename(gamePath),
     steam_appid: appid || undefined,
-    poster_horizontal_path: posters.horizontal || undefined,
-    poster_vertical_path: posters.vertical || undefined,
-    poster_banner_path: posters.banner || undefined,
-    background_path: posters.background || undefined,
-    has_local_poster: posters.horizontal || posters.vertical ? 1 : 0,
     metadata_source: 'regex',
     is_manually_edited: 0
   };
@@ -137,42 +131,7 @@ function scanEntry(
   if (processedPaths.has(normalizedPath)) return games;
 
   // 文件不检查 game.json（只有目录可能有）
-  if (!isFile) {
-    // P1: 本地元数据 (game.json)
-    if (hasLocalMetadata(entryPath)) {
-      const localMeta = readLocalMetadata(entryPath);
-      if (localMeta) {
-        const posters = checkLocalPosters(entryPath);
-        games.push({
-          source_path: entryPath,
-          title: localMeta.title || path.basename(entryPath),
-          title_en: localMeta.title_en,
-          original_name: path.basename(entryPath),
-          steam_appid: localMeta.steam_appid,
-          poster_horizontal_path: posters.horizontal || undefined,
-          poster_vertical_path: posters.vertical || undefined,
-          poster_banner_path: posters.banner || undefined,
-          background_path: posters.background || undefined,
-          has_local_poster: posters.horizontal || posters.vertical ? 1 : 0,
-          developer: localMeta.developer,
-          publisher: localMeta.publisher,
-          release_date: localMeta.release_date,
-          genres: localMeta.genres ? JSON.stringify(localMeta.genres) : undefined,
-          rating: localMeta.rating,
-          description: localMeta.description,
-          short_description: localMeta.short_description,
-          languages: localMeta.languages ? JSON.stringify(localMeta.languages) : undefined,
-          tags: localMeta.tags ? JSON.stringify(localMeta.tags) : undefined,
-          metadata_source: 'local',
-          metadata_path: path.join(entryPath, 'game.json'),
-          is_manually_edited: 0
-        });
-        processedPaths.add(normalizedPath);
-        logger.info('识别游戏(本地元数据): %s [depth=%d]', localMeta.title || path.basename(entryPath), depth);
-        return games;
-      }
-    }
-  }
+  // 文件不检查 game.json（新设计不使用本地元数据）
 
   // P2: 正则规则匹配（文件和目录都可以匹配）
   const matchResult = matchRecognitionRule(entryPath, isFile, rules, scanRoot);

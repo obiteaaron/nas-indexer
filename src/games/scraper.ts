@@ -14,8 +14,10 @@ export interface SteamSearchItem {
 
 import { logger } from '../logger';
 import { gameDatabase } from './database';
-import { writeLocalMetadata, savePoster } from './metadata-manager';
 import { cleanGameName } from './name-cleaner';
+import { getStoragePath, loadConfig } from '../utils';
+import { PosterService } from './poster-service';
+import { ensureGamesDirs } from './storage';
 import type { Game } from '../types';
 
 const STEAM_SEARCH_URL = 'https://store.steampowered.com/api/storesearch/';
@@ -232,15 +234,19 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
     scraped_at: new Date().toISOString()
   };
 
-  // 下载海报到本地
+  // 下载海报到 profiles/games/posters/{gameId}/
   if (downloadPosters && game.source_path) {
     try {
+      const config = loadConfig();
+      const storagePath = getStoragePath(config);
+      ensureGamesDirs(storagePath);
+      const posterService = new PosterService(storagePath);
+
       // 横版海报 (header_image)
       if (data.header_image) {
         const horizontalData = await downloadImage(data.header_image);
         if (horizontalData) {
-          const posterPath = savePoster(game.source_path, 'horizontal', horizontalData);
-          updateData.poster_horizontal_path = posterPath;
+          posterService.saveFromBuffer(game.id, 'horizontal', horizontalData);
           updateData.has_local_poster = 1;
         }
       }
@@ -249,8 +255,7 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
       if (data.background) {
         const backgroundData = await downloadImage(data.background);
         if (backgroundData) {
-          const bgPath = savePoster(game.source_path, 'background', backgroundData);
-          updateData.background_path = bgPath;
+          posterService.saveFromBuffer(game.id, 'background', backgroundData);
         }
       }
     } catch (err) {
@@ -262,12 +267,6 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
   gameDatabase.updateGame(gameId, updateData);
 
   // 写入本地 game.json
-  if (game.source_path && downloadPosters) {
-    const updatedGame = gameDatabase.getGameById(gameId);
-    if (updatedGame) {
-      writeLocalMetadata(game.source_path, updatedGame);
-    }
-  }
 
   logger.info('刮削完成: %s (appid %d)', game.title, appid);
   return gameDatabase.getGameById(gameId);
