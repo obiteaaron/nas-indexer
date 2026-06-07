@@ -201,12 +201,22 @@
               <label>识别规则</label>
               <div class="game-rules-section">
                 <div class="priority-group">
-                  <span class="priority-label">识别优先级 1: 本地元数据</span>
-                  <span class="hint">游戏目录下的 game.json 文件（识别优先级最高，不可在此配置）</span>
+                  <span class="priority-label">识别优先级 1: 手动标记（P0）</span>
+                  <span class="hint">手动添加或提升目录的游戏，自动标记为用户确认，跳过自动识别（最高优先级）</span>
                 </div>
 
                 <div class="priority-group">
-                  <span class="priority-label">识别优先级 2: 正则规则匹配</span>
+                  <span class="priority-label">识别优先级 2: Steam锚点（P1）</span>
+                  <span class="hint">自动向上查找 steam_appid.txt 文件定位游戏根目录</span>
+                </div>
+
+                <div class="priority-group">
+                  <span class="priority-label">识别优先级 3: 启发式规则（P2）</span>
+                  <span class="hint">基于exe目录名、标准子目录、目录大小等特征智能判断</span>
+                </div>
+
+                <div class="priority-group">
+                  <span class="priority-label">识别优先级 4: 正则规则匹配（P3）</span>
                 </div>
 
                 <div class="rule-item">
@@ -264,13 +274,13 @@
 
             <div class="game-doc-section" v-if="config.gamesEnabled">
               <h4 class="doc-title" @click="showGameDoc = !showGameDoc">
-                📖 game.json 格式说明
+                📖 游戏识别优先级说明
                 <span class="doc-toggle">{{ showGameDoc ? '收起' : '展开' }}</span>
               </h4>
               <div v-if="showGameDoc" class="doc-content">
-                <p class="doc-desc">在游戏目录下放置 <code>game.json</code> 文件可手动提供元数据。系统识别时会优先读取此文件，识别优先级最高。</p>
+                <p class="doc-desc">系统采用四级优先级识别游戏根目录，手动操作优先级最高：</p>
 
-                <h5>字段说明</h5>
+                <h5>优先级说明</h5>
                 <table class="doc-table">
                   <thead>
                     <tr><th>字段</th><th>类型</th><th>说明</th></tr>
@@ -364,7 +374,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths, cleanupStaleFiles } from '../api'
-import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule, GameRules, GameScrapeConfig, GameRecognitionRule } from '../types'
+import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule, GameRules, GameScrapeConfig, GameRecognitionRule, HeuristicRulesConfig } from '../types'
 
 const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
   { pattern: '\\[GOG\\]$',           levelOffset: 0, enabled: true, description: 'GOG 版游戏（目录名结尾）' },
@@ -375,10 +385,24 @@ const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
   { pattern: '/games/',              levelOffset: 0, enabled: true, description: '通用游戏目录名' },
 ]
 
+const DEFAULT_HEURISTIC_RULES: HeuristicRulesConfig = {
+  exeNameMatchEnabled: true,
+  exeNameMatchOffset: 1,
+  subdirRulesEnabled: true,
+  subdirPatterns: [
+    { patterns: ['Binaries', 'Binary', 'Bin', 'Win32', 'Win64'], offset: 1, description: '可执行文件标准子目录' },
+    { patterns: ['Redist', 'Support', 'Common'], offset: 1, description: 'redistributable/support目录' },
+    { patterns: ['Data', 'Assets', 'Resources'], offset: 0, description: '数据/资源目录（通常就是根目录）' }
+  ],
+  sizeHeuristicEnabled: true,
+  sizeThresholdMB: 100,
+  sizeRatioThreshold: 5
+}
+
 const DEFAULT_GAME_RULES: GameRules = {
   recognitionRules: DEFAULT_RECOGNITION_RULES,
+  heuristicRules: DEFAULT_HEURISTIC_RULES,
   blacklistPatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__'],
-  metadataFile: 'game.json',
   maxScanDepth: 3
 }
 
@@ -459,8 +483,8 @@ function addRecognitionRule(): void {
   if (!config.value.gamesRules) {
     config.value.gamesRules = {
       recognitionRules: [...DEFAULT_RECOGNITION_RULES],
+      heuristicRules: DEFAULT_HEURISTIC_RULES,
       blacklistPatterns: [...DEFAULT_GAME_RULES.blacklistPatterns],
-      metadataFile: DEFAULT_GAME_RULES.metadataFile,
       maxScanDepth: DEFAULT_GAME_RULES.maxScanDepth
     }
   }
@@ -514,8 +538,11 @@ async function loadConfig(): Promise<void> {
         gameScanPaths: res.data.gameScanPaths || [],
         gamesRules: {
           recognitionRules: res.data.gamesRules?.recognitionRules || DEFAULT_RECOGNITION_RULES,
+          heuristicRules: {
+            ...DEFAULT_HEURISTIC_RULES,
+            ...(res.data.gamesRules?.heuristicRules || {})
+          },
           blacklistPatterns: res.data.gamesRules?.blacklistPatterns || DEFAULT_GAME_RULES.blacklistPatterns,
-          metadataFile: res.data.gamesRules?.metadataFile || DEFAULT_GAME_RULES.metadataFile,
           maxScanDepth: res.data.gamesRules?.maxScanDepth ?? DEFAULT_GAME_RULES.maxScanDepth
         },
         gamesScrape: res.data.gamesScrape || DEFAULT_GAME_SCRAPE

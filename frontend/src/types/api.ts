@@ -334,10 +334,29 @@ export interface GameRecognitionRule {
   description?: string;
 }
 
+export interface HeuristicRulesConfig {
+  // 规则1：exe目录名匹配
+  exeNameMatchEnabled: boolean;
+  exeNameMatchOffset: number;
+
+  // 规则2：标准子目录层级偏移
+  subdirPatterns: Array<{
+    patterns: string[];
+    offset: number;
+    description: string;
+  }>;
+  subdirRulesEnabled: boolean;
+
+  // 规则3：目录大小启发
+  sizeHeuristicEnabled: boolean;
+  sizeThresholdMB: number;
+  sizeRatioThreshold: number;
+}
+
 export interface GameRules {
   recognitionRules: GameRecognitionRule[];
+  heuristicRules: HeuristicRulesConfig;
   blacklistPatterns: string[];
-  metadataFile: string;
   maxScanDepth: number;
 }
 
