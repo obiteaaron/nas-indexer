@@ -36,9 +36,6 @@
         <button class="btn btn-warning" @click="handleCleanupStaleGames">
           清理已移除路径记录
         </button>
-        <button class="btn btn-info" @click="showMigrationModal = true; migrationPreview = null; migrationResult = null">
-          海报迁移
-        </button>
       </div>
     </div>
 
@@ -387,49 +384,6 @@
   </div>
   </div>
   </div>
-
-    <!-- Migration Modal -->
-    <div class="modal-overlay" v-if="showMigrationModal" @click.self="showMigrationModal = false">
-      <div class="modal-content migration-modal">
-        <div class="modal-header">
-          <h3>海报迁移工具</h3>
-          <button class="modal-close" @click="showMigrationModal = false">x</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="migrationLoading" class="migration-loading">
-            <p>正在处理...</p>
-          </div>
-          <div v-else-if="!migrationResult">
-            <div v-if="migrationPreview">
-              <p class="migration-info">
-                发现 <strong>{{ migrationPreview.gamesWithPosters.length }}</strong> 个游戏有本地海报，
-                共 <strong>{{ migrationPreview.totalGames }}</strong> 个游戏
-              </p>
-              <p class="migration-warning">此操作将把海报从游戏目录迁移到集中存储目录，不会删除原文件</p>
-            </div>
-            <div v-else>
-              <p>点击预览查看迁移情况</p>
-            </div>
-          </div>
-          <div v-else class="migration-result">
-            <p>迁移完成!</p>
-            <p>迁移海报: <strong>{{ migrationResult.migratedPosters }}</strong> 个</p>
-            <p v-if="migrationResult.errors.length > 0" class="migration-errors">
-              错误: {{ migrationResult.errors.length }} 个
-            </p>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button class="btn btn-secondary" @click="showMigrationModal = false">关闭</button>
-          <button v-if="!migrationResult" class="btn btn-primary" @click="runPreview" :disabled="migrationLoading">
-            {{ migrationLoading ? '加载中...' : '预览' }}
-          </button>
-          <button v-if="migrationPreview && !migrationResult" class="btn btn-warning" @click="runMigration" :disabled="migrationLoading">
-            {{ migrationLoading ? '迁移中...' : '执行迁移' }}
-          </button>
-        </div>
-      </div>
-    </div>
 </template>
 
 <script setup lang="ts">
@@ -455,9 +409,7 @@ import {
   createGame as createGameApi,
   removeNonexistentGames,
   cleanupStaleGames,
-  getGroupGames,
-  getMigrationPreview,
-  executeMigration
+  getGroupGames
 } from '../api'
 import GameCard from '../components/GameCard.vue'
 import GameGroupSidebar from '../components/GameGroupSidebar.vue'
@@ -506,12 +458,6 @@ const selectedGroupName = ref('')
 const showGroupManager = ref(false)
 const config = ref({ groupsEnabled: true })
 const isFavoriteFilter = ref(false)
-
-// Migration state
-const showMigrationModal = ref(false)
-const migrationPreview = ref<{ totalGames: number; gamesWithPosters: string[]; gamesWithMetadata: string[] } | null>(null)
-const migrationLoading = ref(false)
-const migrationResult = ref<{ totalGames: number; migratedMetadata: number; migratedPosters: number; errors: string[] } | null>(null)
 
 const page = ref(1)
 const pageSize = ref(50)
@@ -985,35 +931,6 @@ function handleEsc(e: KeyboardEvent): void {
     if (showRemoveNonexistentModal.value) { showRemoveNonexistentModal.value = false }
   }
 }
-
-// Migration functions
-async function runPreview(): Promise<void> {
-  migrationLoading.value = true
-  try {
-    const res = await getMigrationPreview()
-    if (res.success && res.data) {
-      migrationPreview.value = res.data
-    }
-  } catch (err) {
-    console.error('Preview failed:', err)
-  }
-  migrationLoading.value = false
-}
-
-async function runMigration(): Promise<void> {
-  migrationLoading.value = true
-  try {
-    const res = await executeMigration()
-    if (res.success && res.data) {
-      migrationResult.value = res.data
-      await loadGames()
-      await loadStats()
-    }
-  } catch (err) {
-    console.error('Migration failed:', err)
-  }
-  migrationLoading.value = false
-}
 </script>
 
 <style scoped>
@@ -1430,27 +1347,5 @@ async function runMigration(): Promise<void> {
 
 .toggle-more:hover {
   text-decoration: underline;
-}
-
-.migration-modal {
-  max-width: 500px;
-}
-.migration-info {
-  margin-bottom: 12px;
-}
-.migration-warning {
-  color: #e67e22;
-  font-size: 14px;
-}
-.migration-loading {
-  text-align: center;
-  padding: 20px;
-}
-.migration-result {
-  text-align: center;
-}
-.migration-errors {
-  color: #e74c3c;
-  margin-top: 10px;
 }
 </style>

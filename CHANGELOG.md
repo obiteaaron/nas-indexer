@@ -1,5 +1,18 @@
 # 更新日志
 
+## [v1.5.3] - 2026-06-07
+
+### 技术改进
+- **游戏元数据集中存储** - 完成游戏海报集中存储到 profiles/games/posters/{game_id}/
+- **移除冗余字段** - 移除数据库中的 has_local_poster 字段，通过文件系统动态检查海报存在性
+- **Backup API** - 添加游戏数据备份/恢复功能（create/list/restore/delete）
+- **Poster API规范化** - 修正海报上传/删除/redownload API路径，符合设计方案规范
+- **清理冗余代码** - 移除未使用的 poster.ts 和 migration.ts 文件
+
+### Bug 修复
+- **Backup路由挂载** - 修复backup路由未正确挂载到games路由的问题
+- **海报上传路径** - 修正海报上传API路径从 /:id/poster/:type 改为 /:id/poster/upload
+
 ## [v1.5.3] - 2026-05-27
 
 ### 技术改进

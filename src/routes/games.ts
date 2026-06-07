@@ -14,9 +14,13 @@ import { PosterService } from '../games/poster-service';
 import { initDatabase, loadConfig, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
 import { logger } from '../logger';
 import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup } from '../types';
+import backupRouter from './backup';
 
 const router: Router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+// Mount backup router at /backup
+router.use('/backup', backupRouter);
 
 /**
  * 初始化游戏数据库（确保表已创建）
@@ -587,30 +591,33 @@ router.post('/scrape/batch', async (req: Request, res: Response): Promise<void> 
 router.get('/:id/poster/:type', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
-    const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
+    const gameId = parseInt(req.params.id as string);
+    const game: Game | null = gameDatabase.getGameById(gameId);
     if (!game) {
-      res.status(404).json({ success: false, error: '游戏不存在' });
+      res.status(404).json({ success: false, error: 'Game not found' });
       return;
     }
 
-    const type: 'horizontal' | 'vertical' | 'banner' | 'background' = req.params.type as 'horizontal' | 'vertical' | 'banner' | 'background';
-    const posterPath: string | null = gameDatabase.getPosterPath(game, type);
+    const type = req.params.type as 'horizontal' | 'vertical' | 'banner' | 'background';
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    const posterService = new PosterService(storagePath);
+    const posterPath = posterService.getPosterPath(gameId, type);
 
-    if (posterPath && fs.existsSync(posterPath)) {
+    if (fs.existsSync(posterPath)) {
       res.sendFile(posterPath);
     } else {
-      res.status(404).json({ success: false, error: '海报不存在' });
+      res.status(404).json({ success: false, error: 'Poster not found' });
     }
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });
   }
 });
-
 /**
  * 上传海报
  */
-router.post('/:id/poster/:type', upload.single('poster'), async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/poster/upload', upload.single('poster'), async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
     const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
@@ -619,15 +626,16 @@ router.post('/:id/poster/:type', upload.single('poster'), async (req: Request, r
       return;
     }
 
-    const type: 'horizontal' | 'vertical' | 'banner' | 'background' = req.params.type as 'horizontal' | 'vertical' | 'banner' | 'background';
+    const type: 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom' = (req.body.type || 'custom') as 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom';
 
     if (!req.file) {
       res.status(400).json({ success: false, error: '请上传海报文件' });
       return;
     }
 
-    const config = loadConfig(); const storagePath = getStoragePath(config); new PosterService(storagePath).saveFromBuffer(game.id, type, req.file.buffer);
-    gameDatabase.updateGame(game.id, { has_local_poster: 1 });
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    new PosterService(storagePath).saveFromBuffer(game.id, type, req.file.buffer);
 
     res.json({ success: true });
   } catch (err) {
@@ -639,7 +647,7 @@ router.post('/:id/poster/:type', upload.single('poster'), async (req: Request, r
 /**
  * 删除海报
  */
-router.post('/:id/poster/delete/:type', async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id/poster/:type', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
     const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
@@ -648,8 +656,56 @@ router.post('/:id/poster/delete/:type', async (req: Request, res: Response): Pro
       return;
     }
 
-    const type: 'horizontal' | 'vertical' | 'banner' | 'background' = req.params.type as 'horizontal' | 'vertical' | 'banner' | 'background';
-    const config = loadConfig(); const storagePath = getStoragePath(config); new PosterService(storagePath).deletePoster(game.id, type);
+    const type: 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom' = req.params.type as 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom';
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    new PosterService(storagePath).deletePoster(game.id, type);
+
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 重新下载海报（从Steam）
+ */
+router.post('/:id/poster/redownload', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
+    if (!game) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+
+    if (!game.steam_appid) {
+      res.status(400).json({ success: false, error: '游戏缺少Steam AppID' });
+      return;
+    }
+
+    const type: 'horizontal' | 'vertical' | 'banner' | 'background' = (req.body.type || 'horizontal') as 'horizontal' | 'vertical' | 'banner' | 'background';
+
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    const posterService = new PosterService(storagePath);
+
+    // 根据类型构建Steam CDN URL
+    const steamBaseUrl = 'https://cdn.cloudflare.steamstatic.com/steam/apps/' + game.steam_appid;
+    let posterUrl: string;
+
+    if (type === 'vertical') {
+      posterUrl = steamBaseUrl + '/capsule_236x175.jpg';
+    } else if (type === 'banner') {
+      posterUrl = steamBaseUrl + '/header.jpg';
+    } else if (type === 'background') {
+      posterUrl = steamBaseUrl + '/' + game.steam_appid + '_page_bg_raw.jpg';
+    } else {
+      posterUrl = steamBaseUrl + '/capsule_616x353.jpg';
+    }
+
+    await posterService.saveFromUrl(game.id, type, posterUrl);
 
     res.json({ success: true });
   } catch (err) {

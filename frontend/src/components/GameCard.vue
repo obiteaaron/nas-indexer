@@ -79,9 +79,12 @@ defineEmits<{
 }>()
 
 const posterUrl = computed(() => {
-  if (props.game.poster_horizontal_path) {
+  // 新设计：海报路径动态计算，不再依赖数据库字段
+  // has_local_poster 表示是否有本地海报（存储在 profiles/games/posters/{gameId}/）
+  if (props.game.has_local_poster) {
     return `/api/games/${props.game.id}/poster/${props.posterType}`
   }
+  // 如果有 Steam 海报 URL，直接使用
   if (props.game.poster_url) {
     return props.game.poster_url
   }

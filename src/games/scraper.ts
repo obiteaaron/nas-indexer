@@ -247,7 +247,6 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
         const horizontalData = await downloadImage(data.header_image);
         if (horizontalData) {
           posterService.saveFromBuffer(game.id, 'horizontal', horizontalData);
-          updateData.has_local_poster = 1;
         }
       }
 

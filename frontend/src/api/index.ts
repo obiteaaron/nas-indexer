@@ -351,17 +351,26 @@ export function getGamePosterUrl(id: number, type: 'horizontal' | 'vertical' | '
   return API_BASE + '/games/' + id + '/poster/' + type
 }
 
-export function uploadGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background', file: globalThis.File): Promise<ApiResponse<{ posterPath: string }>> {
+export function uploadGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom' = 'custom', file: globalThis.File): Promise<ApiResponse<{ posterPath: string }>> {
   clearCache('/games')
   const formData = new FormData()
   formData.append('poster', file)
-  return fetch(API_BASE + '/games/' + id + '/poster/' + type, { method: 'POST', body: formData })
+  formData.append('type', type)
+  return fetch(API_BASE + '/games/' + id + '/poster/upload', { method: 'POST', body: formData })
     .then(res => res.json() as Promise<ApiResponse<{ posterPath: string }>>)
 }
 
-export function deleteGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background'): Promise<ApiResponse<void>> {
+export function deleteGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom'): Promise<ApiResponse<void>> {
   clearCache('/games')
-  return request<void>('/games/' + id + '/poster/delete/' + type, { method: 'POST' })
+  return request<void>('/games/' + id + '/poster/' + type, { method: 'DELETE' })
+}
+
+export function redownloadGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' = 'horizontal'): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/' + id + '/poster/redownload', {
+    method: 'POST',
+    body: JSON.stringify({ type })
+  })
 }
 
 export function openGame(id: number): Promise<ApiResponse<void>> {
@@ -509,8 +518,33 @@ export function reorderGroupGames(groupId: number, items: Array<{ game_id: numbe
 export function getGamesNotInGroup(groupId: number): Promise<ApiResponse<Game[]>> {
   return request<Game[]>('/games/groups/' + groupId + '/games/candidates')
 }
-// === 迁移 API ===
-export {
-  getMigrationPreview,
-  executeMigration
-} from './migration'
+
+// === Backup API ===
+
+export interface BackupInfo {
+  filename: string;
+  createdAt: string;
+  fileSize: number;
+}
+
+export function listBackups(): Promise<ApiResponse<BackupInfo[]>> {
+  return request<BackupInfo[]>('/games/backup/list')
+}
+
+export function createBackup(name?: string): Promise<ApiResponse<{ filename: string }>> {
+  return request<{ filename: string }>('/games/backup/create', {
+    method: 'POST',
+    body: JSON.stringify({ name })
+  })
+}
+
+export function restoreBackup(filename: string, mode: 'merge' | 'overwrite' = 'merge'): Promise<ApiResponse<{ filename: string; mode: string }>> {
+  return request<{ filename: string; mode: string }>('/games/backup/' + filename + '/restore', {
+    method: 'POST',
+    body: JSON.stringify({ mode })
+  })
+}
+
+export function deleteBackup(filename: string): Promise<ApiResponse<void>> {
+  return request<void>('/games/backup/' + filename, { method: 'DELETE' })
+}

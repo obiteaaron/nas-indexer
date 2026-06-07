@@ -40,8 +40,6 @@ class GameDatabase {
 
         poster_url TEXT,
         cover_url TEXT,
-        
-        has_local_poster INTEGER DEFAULT 0,
 
         developer TEXT,
         publisher TEXT,
@@ -141,8 +139,7 @@ class GameDatabase {
       steam_appid = null,
       poster_url = null,
       cover_url = null,
-      
-      has_local_poster = 0,
+
       developer = null,
       publisher = null,
       release_date = null,
@@ -179,14 +176,14 @@ class GameDatabase {
         database.db!.run(`
           UPDATE games SET
             title = ?, title_en = ?, original_name = ?, steam_appid = ?,
-            poster_url = ?, cover_url = ?, has_local_poster = ?,
+            poster_url = ?, cover_url = ?,
             developer = ?, publisher = ?, release_date = ?, genres = ?, rating = ?,
             description = ?, short_description = ?, languages = ?, tags = ?, notes = ?,
             is_manually_edited = ?, updated_at = datetime('now', 'localtime')
           WHERE id = ?
         `, [
           title, title_en, original_name, steam_appid,
-          poster_url, cover_url, has_local_poster,
+          poster_url, cover_url,
           developer, publisher, release_date, genres, rating,
           description, short_description, languages, tags, notes,
           screenshots, metadata_source, scraped_at,
@@ -199,16 +196,16 @@ class GameDatabase {
         const insertSql = `
           INSERT INTO games (
             source_path, title, title_en, original_name, steam_appid,
-            poster_url, cover_url, has_local_poster,
+            poster_url, cover_url,
             developer, publisher, release_date, genres, rating,
             description, short_description, languages, tags, notes,
             screenshots, metadata_source, scraped_at,
             is_manually_edited
-          ) VALUES (\?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         const insertParams = [
           source_path, title, title_en, original_name, steam_appid,
-          poster_url, cover_url, has_local_poster,
+          poster_url, cover_url,
           developer, publisher, release_date, genres, rating,
           description, short_description, languages, tags, notes,
           screenshots, metadata_source, scraped_at,
@@ -358,7 +355,7 @@ class GameDatabase {
 
     const allowedFields = [
       'title', 'title_en', 'original_name', 'steam_appid',
-      'poster_url', 'cover_url', 'has_local_poster',
+      'poster_url', 'cover_url',
       'developer', 'publisher', 'release_date', 'genres', 'rating',
       'description', 'short_description', 'languages', 'tags', 'notes',
       'is_manually_edited'
@@ -877,14 +874,6 @@ class GameDatabase {
 
   // === 海报路径处理 ===
 
-  getPosterPath(game: Game, type: 'horizontal' | 'vertical' | 'banner' | 'background'): string | null {
-    const pathField = `poster_${type}_path` as keyof Game;
-    const localPath = game[pathField] as string | undefined;
-    if (localPath && fs.existsSync(localPath)) {
-      return localPath;
-    }
-    return null;
-  }
 
 
   private rowToGame(resultMeta: QueryResult, row: unknown[]): Game {

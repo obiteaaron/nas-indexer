@@ -17,11 +17,6 @@ export interface Game {
   // 海报相关
   poster_url?: string;
   cover_url?: string;
-  poster_horizontal_path?: string;
-  poster_vertical_path?: string;
-  poster_banner_path?: string;
-  background_path?: string;
-  has_local_poster: number;
 
   // 元数据
   developer?: string;

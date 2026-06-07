@@ -22,7 +22,6 @@ import recommendationsRouter from './routes/recommendations';
 import trackingRouter from './routes/tracking';
 import gamesRouter from './routes/games';
 import { router as statsRouter, setScanJob } from './routes/stats';
-import migrationRouter from './routes/migration';
 
 const app = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
@@ -135,7 +134,6 @@ app.use('/api/preview', previewRouter);
 app.use('/api/recommendations', recommendationsRouter);
 app.use('/api/tracking', trackingRouter);
 app.use('/api/stats', statsRouter);
-app.use('/api/migration', migrationRouter);
 
 // Static files - serve Vue frontend
 const frontendPath: string = path.join(PROJECT_ROOT, 'frontend', 'dist');
