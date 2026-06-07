@@ -13,7 +13,7 @@ import { logger } from '../logger';
 import { gameDatabase } from './database';
 // metadata-manager no longer used - game.json removed from design
 import { cleanGameName } from './name-cleaner';
-import type { Game, GameRules, GameScrapeConfig, GameRecognitionRule } from '../types';
+import type { Game, GameRules, GameScrapeConfig, GameRecognitionRule, HeuristicRulesConfig } from '../types';
 
 /**
  * P1: 向上查找steam_appid.txt文件
@@ -39,70 +39,89 @@ function findSteamAppidUpward(startDir: string, stopAtRoot: string): string | nu
 /**
  * P2: 启发式规则判断游戏根目录（含层级偏移自适应）
  * 根据目录结构和exe位置自动判断
+ *
+ * 注意：Steam锚点（steam_appid.txt向上查找）在P1阶段处理，此函数处理其他启发式规则
  */
-function findHeuristicRoot(initialGameDir: string, exePath: string, scanRoot: string): string {
+function findHeuristicRoot(
+  initialGameDir: string,
+  exePath: string,
+  scanRoot: string,
+  heuristicRules: HeuristicRulesConfig
+): string {
   const exeName = path.basename(exePath, '.exe').toLowerCase();
   const exeDir = path.dirname(exePath);
   const exeDirName = path.basename(exeDir).toLowerCase();
 
   // 规则1：exe所在目录名与exe名相同（如 Game/Game.exe）
-  // 通常需要向上提升1级到父目录
-  if (exeDirName === exeName || exeDirName === exeName.replace(/[^a-z0-9]/g, '')) {
-    const parent = path.dirname(exeDir);
-    if (parent !== exeDir && path.resolve(parent) !== path.resolve(scanRoot)) {
-      logger.debug('[智能识别] exe目录名与exe名相同，向上提升1级: %s → %s', exeDir, parent);
-      return parent;
+  // 通常需要向上提升到父目录
+  if (heuristicRules.exeNameMatchEnabled) {
+    if (exeDirName === exeName || exeDirName === exeName.replace(/[^a-z0-9]/g, '')) {
+      let result = exeDir;
+      for (let i = 0; i < heuristicRules.exeNameMatchOffset; i++) {
+        const parent = path.dirname(result);
+        if (parent === result || path.resolve(parent) === path.resolve(scanRoot)) {
+          break;
+        }
+        result = parent;
+      }
+      if (result !== exeDir) {
+        logger.debug('[智能识别-P2.1] exe目录名与exe名相同，向上提升%d级: %s → %s',
+          heuristicRules.exeNameMatchOffset, exeDir, result);
+        return result;
+      }
     }
   }
 
   // 规则2：标准子目录层级偏移
   // 这些目录通常是游戏根目录下的标准子结构
-  const subdirRules = [
-    { patterns: ['binaries', 'binary', 'bin', 'win32', 'win64'], offset: 1 },
-    { patterns: ['redist', 'support', 'common'], offset: 1 },
-    { patterns: ['data', 'assets', 'resources'], offset: 0 },  // 这些可能就是根目录
-  ];
-
-  const normalizedPath = exePath.replace(/\\/g, '/').toLowerCase();
-  for (const rule of subdirRules) {
-    for (const pattern of rule.patterns) {
-      if (normalizedPath.includes(`/${pattern}/`)) {
-        let result = exeDir;
-        for (let i = 0; i < rule.offset; i++) {
-          const parent = path.dirname(result);
-          if (parent === result || path.resolve(parent) === path.resolve(scanRoot)) {
-            break;
+  if (heuristicRules.subdirRulesEnabled) {
+    const normalizedPath = exePath.replace(/\\/g, '/').toLowerCase();
+    for (const rule of heuristicRules.subdirPatterns) {
+      for (const pattern of rule.patterns) {
+        const patternLower = pattern.toLowerCase();
+        if (normalizedPath.includes(`/${patternLower}/`)) {
+          let result = exeDir;
+          for (let i = 0; i < rule.offset; i++) {
+            const parent = path.dirname(result);
+            if (parent === result || path.resolve(parent) === path.resolve(scanRoot)) {
+              break;
+            }
+            result = parent;
           }
-          result = parent;
-        }
-        if (result !== exeDir) {
-          logger.debug('[智能识别] 标准子目录%s，向上提升%d级: %s → %s',
-            pattern, rule.offset, exeDir, result);
-          return result;
+          if (result !== exeDir) {
+            logger.debug('[智能识别-P2.2] 标准子目录%s，向上提升%d级: %s → %s',
+              pattern, rule.offset, exeDir, result);
+            return result;
+          }
         }
       }
     }
   }
 
   // 规则3：目录大小启发（游戏根目录通常较大）
-  // 如果exeDir很小（<100MB），可能只是子目录，向上查找
-  try {
-    const exeDirSize = getDirectorySize(exeDir);
-    if (exeDirSize < 100 * 1024 * 1024) { // < 100MB
-      const parent = path.dirname(exeDir);
-      if (parent !== exeDir && path.resolve(parent) !== path.resolve(scanRoot)) {
-        const parentSize = getDirectorySize(parent);
-        // 父目录明显更大，可能是根目录
-        if (parentSize > exeDirSize * 5) {
-          logger.debug('[智能识别] exe目录过小(%dMB)，父目录更大(%dMB)，向上提升: %s → %s',
-            Math.round(exeDirSize / 1024 / 1024), Math.round(parentSize / 1024 / 1024),
-            exeDir, parent);
-          return parent;
+  // 如果exeDir很小，可能只是子目录，向上查找更大的父目录
+  if (heuristicRules.sizeHeuristicEnabled) {
+    try {
+      const exeDirSize = getDirectorySize(exeDir);
+      const thresholdBytes = heuristicRules.sizeThresholdMB * 1024 * 1024;
+
+      if (exeDirSize < thresholdBytes) {
+        const parent = path.dirname(exeDir);
+        if (parent !== exeDir && path.resolve(parent) !== path.resolve(scanRoot)) {
+          const parentSize = getDirectorySize(parent);
+          // 父目录明显更大，可能是根目录
+          if (parentSize > exeDirSize * heuristicRules.sizeRatioThreshold) {
+            logger.debug('[智能识别-P2.3] exe目录过小(%dMB)，父目录更大(%dMB)，向上提升: %s → %s',
+              Math.round(exeDirSize / 1024 / 1024),
+              Math.round(parentSize / 1024 / 1024),
+              exeDir, parent);
+            return parent;
+          }
         }
       }
+    } catch {
+      // 忽略大小计算错误
     }
-  } catch {
-    // 忽略大小计算错误
   }
 
   return initialGameDir;
@@ -146,9 +165,10 @@ function smartLevelOffset(
   initialGameDir: string,
   matchedPath: string,
   rule: GameRecognitionRule,
-  scanRoot: string
+  scanRoot: string,
+  heuristicRules: HeuristicRulesConfig
 ): string {
-  // P1: Steam锚点优先级最高
+  // P1: Steam锚点优先级最高（固定启用，无需配置）
   const steamRoot = findSteamAppidUpward(initialGameDir, scanRoot);
   if (steamRoot) {
     logger.info('[智能识别] P1成功 - steam_appid.txt锚点: %s', steamRoot);
@@ -156,7 +176,7 @@ function smartLevelOffset(
   }
 
   // P2: 启发式规则（含自适应）
-  const heuristicRoot = findHeuristicRoot(initialGameDir, matchedPath, scanRoot);
+  const heuristicRoot = findHeuristicRoot(initialGameDir, matchedPath, scanRoot, heuristicRules);
   if (heuristicRoot !== initialGameDir) {
     logger.info('[智能识别] P2成功 - 启发式判断: %s', heuristicRoot);
     return heuristicRoot;
@@ -256,7 +276,7 @@ function matchRecognitionRule(
           entryName, path.basename(gamePath), rule.pattern, rule.levelOffset, isFile ? '文件' : '目录');
 
         // 智能层级偏移（P1/P2/P3）
-        gamePath = smartLevelOffset(gamePath, entryPath, rule, scanRoot);
+        gamePath = smartLevelOffset(gamePath, entryPath, rule, scanRoot, rules.heuristicRules);
 
         return { matched: true, gamePath, rule, matchedPath: entryPath, isFile };
       }

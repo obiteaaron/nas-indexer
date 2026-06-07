@@ -11,6 +11,8 @@
   - P1: steam_appid.txt向上查找（Steam游戏锚点）
   - P2: 启发式规则 + 层级偏移自适应（exe目录名、标准子目录、目录大小）
   - P3: 配置levelOffset（兜底方案）
+- **启发式规则配置化** - 可配置exe目录名匹配、标准子目录模式、目录大小阈值
+- **配置说明文档** - docs/game-identification-rules.md
 - **清理冗余代码** - 移除未使用的 poster.ts 和 migration.ts 文件
 
 ### Bug 修复

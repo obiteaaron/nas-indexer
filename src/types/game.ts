@@ -58,12 +58,37 @@ export interface GameRecognitionRule {
 }
 
 /**
+ * 启发式规则配置
+ */
+export interface HeuristicRulesConfig {
+  // 规则1：exe目录名匹配
+  exeNameMatchEnabled: boolean;     // 是否启用exe名与目录名相同判断
+  exeNameMatchOffset: number;       // 向上提升层级（默认1）
+
+  // 规则2：标准子目录层级偏移
+  subdirPatterns: Array<{           // 子目录模式列表
+    patterns: string[];             // 目录名模式（如 Binaries, Win32）
+    offset: number;                 // 层级偏移
+    description: string;            // 说明
+  }>;
+  subdirRulesEnabled: boolean;      // 是否启用标准子目录规则
+
+  // 规则3：目录大小启发
+  sizeHeuristicEnabled: boolean;    // 是否启用目录大小判断
+  sizeThresholdMB: number;          // 小目录阈值（MB），小于此值可能需向上
+  sizeRatioThreshold: number;       // 父目录大小倍数阈值（父目录>子目录*此值）
+
+  // Steam锚点规则（固定启用）
+  // steam_appid.txt向上查找始终启用，无需配置
+}
+
+/**
  * 游戏识别配置
  */
 export interface GameRules {
   recognitionRules: GameRecognitionRule[];  // 正则规则列表
+  heuristicRules: HeuristicRulesConfig;     // 启发式规则配置
   blacklistPatterns: string[];              // 黑名单：匹配的路径跳过识别
-  metadataFile: string;                     // 本地元数据文件名
   maxScanDepth: number;                     // 递归深度限制
 }
 
@@ -135,10 +160,46 @@ export const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
   { pattern: '/games/',              levelOffset: 0, enabled: true, description: '通用游戏目录名' },
 ];
 
+/**
+ * 默认启发式规则配置
+ */
+export const DEFAULT_HEURISTIC_RULES: HeuristicRulesConfig = {
+  // 规则1：exe目录名匹配
+  exeNameMatchEnabled: true,
+  exeNameMatchOffset: 1,              // Game/Game.exe → Game/
+
+  // 规则2：标准子目录层级偏移
+  subdirRulesEnabled: true,
+  subdirPatterns: [
+    {
+      patterns: ['Binaries', 'Binary', 'Bin', 'Win32', 'Win64'],
+      offset: 1,
+      description: '可执行文件标准子目录'
+    },
+    {
+      patterns: ['Redist', 'Support', 'Common'],
+      offset: 1,
+      description: ' redistributable/support目录'
+    },
+    {
+      patterns: ['Data', 'Assets', 'Resources'],
+      offset: 0,
+      description: '数据/资源目录（通常就是根目录）'
+    }
+  ],
+
+  // 规则3：目录大小启发
+  sizeHeuristicEnabled: true,
+  sizeThresholdMB: 100,               // 小于此值可能只是子目录
+  sizeRatioThreshold: 5,              // 父目录需大于子目录5倍
+
+  // Steam锚点：steam_appid.txt向上查找始终启用（无需配置）
+};
+
 export const DEFAULT_GAME_RULES: GameRules = {
   recognitionRules: DEFAULT_RECOGNITION_RULES,
+  heuristicRules: DEFAULT_HEURISTIC_RULES,
   blacklistPatterns: ['$Recycle.Bin', 'System Volume Information', '.git', 'node_modules', '__pycache__'],
-  metadataFile: 'game.json',
   maxScanDepth: 3
 };
 
