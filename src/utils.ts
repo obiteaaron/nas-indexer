@@ -92,8 +92,28 @@ function loadConfig(): Config {
 
     const profilesConfigPath: string = path.join(DEFAULT_STORAGE_PATH, 'config.json');
     if (fs.existsSync(profilesConfigPath)) {
-      const config: Config = JSON.parse(fs.readFileSync(profilesConfigPath, 'utf-8'));
+      const rawConfig = JSON.parse(fs.readFileSync(profilesConfigPath, 'utf-8'));
       logger.debug('从 profiles 目录加载配置: %s', profilesConfigPath);
+
+      // 合并默认值，确保所有字段都存在
+      const config: Config = {
+        ...defaultConfig,
+        ...rawConfig,
+        // 特殊处理嵌套对象，确保默认值存在
+        gamesRules: {
+          ...defaultConfig.gamesRules!,
+          ...(rawConfig.gamesRules || {}),
+          heuristicRules: {
+            ...defaultConfig.gamesRules!.heuristicRules,
+            ...(rawConfig.gamesRules?.heuristicRules || {})
+          }
+        },
+        gamesScrape: {
+          ...defaultConfig.gamesScrape!,
+          ...(rawConfig.gamesScrape || {})
+        }
+      };
+
       return config;
     }
 
@@ -101,8 +121,27 @@ function loadConfig(): Config {
     if (envStoragePath) {
       const envConfigPath: string = path.join(envStoragePath, 'config.json');
       if (fs.existsSync(envConfigPath)) {
-        const config: Config = JSON.parse(fs.readFileSync(envConfigPath, 'utf-8'));
+        const rawConfig = JSON.parse(fs.readFileSync(envConfigPath, 'utf-8'));
         logger.info('从环境变量指定路径加载配置: %s', envConfigPath);
+
+        // 合并默认值
+        const config: Config = {
+          ...defaultConfig,
+          ...rawConfig,
+          gamesRules: {
+            ...defaultConfig.gamesRules!,
+            ...(rawConfig.gamesRules || {}),
+            heuristicRules: {
+              ...defaultConfig.gamesRules!.heuristicRules,
+              ...(rawConfig.gamesRules?.heuristicRules || {})
+            }
+          },
+          gamesScrape: {
+            ...defaultConfig.gamesScrape!,
+            ...(rawConfig.gamesScrape || {})
+          }
+        };
+
         return config;
       }
     }
@@ -110,8 +149,27 @@ function loadConfig(): Config {
     const userHome: string = process.env.USERPROFILE || process.env.HOME || os.homedir();
     const legacyConfigPath: string = path.join(userHome, 'nasscanclassllm', 'config.json');
     if (fs.existsSync(legacyConfigPath)) {
-      const config: Config = JSON.parse(fs.readFileSync(legacyConfigPath, 'utf-8'));
+      const rawConfig = JSON.parse(fs.readFileSync(legacyConfigPath, 'utf-8'));
       logger.info('检测到旧版本配置，正在迁移到 profiles 目录...');
+
+      // 合并默认值
+      const config: Config = {
+        ...defaultConfig,
+        ...rawConfig,
+        gamesRules: {
+          ...defaultConfig.gamesRules!,
+          ...(rawConfig.gamesRules || {}),
+          heuristicRules: {
+            ...defaultConfig.gamesRules!.heuristicRules,
+            ...(rawConfig.gamesRules?.heuristicRules || {})
+          }
+        },
+        gamesScrape: {
+          ...defaultConfig.gamesScrape!,
+          ...(rawConfig.gamesScrape || {})
+        }
+      };
+
       if (!config.storagePath) {
         config.storagePath = '';
       }
