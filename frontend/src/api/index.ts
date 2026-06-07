@@ -509,3 +509,8 @@ export function reorderGroupGames(groupId: number, items: Array<{ game_id: numbe
 export function getGamesNotInGroup(groupId: number): Promise<ApiResponse<Game[]>> {
   return request<Game[]>('/games/groups/' + groupId + '/games/candidates')
 }
+// === 迁移 API ===
+export {
+  getMigrationPreview,
+  executeMigration
+} from './migration'
