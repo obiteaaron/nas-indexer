@@ -214,11 +214,15 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
 
   const data = details.data;
 
-  // 更新游戏元数据
+  // 智能处理 title 和 title_en
+  // title_en 始终设置为 Steam 英文名
+  // title：如果用户已手动编辑过（is_manually_edited=1），保持原值；否则更新为 Steam 名称
+  const shouldUpdateTitle = !game.is_manually_edited;
+
   const updateData: Partial<Game> = {
     steam_appid: String(data.steam_appid),
-    title: data.name,
-    title_en: data.name,
+    title: shouldUpdateTitle ? data.name : game.title,
+    title_en: data.name,  // Steam 英文名，用于搜索匹配
     developer: data.developers?.[0] || undefined,
     publisher: data.publishers?.[0] || undefined,
     release_date: data.release_date?.date || undefined,
