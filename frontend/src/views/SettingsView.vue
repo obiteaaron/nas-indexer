@@ -283,51 +283,65 @@
                 <h5>优先级说明</h5>
                 <table class="doc-table">
                   <thead>
-                    <tr><th>字段</th><th>类型</th><th>说明</th></tr>
+                    <tr><th>优先级</th><th>方法</th><th>说明</th></tr>
                   </thead>
                   <tbody>
-                    <tr><td><code>title</code></td><td>string</td><td>游戏名称（必填）</td></tr>
-                    <tr><td><code>title_en</code></td><td>string</td><td>英文名称</td></tr>
-                    <tr><td><code>original_name</code></td><td>string</td><td>原始文件夹名</td></tr>
-                    <tr><td><code>steam_appid</code></td><td>string</td><td>Steam AppID，设置后可自动关联 Steam 数据</td></tr>
-                    <tr><td><code>developer</code></td><td>string</td><td>开发商</td></tr>
-                    <tr><td><code>publisher</code></td><td>string</td><td>发行商</td></tr>
-                    <tr><td><code>release_date</code></td><td>string</td><td>发行日期，格式 YYYY-MM-DD</td></tr>
-                    <tr><td><code>genres</code></td><td>string[]</td><td>游戏类型，如 ["RPG", "Action"]</td></tr>
-                    <tr><td><code>rating</code></td><td>number</td><td>评分</td></tr>
-                    <tr><td><code>description</code></td><td>string</td><td>详细描述</td></tr>
-                    <tr><td><code>short_description</code></td><td>string</td><td>简短描述</td></tr>
-                    <tr><td><code>languages</code></td><td>string[]</td><td>支持语言，如 ["English", "中文"]</td></tr>
-                    <tr><td><code>tags</code></td><td>string[]</td><td>标签列表</td></tr>
-                    <tr><td><code>notes</code></td><td>string</td><td>备注（仅本地存储）</td></tr>
-                    <tr><td><code>screenshots</code></td><td>string[]</td><td>截图 URL 列表</td></tr>
-                    <tr><td><code>metadata_source</code></td><td>string</td><td>数据来源，如 "local"、"steam"</td></tr>
-                    <tr><td><code>scraped_at</code></td><td>string</td><td>刮削时间，ISO 格式</td></tr>
+                    <tr>
+                      <td><strong>P0</strong></td>
+                      <td>手动标记</td>
+                      <td>手动添加或提升目录时自动标记，跳过自动识别（最高优先级）</td>
+                    </tr>
+                    <tr>
+                      <td><strong>P1</strong></td>
+                      <td>Steam锚点</td>
+                      <td>自动向上查找 <code>steam_appid.txt</code> 文件定位根目录</td>
+                    </tr>
+                    <tr>
+                      <td><strong>P2</strong></td>
+                      <td>启发式规则</td>
+                      <td>基于exe目录名匹配、标准子目录结构、目录大小等智能判断</td>
+                    </tr>
+                    <tr>
+                      <td><strong>P3</strong></td>
+                      <td>正则规则</td>
+                      <td>匹配自定义正则规则，配合 levelOffset 向上提升（兜底方案）</td>
+                    </tr>
                   </tbody>
                 </table>
 
-                <h5>示例</h5>
-                <pre class="doc-code">{
-  "title": "The Witcher 3: Wild Hunt",
-  "title_en": "The Witcher 3: Wild Hunt",
-  "developer": "CD Projekt RED",
-  "publisher": "CD Projekt",
-  "release_date": "2015-05-19",
-  "genres": ["RPG", "Action", "Open World"],
-  "rating": 9.5,
-  "steam_appid": "292030",
-  "languages": ["English", "中文"],
-  "metadata_source": "local"
-}</pre>
+                <h5>启发式规则详情（P2）</h5>
+                <table class="doc-table">
+                  <thead>
+                    <tr><th>规则</th><th>触发条件</th><th>处理方式</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>exe目录名匹配</td>
+                      <td>exe文件名与所在目录名相同（如 <code>Game/Game.exe</code>）</td>
+                      <td>向上提升到父目录</td>
+                    </tr>
+                    <tr>
+                      <td>标准子目录</td>
+                      <td>exe位于标准子目录（如 <code>Binaries</code>、<code>Win32</code>）</td>
+                      <td>向上提升指定的层级偏移</td>
+                    </tr>
+                    <tr>
+                      <td>目录大小启发</td>
+                      <td>exe所在目录过小（&lt;100MB），父目录明显更大（&gt;5倍）</td>
+                      <td>使用父目录作为根目录</td>
+                    </tr>
+                  </tbody>
+                </table>
 
-                <h5>海报文件</h5>
-                <p class="doc-desc">可在游戏目录下放置以下海报文件，系统会自动识别：</p>
+                <h5>海报存储位置</h5>
+                <p class="doc-desc">游戏海报集中存储在 <code>profiles/games/posters/{game_id}/</code> 目录：</p>
                 <ul class="doc-list">
-                  <li><code>poster-horizontal.jpg</code> — 横版海报（主要展示用）</li>
-                  <li><code>poster-vertical.jpg</code> — 竖版海报</li>
-                  <li><code>poster-banner.jpg</code> — 横幅海报</li>
+                  <li><code>horizontal.jpg</code> — 横版海报（主要展示用）</li>
+                  <li><code>vertical.jpg</code> — 竖版海报</li>
+                  <li><code>banner.jpg</code> — 横幅海报</li>
                   <li><code>background.jpg</code> — 背景图</li>
                 </ul>
+                <p class="doc-desc hint">海报可通过刮削自动获取，也可在游戏详情页手动上传</p>
               </div>
             </div>
           </div>
