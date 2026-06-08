@@ -10,7 +10,7 @@
     <div class="task-panel" v-if="expanded">
       <div class="task-item" v-for="task in tasks" :key="task.id">
         <div class="task-header">
-          <span class="task-type">{{ task.type === 'scan' ? '扫描全部' : '单路径扫描' }}</span>
+          <span class="task-type">{{ getTaskTypeLabel(task.type) }}</span>
           <span class="task-status" :class="task.status">{{ statusText[task.status] }}</span>
         </div>
         <div class="task-progress-bar">
@@ -21,7 +21,7 @@
           <span class="task-percent">{{ task.progress }}%</span>
         </div>
         <div class="task-result" v-if="task.status === 'completed' && task.result">
-          完成: {{ task.result.totalFiles }} 个文件, {{ task.result.totalSize }}
+          {{ getTaskResult(task) }}
         </div>
         <div class="task-error" v-if="task.status === 'failed' && task.error">
           {{ task.error }}
@@ -54,6 +54,25 @@ const statusText: Record<Task['status'], string> = {
   running: '进行中',
   completed: '已完成',
   failed: '失败'
+}
+
+const taskTypeLabels: Record<string, string> = {
+  scan: '扫描全部',
+  'single-scan': '单路径扫描',
+  'game-scrape': '批量刮削'
+}
+
+function getTaskTypeLabel(type: string): string {
+  return taskTypeLabels[type] || type
+}
+
+function getTaskResult(task: Task): string {
+  if (task.type === 'game-scrape') {
+    return task.message || '刮削完成'
+  }
+  const totalFiles = task.result?.totalFiles || 0
+  const totalSize = task.result?.totalSize || ''
+  return `完成: ${totalFiles} 个文件${totalSize ? ', ' + totalSize : ''}`
 }
 
 onMounted(() => {
@@ -94,11 +113,17 @@ watch(() => props.tasks, (newTasks: Task[], oldTasks: Task[] | undefined) => {
 
 function sendNotification(task: Task): void {
   if ('Notification' in window && Notification.permission === 'granted') {
-    const totalFiles = task.result?.totalFiles || 0
-    const totalSize = task.result?.totalSize || ''
-    new Notification('扫描完成', {
-      body: `共扫描 ${totalFiles} 个文件${totalSize ? '，' + totalSize : ''}`
-    })
+    if (task.type === 'game-scrape') {
+      new Notification('批量刮削完成', {
+        body: task.message || '刮削完成'
+      })
+    } else {
+      const totalFiles = task.result?.totalFiles || 0
+      const totalSize = task.result?.totalSize || ''
+      new Notification('扫描完成', {
+        body: `共扫描 ${totalFiles} 个文件${totalSize ? '，' + totalSize : ''}`
+      })
+    }
   }
 }
 </script>

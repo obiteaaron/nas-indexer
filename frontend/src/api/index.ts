@@ -342,9 +342,9 @@ export function scrapeGame(id: number, downloadPosters: boolean = true): Promise
   return request<Game>('/games/' + id + '/scrape', { method: 'POST', body: JSON.stringify({ downloadPosters }) })
 }
 
-export function scrapeGamesBatch(downloadPosters: boolean = true): Promise<ApiResponse<{ scrapedCount: number; scrapedIds: number[] }>> {
+export function scrapeGamesBatch(downloadPosters: boolean = true): Promise<ApiResponse<{ taskId: string }>> {
   clearCache('/games')
-  return request<{ scrapedCount: number; scrapedIds: number[] }>('/games/scrape/batch', { method: 'POST', body: JSON.stringify({ downloadPosters }) })
+  return request<{ taskId: string }>('/games/scrape/batch', { method: 'POST', body: JSON.stringify({ downloadPosters }) })
 }
 
 export function getGamePosterUrl(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' = 'horizontal'): string {

@@ -276,11 +276,19 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
 /**
  * 批量刮削未刮削的游戏
  */
-export async function scrapeUnscrapedGames(downloadPosters: boolean = true): Promise<number[]> {
+export async function scrapeUnscrapedGames(
+  downloadPosters: boolean = true,
+  onProgress?: (current: number, total: number, gameTitle: string) => void
+): Promise<number[]> {
   const unscraped = gameDatabase.getGames({ scraped: 'false', limit: 100 });
   const scrapedIds: number[] = [];
+  const total = unscraped.length;
 
-  for (const game of unscraped) {
+  for (let i = 0; i < unscraped.length; i++) {
+    const game = unscraped[i];
+    if (onProgress) {
+      onProgress(i + 1, total, game.title);
+    }
     const result = await scrapeGame(game.id, downloadPosters);
     if (result && result.metadata_source !== 'unknown') {
       scrapedIds.push(game.id);

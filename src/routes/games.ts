@@ -13,6 +13,7 @@ import { runIdentification } from '../games/identifier';
 import { PosterService } from '../games/poster-service';
 import { initDatabase, loadConfig, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
 import { logger } from '../logger';
+import { taskManager } from '../task-manager';
 import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup } from '../types';
 import backupRouter from './backup';
 
@@ -568,8 +569,34 @@ router.post('/scrape/batch', async (req: Request, res: Response): Promise<void> 
   await initGameDatabase();
   try {
     const { downloadPosters = true } = req.body;
-    const scrapedIds: number[] = await scrapeUnscrapedGames(downloadPosters);
-    res.json({ success: true, data: { scrapedCount: scrapedIds.length, scrapedIds } });
+
+    // 检查是否有正在运行的刮削任务
+    if (taskManager.hasRunningTask('game-scrape')) {
+      res.status(409).json({ success: false, error: '已有刮削任务正在执行' });
+      return;
+    }
+
+    const task = taskManager.createTask('game-scrape');
+    res.json({ success: true, data: { taskId: task.id } });
+
+    // 异步执行刮削
+    (async () => {
+      try {
+        const scrapedIds = await scrapeUnscrapedGames(downloadPosters, (current, total, gameTitle) => {
+          taskManager.updateTask(task.id, {
+            progress: Math.round((current / total) * 100),
+            message: `正在刮削: ${gameTitle} (${current}/${total})`
+          });
+        });
+
+        taskManager.completeTask(task.id, {
+          message: `批量刮削完成，共刮削 ${scrapedIds.length} 个游戏`
+        });
+      } catch (err) {
+        const error = err as Error;
+        taskManager.failTask(task.id, error.message);
+      }
+    })();
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

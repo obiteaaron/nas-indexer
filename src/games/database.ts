@@ -163,7 +163,7 @@ class GameDatabase {
       notes = null,
       screenshots = null,
       metadata_source = 'unknown',
-      
+
       scraped_at = null,
       is_manually_edited = 0
     } = gameData;
@@ -183,23 +183,19 @@ class GameDatabase {
     try {
       const existing: Game | null = this.getGameByPath(source_path);
       if (existing) {
-        logger.debug('游戏已存在，更新: id=%d, path=%s', existing.id, source_path);
+        logger.debug('游戏已存在，仅更新基本信息: id=%d, path=%s', existing.id, source_path);
+        // 只更新识别相关的基本字段，保留已有的刮削元数据
         database.db!.run(`
           UPDATE games SET
-            title = ?, title_en = ?, original_name = ?, steam_appid = ?,
-            poster_url = ?, cover_url = ?,
-            developer = ?, publisher = ?, release_date = ?, genres = ?, rating = ?,
-            description = ?, short_description = ?, languages = ?, tags = ?, notes = ?,
-            screenshots = ?, metadata_source = ?, scraped_at = ?,
-            is_manually_edited = ?, updated_at = datetime('now', 'localtime')
+            title = COALESCE(?, title),
+            title_en = COALESCE(?, title_en),
+            original_name = COALESCE(?, original_name),
+            steam_appid = COALESCE(?, steam_appid),
+            updated_at = datetime('now', 'localtime')
           WHERE id = ?
         `, [
           title, title_en, original_name, steam_appid,
-          poster_url, cover_url,
-          developer, publisher, release_date, genres, rating,
-          description, short_description, languages, tags, notes,
-          screenshots, metadata_source, scraped_at,
-          is_manually_edited, existing.id
+          existing.id
         ]);
         database.save();
         return existing.id;

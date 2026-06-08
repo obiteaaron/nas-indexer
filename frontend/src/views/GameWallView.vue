@@ -798,12 +798,13 @@ async function redownloadPoster(game: Game): Promise<void> {
       if (selectedGame.value?.id === game.id) {
         selectedGame.value = { ...selectedGame.value }
       }
+      showNotification('海报已重新下载')
     } else {
-      alert('重新下载海报失败: ' + ((res as any).error || '未知错误'))
+      showNotification('重新下载海报失败: ' + ((res as any).error || '未知错误'))
     }
   } catch (err) {
     console.error('重新下载海报失败:', err)
-    alert('重新下载海报失败，请查看控制台')
+    showNotification('重新下载海报失败')
   }
   posterRedownloading.value = false
 }
@@ -830,12 +831,13 @@ async function submitPosterUpload(): Promise<void> {
         games.value[idx] = { ...games.value[idx] }
       }
       selectedGame.value = { ...selectedGame.value }
+      showNotification('海报已上传')
     } else {
-      alert('上传海报失败: ' + ((res as any).error || '未知错误'))
+      showNotification('上传海报失败: ' + ((res as any).error || '未知错误'))
     }
   } catch (err) {
     console.error('上传海报失败:', err)
-    alert('上传海报失败，请查看控制台')
+    showNotification('上传海报失败')
   }
   posterUploading.value = false
 }
@@ -845,9 +847,9 @@ async function scrapeAll(): Promise<void> {
   try {
     const res = await scrapeGamesBatch()
     if (res.success && res.data) {
-      await loadGames()
-      await loadStats()
-      showNotification(`批量刮削完成，共刮削 ${res.data.scrapedCount} 个游戏`)
+      // SSE 模式：任务已创建，进度由 TaskBar 显示
+      // 等任务完成后再刷新数据
+      showNotification('批量刮削任务已启动')
     }
   } catch (err) {
     console.error('批量刮削失败:', err)

@@ -167,7 +167,7 @@ export interface FileView {
 // 前端特有类型
 export interface Task {
   id: string;
-  type: 'scan' | 'scan-path';
+  type: 'scan' | 'scan-path' | 'game-scrape';
   status: 'running' | 'completed' | 'failed';
   progress: number;
   message: string;
