@@ -154,9 +154,14 @@
             </div>
             <div class="info-row" v-if="selectedGame.steam_appid">
               <span class="info-label">Steam</span>
-              <a class="info-value link" :href="`https://store.steampowered.com/app/${selectedGame.steam_appid}`" target="_blank">
-                查看 Steam 页面
-              </a>
+              <div class="info-value-group">
+                <span class="info-value steam-id" @click="copySteamAppid" title="点击复制">
+                  {{ selectedGame.steam_appid }}
+                </span>
+                <a class="steam-link" :href="`https://store.steampowered.com/app/${selectedGame.steam_appid}`" target="_blank">
+                  查看页面
+                </a>
+              </div>
             </div>
             <div class="info-row" v-if="selectedGame.short_description">
               <span class="info-label">简介</span>
@@ -672,6 +677,17 @@ async function loadFilters(): Promise<void> {
 
 async function refreshGames(): Promise<void> {
   await Promise.all([loadGames(), loadStats(), loadFilters()])
+}
+
+function copySteamAppid(): void {
+  if (!selectedGame.value?.steam_appid) return
+  navigator.clipboard.writeText(selectedGame.value.steam_appid)
+    .then(() => {
+      // 可选：显示复制成功提示
+    })
+    .catch(err => {
+      console.error('复制失败:', err)
+    })
 }
 
 async function openGameDir(game: Game): Promise<void> {
@@ -1337,6 +1353,38 @@ function handleEsc(e: KeyboardEvent): void {
 .info-value.description {
   margin: 0;
   line-height: 1.6;
+}
+
+.info-value-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.info-value.steam-id {
+  font-family: monospace;
+  font-size: 14px;
+  background: var(--card-bg);
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  transition: background 0.2s;
+}
+
+.info-value.steam-id:hover {
+  background: var(--hover-bg);
+}
+
+.steam-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.steam-link:hover {
+  text-decoration: underline;
 }
 
 .modal-actions {
