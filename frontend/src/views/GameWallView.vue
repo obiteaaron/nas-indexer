@@ -171,8 +171,87 @@
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="openGameDir(selectedGame)">打开目录</button>
           <button class="btn btn-secondary" @click="openSteamSearch">搜索 Steam</button>
+          <button class="btn btn-secondary" @click="startEditGame(selectedGame)">编辑信息</button>
           <button class="btn btn-secondary" @click="scrapeGame(selectedGame)" :disabled="scraping">
             {{ scraping ? '刮削中...' : '重新刮削' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Game Modal -->
+    <div class="modal-overlay" v-if="showEditGameModal" @click.self="showEditGameModal = false">
+      <div class="modal-content add-game-modal">
+        <div class="modal-header">
+          <h3>编辑游戏信息</h3>
+          <button class="modal-close" @click="showEditGameModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label">游戏名称 <span class="required">*</span></label>
+            <input v-model="editForm.title" class="input" placeholder="游戏名称" />
+          </div>
+          <div class="form-row-inline">
+            <div class="form-row half">
+              <label class="form-label">英文名</label>
+              <input v-model="editForm.title_en" class="input" placeholder="英文名称" />
+            </div>
+            <div class="form-row half">
+              <label class="form-label">Steam AppID</label>
+              <input v-model="editForm.steam_appid" class="input" type="number" placeholder="782330" />
+              <span class="hint">修改后重新刮削可更新元数据</span>
+            </div>
+          </div>
+          <div class="form-row-inline">
+            <div class="form-row half">
+              <label class="form-label">开发商</label>
+              <input v-model="editForm.developer" class="input" placeholder="Nintendo" />
+            </div>
+            <div class="form-row half">
+              <label class="form-label">发行商</label>
+              <input v-model="editForm.publisher" class="input" placeholder="Nintendo" />
+            </div>
+          </div>
+          <div class="form-row-inline">
+            <div class="form-row half">
+              <label class="form-label">发行日期</label>
+              <input v-model="editForm.release_date" class="input" placeholder="2017-03-03" />
+            </div>
+            <div class="form-row half">
+              <label class="form-label">类型</label>
+              <input v-model="editForm.genres" class="input" placeholder="动作, 冒险, RPG" />
+              <span class="hint">逗号分隔</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">评分</label>
+            <input v-model.number="editForm.rating" class="input" type="number" step="0.1" min="0" max="10" placeholder="9.5" />
+            <span class="hint">0-10 分</span>
+          </div>
+          <div class="form-row">
+            <a class="toggle-more" @click="showEditMoreFields = !showEditMoreFields">
+              {{ showEditMoreFields ? '收起扩展字段 ▲' : '展开扩展字段 ▼' }}
+            </a>
+          </div>
+          <div v-if="showEditMoreFields">
+            <div class="form-row">
+              <label class="form-label">简介</label>
+              <textarea v-model="editForm.short_description" class="textarea" rows="2" placeholder="简短介绍..."></textarea>
+            </div>
+            <div class="form-row">
+              <label class="form-label">详细描述</label>
+              <textarea v-model="editForm.description" class="textarea" rows="4" placeholder="详细介绍..."></textarea>
+            </div>
+            <div class="form-row">
+              <label class="form-label">备注</label>
+              <textarea v-model="editForm.notes" class="textarea" rows="2" placeholder="备注信息..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showEditGameModal = false">取消</button>
+          <button class="btn btn-primary" @click="submitEditGame" :disabled="editingGame">
+            {{ editingGame ? '保存中...' : '保存修改' }}
           </button>
         </div>
       </div>
@@ -407,6 +486,7 @@ import {
   toggleFavoriteGame,
   promoteGame as promoteGameApi,
   createGame as createGameApi,
+  updateGame as updateGameApi,
   removeNonexistentGames,
   cleanupStaleGames,
   getGroupGames
@@ -448,6 +528,23 @@ const addForm = ref({
   release_date: '',
   genres: '',
   short_description: '',
+  notes: ''
+})
+
+const showEditGameModal = ref(false)
+const editingGame = ref(false)
+const showEditMoreFields = ref(false)
+const editForm = ref({
+  title: '',
+  title_en: '',
+  steam_appid: '',
+  developer: '',
+  publisher: '',
+  release_date: '',
+  genres: '',
+  rating: null as number | null,
+  short_description: '',
+  description: '',
   notes: ''
 })
 
@@ -882,6 +979,73 @@ async function submitAddGame(): Promise<void> {
     alert('添加失败，请查看控制台')
   }
   addingGame.value = false
+}
+
+function startEditGame(game: Game): void {
+  // 填充表单
+  editForm.value = {
+    title: game.title || '',
+    title_en: game.title_en || '',
+    steam_appid: game.steam_appid || '',
+    developer: game.developer || '',
+    publisher: game.publisher || '',
+    release_date: game.release_date || '',
+    genres: game.genresArray?.join(', ') || '',
+    rating: game.rating || null,
+    short_description: game.short_description || '',
+    description: game.description || '',
+    notes: game.notes || ''
+  }
+  showEditMoreFields.value = false
+  showEditGameModal.value = true
+}
+
+async function submitEditGame(): Promise<void> {
+  if (!editForm.value.title.trim()) {
+    alert('请输入游戏名称')
+    return
+  }
+
+  if (!selectedGame.value) return
+
+  editingGame.value = true
+  try {
+    const genresStr = editForm.value.genres
+      ? JSON.stringify(editForm.value.genres.split(',').map(s => s.trim()).filter(s => s))
+      : undefined
+
+    const updateData: Partial<Game> = {
+      title: editForm.value.title.trim(),
+      title_en: editForm.value.title_en.trim() || undefined,
+      steam_appid: editForm.value.steam_appid.toString().trim() || undefined,
+      developer: editForm.value.developer.trim() || undefined,
+      publisher: editForm.value.publisher.trim() || undefined,
+      release_date: editForm.value.release_date.trim() || undefined,
+      genres: genresStr,
+      rating: editForm.value.rating || undefined,
+      short_description: editForm.value.short_description.trim() || undefined,
+      description: editForm.value.description.trim() || undefined,
+      notes: editForm.value.notes.trim() || undefined
+    }
+
+    const res = await updateGameApi(selectedGame.value.id, updateData)
+    if (res.success && res.data) {
+      showEditGameModal.value = false
+      // 更新游戏列表和选中游戏
+      const idx = games.value.findIndex(g => g.id === selectedGame.value!.id)
+      if (idx >= 0) {
+        games.value[idx] = res.data
+      }
+      selectedGame.value = res.data
+      loadStats()
+    } else {
+      alert('保存失败: ' + (res as any).error || '未知错误')
+    }
+  } catch (err) {
+    console.error('编辑游戏失败:', err)
+    alert('保存失败，请查看控制台')
+  }
+  editingGame.value = false
 }
 
 async function removeNonexistent(): Promise<void> {
