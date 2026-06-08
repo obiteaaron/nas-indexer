@@ -107,20 +107,24 @@ const genres = computed(() => {
 
 const statusClass = computed(() => {
   if (props.game.is_excluded) return 'status-excluded'
-  const source = props.game.metadata_source
 
-  // 已刮削：metadata_source 不为 'unknown' 或空
-  if (source && source !== 'unknown') return 'status-scraped'
+  // 已刮削：有 scraped_at 时间戳（Steam或其他来源刮削完成）
+  if (props.game.scraped_at) return 'status-scraped'
+
+  // 已配置：手动添加（metadata_source = 'manual'）
+  if (props.game.metadata_source === 'manual') return 'status-manual'
 
   return 'status-unscraped'
 })
 
 const statusText = computed(() => {
   if (props.game.is_excluded) return '已排除'
-  const source = props.game.metadata_source
 
-  // 已刮削：metadata_source 不为 'unknown' 或空
-  if (source && source !== 'unknown') return '已刮削'
+  // 已刮削：有 scraped_at 时间戳
+  if (props.game.scraped_at) return '已刮削'
+
+  // 已配置：手动添加
+  if (props.game.metadata_source === 'manual') return '已配置'
 
   return '待刮削'
 })
@@ -303,7 +307,7 @@ function formatYear(dateStr: string): string {
   color: white;
 }
 
-.status-local {
+.status-manual {
   background: #3b82f6;
   color: white;
 }

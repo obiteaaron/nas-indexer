@@ -335,7 +335,7 @@ function createGameRecord(gamePath: string): Partial<Game> {
     title: cleanTitle,
     original_name: path.basename(gamePath),
     steam_appid: appid || undefined,
-    metadata_source: 'regex',
+    metadata_source: 'unknown',  // 元数据来源未知，待刮削
     is_manually_edited: 0
   };
 }

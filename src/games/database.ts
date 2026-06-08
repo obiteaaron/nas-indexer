@@ -275,9 +275,9 @@ class GameDatabase {
     }
 
     if (scraped === 'true') {
-      conditions.push('(scraped_at IS NOT NULL OR metadata_source = \'local\')');
+      conditions.push('(scraped_at IS NOT NULL OR metadata_source = \'manual\')');
     } else if (scraped === 'false') {
-      conditions.push('(scraped_at IS NULL AND metadata_source != \'local\')');
+      conditions.push('(scraped_at IS NULL AND metadata_source != \'manual\')');
     }
 
     if (excluded === 'true' || excluded === 'only') {
@@ -335,9 +335,9 @@ class GameDatabase {
     }
 
     if (scraped === 'true') {
-      conditions.push('(scraped_at IS NOT NULL OR metadata_source = \'local\')');
+      conditions.push('(scraped_at IS NOT NULL OR metadata_source = \'manual\')');
     } else if (scraped === 'false') {
-      conditions.push('(scraped_at IS NULL AND metadata_source != \'local\')');
+      conditions.push('(scraped_at IS NULL AND metadata_source != \'manual\')');
     }
 
     if (excluded === 'true' || excluded === 'only') {
@@ -800,7 +800,7 @@ class GameDatabase {
     const totalGames: number = totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0;
 
     const scrapedResult: QueryResult[] = database.db!.exec(
-      'SELECT COUNT(*) as count FROM games WHERE scraped_at IS NOT NULL OR metadata_source = \'local\''
+      'SELECT COUNT(*) as count FROM games WHERE scraped_at IS NOT NULL OR metadata_source = \'manual\''
     );
     const scrapedGames: number = scrapedResult.length > 0 ? (scrapedResult[0].values[0][0] as number) : 0;
 
