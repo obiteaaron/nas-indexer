@@ -108,16 +108,20 @@ const genres = computed(() => {
 const statusClass = computed(() => {
   if (props.game.is_excluded) return 'status-excluded'
   const source = props.game.metadata_source
-  if (source === 'steam') return 'status-scraped'
-  if (source === 'local') return 'status-local'
+
+  // 已刮削：metadata_source 不为 'unknown' 或空
+  if (source && source !== 'unknown') return 'status-scraped'
+
   return 'status-unscraped'
 })
 
 const statusText = computed(() => {
   if (props.game.is_excluded) return '已排除'
   const source = props.game.metadata_source
-  if (source === 'steam') return '已刮削'
-  if (source === 'local') return '本地'
+
+  // 已刮削：metadata_source 不为 'unknown' 或空
+  if (source && source !== 'unknown') return '已刮削'
+
   return '待刮削'
 })
 
