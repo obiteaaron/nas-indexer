@@ -37,5 +37,50 @@
   "trackingConfig": {
     "trackingEnabled": true,
     "trackingLevel": "full"
+  },
+  "gamesEnabled": false,
+  "gameScanPathsEnabled": false,
+  "gameScanPaths": [],
+  "gamesRules": {
+    "recognitionRules": [
+      { "pattern": "[GOG]$", "levelOffset": 0, "enabled": true, "description": "GOG 版游戏（目录名结尾）" },
+      { "pattern": "[Steam]$", "levelOffset": 0, "enabled": true, "description": "Steam 版游戏（目录名结尾）" },
+      { "pattern": "[CRACK]$", "levelOffset": 0, "enabled": true, "description": "破解版游戏（目录名结尾）" },
+      { "pattern": "FitGirl.*Repack$", "levelOffset": 1, "enabled": true, "description": "FitGirl 压缩包 → 父目录" },
+      { "pattern": "/steamapps/", "levelOffset": 0, "enabled": true, "description": "Steam 游戏库目录" },
+      { "pattern": "/games/", "levelOffset": 0, "enabled": true, "description": "通用游戏目录名" }
+    ],
+    "heuristicRules": {
+      "exeNameMatchEnabled": true,
+      "exeNameMatchOffset": 1,
+      "subdirRulesEnabled": true,
+      "subdirPatterns": [
+        {
+          "patterns": ["Binaries", "Binary", "Bin", "Win32", "Win64"],
+          "offset": 1,
+          "description": "可执行文件标准子目录"
+        },
+        {
+          "patterns": ["Redist", "Support", "Common"],
+          "offset": 1,
+          "description": "redistributable/support目录"
+        },
+        {
+          "patterns": ["Data", "Assets", "Resources"],
+          "offset": 0,
+          "description": "数据/资源目录（通常就是根目录）"
+        }
+      ],
+      "sizeHeuristicEnabled": true,
+      "sizeThresholdMB": 100,
+      "sizeRatioThreshold": 5
+    },
+    "blacklistPatterns": ["$Recycle.Bin", "System Volume Information", ".git", "node_modules", "__pycache__"],
+    "maxScanDepth": 3
+  },
+  "gamesScrape": {
+    "autoScrape": true,
+    "downloadPosters": true,
+    "scrapeOnIdentify": true
   }
 }

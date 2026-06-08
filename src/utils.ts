@@ -46,17 +46,7 @@ function ensureStorageDir(config: Config): string {
 }
 
 function getDefaultConfig(): Config {
-  try {
-    if (fs.existsSync(DEFAULT_CONFIG_FILE)) {
-      const defaultConfig: Config = JSON.parse(fs.readFileSync(DEFAULT_CONFIG_FILE, 'utf-8'));
-      return defaultConfig;
-    }
-  } catch (err) {
-    const error = err as Error;
-    logger.warn('加载默认配置文件失败，使用内置默认值: %s', error.message);
-  }
-
-  return {
+  const builtinDefault: Config = {
     storagePath: '',
     scanPaths: [],
     scanTime: '0 2 * * *',
@@ -84,6 +74,37 @@ function getDefaultConfig(): Config {
     gamesRules: DEFAULT_GAME_RULES,
     gamesScrape: DEFAULT_GAME_SCRAPE
   };
+
+  try {
+    if (fs.existsSync(DEFAULT_CONFIG_FILE)) {
+      const rawDefaultConfig = JSON.parse(fs.readFileSync(DEFAULT_CONFIG_FILE, 'utf-8'));
+
+      // 深度合并内置默认值和文件配置
+      const mergedConfig: Config = {
+        ...builtinDefault,
+        ...rawDefaultConfig,
+        gamesRules: {
+          ...builtinDefault.gamesRules!,
+          ...(rawDefaultConfig.gamesRules || {}),
+          heuristicRules: {
+            ...builtinDefault.gamesRules!.heuristicRules,
+            ...(rawDefaultConfig.gamesRules?.heuristicRules || {})
+          }
+        },
+        gamesScrape: {
+          ...builtinDefault.gamesScrape!,
+          ...(rawDefaultConfig.gamesScrape || {})
+        }
+      };
+
+      return mergedConfig;
+    }
+  } catch (err) {
+    const error = err as Error;
+    logger.warn('加载默认配置文件失败，使用内置默认值: %s', error.message);
+  }
+
+  return builtinDefault;
 }
 
 function loadConfig(): Config {
