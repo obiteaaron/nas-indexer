@@ -20,7 +20,8 @@ import type {
   GamesResponse,
   SteamSearchItem,
   GameStatistics,
-  GameGroup
+  GameGroup,
+  PosterBackup
 } from '../types'
 
 const API_BASE = '/api'
@@ -370,6 +371,26 @@ export function redownloadGamePoster(id: number, type: 'horizontal' | 'vertical'
   return request<void>('/games/' + id + '/poster/redownload', {
     method: 'POST',
     body: JSON.stringify({ type })
+  })
+}
+
+export function getGamePosterBackups(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' = 'horizontal'): Promise<ApiResponse<PosterBackup[]>> {
+  return request<PosterBackup[]>('/games/' + id + '/poster/backups?type=' + type)
+}
+
+export function restoreGamePosterBackup(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background', filename: string): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/' + id + '/poster/restore', {
+    method: 'POST',
+    body: JSON.stringify({ type, filename })
+  })
+}
+
+export function deleteGamePosterBackup(id: number, filename: string): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/' + id + '/poster/backup/delete', {
+    method: 'POST',
+    body: JSON.stringify({ filename })
   })
 }
 

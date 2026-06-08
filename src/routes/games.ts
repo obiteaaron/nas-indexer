@@ -4,6 +4,7 @@
 
 import express, { Router, Request, Response } from 'express';
 import fs from 'fs';
+import path from 'path';
 import { spawn } from 'child_process';
 import multer from 'multer';
 import { database } from '../database';
@@ -604,6 +605,59 @@ router.post('/scrape/batch', async (req: Request, res: Response): Promise<void> 
 });
 
 /**
+ * 获取海报备份列表
+ */
+router.get('/:id/poster/backups', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
+    if (!game) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+
+    const type: 'horizontal' | 'vertical' | 'banner' | 'background' = (req.query.type as 'horizontal' | 'vertical' | 'banner' | 'background') || 'horizontal';
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    const backups = new PosterService(storagePath).listBackups(game.id, type);
+
+    res.json({ success: true, data: backups });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 获取海报备份图片
+ */
+router.get('/:id/poster/backups/:filename', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const gameId = parseInt(req.params.id as string);
+    const game: Game | null = gameDatabase.getGameById(gameId);
+    if (!game) {
+      res.status(404).json({ success: false, error: 'Game not found' });
+      return;
+    }
+
+    const filename = req.params.filename as string;
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    const backupPath = path.join(storagePath, 'games', 'posters', String(gameId), filename);
+
+    if (fs.existsSync(backupPath)) {
+      res.sendFile(backupPath);
+    } else {
+      res.status(404).json({ success: false, error: 'Backup not found' });
+    }
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 获取海报
  */
 router.get('/:id/poster/:type', async (req: Request, res: Response): Promise<void> => {
@@ -653,7 +707,8 @@ router.post('/:id/poster/upload', upload.single('poster'), async (req: Request, 
 
     const config = loadConfig();
     const storagePath = getStoragePath(config);
-    new PosterService(storagePath).saveFromBuffer(game.id, type, req.file.buffer);
+    const maxBackups = config.maxPosterBackups || 5;
+    new PosterService(storagePath, maxBackups).saveFromBuffer(game.id, type, req.file.buffer);
 
     res.json({ success: true });
   } catch (err) {
@@ -680,6 +735,73 @@ router.delete('/:id/poster/:type', async (req: Request, res: Response): Promise<
     new PosterService(storagePath).deletePoster(game.id, type);
 
     res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 恢复海报备份
+ */
+router.post('/:id/poster/restore', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
+    if (!game) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+
+    const { type, filename } = req.body;
+    if (!type || !filename) {
+      res.status(400).json({ success: false, error: '缺少 type 或 filename 参数' });
+      return;
+    }
+
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    const maxBackups = config.maxPosterBackups || 5;
+    const result = new PosterService(storagePath, maxBackups).restoreBackup(game.id, type, filename);
+
+    if (result) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ success: false, error: '备份文件不存在' });
+    }
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 删除海报备份
+ */
+router.post('/:id/poster/backup/delete', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
+    if (!game) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+
+    const { filename } = req.body;
+    if (!filename) {
+      res.status(400).json({ success: false, error: '缺少 filename 参数' });
+      return;
+    }
+
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    const result = new PosterService(storagePath).deleteBackup(game.id, filename);
+
+    if (result) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ success: false, error: '备份文件不存在' });
+    }
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

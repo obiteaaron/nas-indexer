@@ -1,15 +1,33 @@
 ﻿import fs from 'fs';
 import path from 'path';
 import { logger } from '../logger';
-import { getPosterDir, getPosterPath, ensurePosterDir } from './storage';
+import {
+  getPosterDir,
+  getPosterPath,
+  ensurePosterDir,
+  backupPoster,
+  listPosterBackups,
+  restorePosterBackup,
+  deletePosterBackup,
+  cleanupOldBackups
+} from './storage';
 
 export type PosterType = 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom';
 
+export interface PosterBackup {
+  filename: string;
+  type: PosterType;
+  createdAt: string;
+  size: number;
+}
+
 export class PosterService {
   private basePath: string;
+  private maxBackups: number;
 
-  constructor(basePath: string) {
+  constructor(basePath: string, maxBackups: number = 5) {
     this.basePath = basePath;
+    this.maxBackups = maxBackups;
   }
 
   /**
@@ -25,6 +43,12 @@ export class PosterService {
   async saveFromUrl(gameId: number, type: PosterType, url: string): Promise<void> {
     ensurePosterDir(this.basePath, gameId);
     const destPath = this.getPosterPath(gameId, type);
+
+    // Backup existing poster if exists
+    if (fs.existsSync(destPath)) {
+      backupPoster(this.basePath, gameId, type);
+      cleanupOldBackups(this.basePath, gameId, type, this.maxBackups);
+    }
 
     try {
       const response = await fetch(url);
@@ -48,6 +72,12 @@ export class PosterService {
     ensurePosterDir(this.basePath, gameId);
     const destPath = this.getPosterPath(gameId, type);
 
+    // Backup existing poster if exists
+    if (fs.existsSync(destPath)) {
+      backupPoster(this.basePath, gameId, type);
+      cleanupOldBackups(this.basePath, gameId, type, this.maxBackups);
+    }
+
     if (!fs.existsSync(srcPath)) {
       throw new Error('Source file not found: ' + srcPath);
     }
@@ -62,8 +92,45 @@ export class PosterService {
   saveFromBuffer(gameId: number, type: PosterType, buffer: Buffer): void {
     ensurePosterDir(this.basePath, gameId);
     const destPath = this.getPosterPath(gameId, type);
+
+    // Backup existing poster if exists
+    if (fs.existsSync(destPath)) {
+      backupPoster(this.basePath, gameId, type);
+      cleanupOldBackups(this.basePath, gameId, type, this.maxBackups);
+    }
+
     fs.writeFileSync(destPath, buffer);
     logger.info('Saved poster from buffer: gameId=%d type=%s', gameId, type);
+  }
+
+  /**
+   * List backups for a poster type
+   */
+  listBackups(gameId: number, type: PosterType): PosterBackup[] {
+    return listPosterBackups(this.basePath, gameId, type).map(b => ({
+      filename: b.filename,
+      type,
+      createdAt: b.createdAt,
+      size: b.size
+    }));
+  }
+
+  /**
+   * Restore a backup to be current poster
+   */
+  restoreBackup(gameId: number, type: PosterType, backupFilename: string): boolean {
+    const result = restorePosterBackup(this.basePath, gameId, type, backupFilename);
+    if (result) {
+      cleanupOldBackups(this.basePath, gameId, type, this.maxBackups);
+    }
+    return result;
+  }
+
+  /**
+   * Delete a backup file
+   */
+  deleteBackup(gameId: number, backupFilename: string): boolean {
+    return deletePosterBackup(this.basePath, gameId, backupFilename);
   }
 
   /**

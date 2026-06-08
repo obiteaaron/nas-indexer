@@ -36,6 +36,7 @@ export interface Config {
   gameScanPaths?: string[];
   gamesRules?: import('./game').GameRules;
   gamesScrape?: import('./game').GameScrapeConfig;
+  maxPosterBackups?: number;  // 每种海报类型最多保留的备份数
 }
 
 export const DEFAULT_EXCLUDE_PATTERNS: string[] = [

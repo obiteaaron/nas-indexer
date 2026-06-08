@@ -328,6 +328,13 @@ export interface GameGroupItem {
   game?: Game;
 }
 
+export interface PosterBackup {
+  filename: string;
+  type: 'horizontal' | 'vertical' | 'banner' | 'background';
+  createdAt: string;
+  size: number;
+}
+
 export interface GameRecognitionRule {
   pattern: string;
   levelOffset: number;

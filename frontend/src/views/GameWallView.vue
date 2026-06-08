@@ -146,6 +146,27 @@
                 {{ posterRedownloading ? '下载中...' : '重新下载' }}
               </button>
             </div>
+            <div class="poster-backups" v-if="posterBackups.length">
+              <div class="backups-header">历史备份</div>
+              <div class="backups-list">
+                <div
+                  v-for="backup in posterBackups"
+                  :key="backup.filename"
+                  class="backup-item"
+                  @click="restoreBackup(backup)"
+                >
+                  <img :src="`/api/games/${selectedGame.id}/poster/backups/${backup.filename}`" :alt="backup.createdAt" />
+                  <div class="backup-info">
+                    <span class="backup-time">{{ backup.createdAt }}</span>
+                    <button class="btn-icon delete-btn" @click.stop="deleteBackup(backup)" title="删除备份">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="detail-info">
             <div class="info-row" v-if="selectedGame.developer">
@@ -541,13 +562,16 @@ import {
   cleanupStaleGames,
   getGroupGames,
   uploadGamePoster,
-  redownloadGamePoster
+  redownloadGamePoster,
+  getGamePosterBackups,
+  restoreGamePosterBackup,
+  deleteGamePosterBackup
 } from '../api'
 import GameCard from '../components/GameCard.vue'
 import GameGroupSidebar from '../components/GameGroupSidebar.vue'
 import GameGroupManager from '../components/GameGroupManager.vue'
 import Pagination from '../components/Pagination.vue'
-import type { Game, GameStatistics, GameGroup, SteamSearchItem } from '../types'
+import type { Game, GameStatistics, GameGroup, SteamSearchItem, PosterBackup } from '../types'
 
 const games = ref<Game[]>([])
 const stats = ref<GameStatistics | null>(null)
@@ -604,6 +628,7 @@ const showPosterUploadModal = ref(false)
 const posterRedownloading = ref(false)
 const posterUploadFile = ref<File | null>(null)
 const posterUploading = ref(false)
+const posterBackups = ref<PosterBackup[]>([])
 
 // Toast notification
 const showToast = ref(false)
@@ -832,6 +857,7 @@ async function submitPosterUpload(): Promise<void> {
       }
       selectedGame.value = { ...selectedGame.value }
       showNotification('海报已上传')
+      loadPosterBackups()
     } else {
       showNotification('上传海报失败: ' + ((res as any).error || '未知错误'))
     }
@@ -840,6 +866,52 @@ async function submitPosterUpload(): Promise<void> {
     showNotification('上传海报失败')
   }
   posterUploading.value = false
+}
+
+async function loadPosterBackups(): Promise<void> {
+  if (!selectedGame.value) return
+  try {
+    const res = await getGamePosterBackups(selectedGame.value.id, 'horizontal')
+    if (res.success && res.data) {
+      posterBackups.value = res.data
+    }
+  } catch (err) {
+    console.error('加载备份列表失败:', err)
+  }
+}
+
+async function restoreBackup(backup: PosterBackup): Promise<void> {
+  if (!selectedGame.value) return
+  try {
+    const res = await restoreGamePosterBackup(selectedGame.value.id, backup.type, backup.filename)
+    if (res.success) {
+      // Force refresh
+      const idx = games.value.findIndex(g => g.id === selectedGame.value!.id)
+      if (idx >= 0) {
+        games.value[idx] = { ...games.value[idx] }
+      }
+      selectedGame.value = { ...selectedGame.value }
+      loadPosterBackups()
+      showNotification('已恢复备份海报')
+    }
+  } catch (err) {
+    console.error('恢复备份失败:', err)
+    showNotification('恢复备份失败')
+  }
+}
+
+async function deleteBackup(backup: PosterBackup): Promise<void> {
+  if (!selectedGame.value) return
+  try {
+    const res = await deleteGamePosterBackup(selectedGame.value.id, backup.filename)
+    if (res.success) {
+      loadPosterBackups()
+      showNotification('已删除备份')
+    }
+  } catch (err) {
+    console.error('删除备份失败:', err)
+    showNotification('删除备份失败')
+  }
 }
 
 async function scrapeAll(): Promise<void> {
@@ -928,6 +1000,8 @@ async function bindSteamAppid(): Promise<void> {
 
 function showGameDetail(game: Game): void {
   selectedGame.value = game
+  posterBackups.value = []
+  loadPosterBackups()
 }
 
 async function toggleExclude(game: Game): Promise<void> {
@@ -1412,7 +1486,7 @@ function handleEsc(e: KeyboardEvent): void {
   aspect-ratio: 460 / 215;
 }
 
-.detail-poster img {
+.detail-poster .poster-container img {
   position: absolute;
   top: 0;
   left: 0;
@@ -1443,6 +1517,63 @@ function handleEsc(e: KeyboardEvent): void {
 .poster-actions {
   display: flex;
   gap: 8px;
+}
+
+.poster-backups {
+  margin-top: 8px;
+}
+
+.poster-backups .backups-header {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.poster-backups .backups-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.poster-backups .backup-item {
+  width: 80px;
+  cursor: pointer;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+
+.poster-backups .backup-item:hover {
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+
+.poster-backups .backup-item img {
+  width: 100%;
+  height: 37px;
+  object-fit: cover;
+}
+
+.poster-backups .backup-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px;
+  background: var(--bg);
+}
+
+.poster-backups .backup-time {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.poster-backups .delete-btn {
+  padding: 2px;
+}
+
+.poster-backups .delete-btn:hover {
+  color: #ef4444;
 }
 
 .detail-info {
