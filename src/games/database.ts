@@ -370,6 +370,8 @@ class GameDatabase {
       'poster_url', 'cover_url',
       'developer', 'publisher', 'release_date', 'genres', 'rating',
       'description', 'short_description', 'languages', 'tags', 'notes',
+      'screenshots',
+      'metadata_source', 'scraped_at',  // ✓ 允许更新元数据来源和刮削时间
       'is_manually_edited', 'is_root_manually_marked'
     ];
 
