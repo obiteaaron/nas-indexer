@@ -389,6 +389,9 @@ class GameDatabase {
   }
 
   deleteGame(id: number): boolean {
+    // 先删除分组关系，避免孤儿数据
+    database.db!.run('DELETE FROM game_group_items WHERE game_id = ?', [id]);
+    // 再删除游戏记录
     database.db!.run('DELETE FROM games WHERE id = ?', [id]);
     database.save();
     return true;
@@ -567,10 +570,18 @@ class GameDatabase {
   }
 
   getGroups(): GameGroup[] {
+    // 清理孤儿数据：删除游戏已不存在但分组关系仍存在的记录
+    database.db!.run(
+      'DELETE FROM game_group_items WHERE game_id NOT IN (SELECT id FROM games)'
+    );
+    database.save();
+
+    // 统计时只计算实际存在的游戏
     const result: QueryResult[] = database.db!.exec(`
-      SELECT g.*, COUNT(gi.game_id) as game_count
+      SELECT g.*, COUNT(ga.id) as game_count
       FROM game_groups g
       LEFT JOIN game_group_items gi ON g.id = gi.group_id
+      LEFT JOIN games ga ON gi.game_id = ga.id
       GROUP BY g.id
       ORDER BY g.pinned DESC, g.sort_order ASC
     `);
