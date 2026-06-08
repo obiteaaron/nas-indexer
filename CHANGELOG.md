@@ -2,6 +2,15 @@
 
 ## [v1.5.3] - 2026-06-08
 
+### Bug 修复
+- **前端 TypeScript 编译错误** - 修复 GameWallView.vue 缺失的 poster upload/redownload 功能
+  - 添加 showPosterUploadModal、posterRedownloading、posterUploading 响应式变量
+  - 实现 redownloadPoster 和 submitPosterUpload 方法
+  - 新增海报上传弹窗组件
+  - 导入 uploadGamePoster 和 redownloadGamePoster API
+
+## [v1.5.3] - 2026-06-08（上午提交）
+
 ### 技术改进
 - **P0手动优先级标记** - 替代game.json本地元数据机制，实现游戏根目录人工界定功能
   - 新增数据库字段 `is_root_manually_marked`

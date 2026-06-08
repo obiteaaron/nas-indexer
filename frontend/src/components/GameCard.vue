@@ -1,17 +1,19 @@
 <template>
   <div class="game-card" :class="{ excluded: game.is_excluded, favorited: game.is_favorite }" @click="$emit('click', game)">
     <div class="poster-container">
+      <div class="poster-placeholder">
+        <span class="poster-icon">🎮</span>
+        <span class="poster-title">{{ game.title }}</span>
+      </div>
       <img
         v-if="posterUrl"
         :src="posterUrl"
         :alt="game.title"
         class="poster"
         loading="lazy"
+        @load="($event.target as HTMLImageElement).previousElementSibling?.classList.add('hidden')"
+        @error="($event.target as HTMLImageElement).style.display = 'none'"
       />
-      <div v-else class="poster-placeholder">
-        <span class="poster-icon">🎮</span>
-        <span class="poster-title">{{ game.title }}</span>
-      </div>
       <div class="poster-overlay">
         <div class="game-rating" v-if="game.rating">
           <span class="rating-badge">{{ game.rating }}</span>
@@ -78,17 +80,11 @@ defineEmits<{
   delete: [game: Game]
 }>()
 
+// 海报始终从本地 API 加载（集中存储在 profiles/games/posters/{gameId}/）
+// 如果有 Steam 海报 URL 作为备选
 const posterUrl = computed(() => {
-  // 新设计：海报路径动态计算，不再依赖数据库字段
-  // has_local_poster 表示是否有本地海报（存储在 profiles/games/posters/{gameId}/）
-  if (props.game.has_local_poster) {
-    return `/api/games/${props.game.id}/poster/${props.posterType}`
-  }
-  // 如果有 Steam 海报 URL，直接使用
-  if (props.game.poster_url) {
-    return props.game.poster_url
-  }
-  return null
+  // 优先使用本地集中存储的海报
+  return `/api/games/${props.game.id}/poster/${props.posterType}`
 })
 
 const genres = computed(() => {
@@ -158,12 +154,18 @@ function formatYear(dateStr: string): string {
 }
 
 .poster {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
 .poster-placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, var(--bg) 0%, var(--border) 100%);
@@ -172,6 +174,10 @@ function formatYear(dateStr: string): string {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+.poster-placeholder.hidden {
+  display: none;
 }
 
 .poster-icon {

@@ -254,7 +254,7 @@ export interface Game {
   poster_vertical_path?: string;
   poster_banner_path?: string;
   background_path?: string;
-  has_local_poster: number;
+  has_local_poster?: number; // 已废弃，海报现在集中存储在 profiles/games/posters/{id}/
   developer?: string;
   publisher?: string;
   release_date?: string;
@@ -272,6 +272,7 @@ export interface Game {
   is_manually_edited: number;
   is_excluded?: number;
   is_favorite?: number;
+  is_root_manually_marked?: number;
   created_at?: string;
   updated_at?: string;
   posterLocal?: string;

@@ -1,5 +1,11 @@
 <template>
   <div class="game-wall">
+    <!-- Toast Notification -->
+    <Transition name="toast">
+      <div v-if="showToast" class="toast-notification">
+        {{ toastMessage }}
+      </div>
+    </Transition>
     <div class="game-wall-layout">
       <GameGroupSidebar
         v-if="config.groupsEnabled"
@@ -118,17 +124,27 @@
       <div class="modal-content game-detail-modal">
         <div class="modal-header">
           <h3>{{ selectedGame.title }}</h3>
+          <div v-if="selectedGame.title_en" class="title-en">{{ selectedGame.title_en }}</div>
           <button class="modal-close" @click="selectedGame = null">✕</button>
         </div>
         <div class="modal-body">
           <div class="detail-poster">
-            <img
-              v-if="selectedGame.poster_horizontal_path"
-              :src="`/api/games/${selectedGame.id}/poster/horizontal`"
-              :alt="selectedGame.title"
-            />
-            <div v-else class="poster-placeholder-large">
-              <span class="poster-icon">🎮</span>
+            <div class="poster-container">
+              <div class="poster-placeholder-large">
+                <span class="poster-icon">🎮</span>
+              </div>
+              <img
+                :src="`/api/games/${selectedGame.id}/poster/horizontal`"
+                :alt="selectedGame.title"
+                @load="($event.target as HTMLImageElement).previousElementSibling?.classList.add('hidden')"
+                @error="($event.target as HTMLImageElement).style.display = 'none'"
+              />
+            </div>
+            <div class="poster-actions">
+              <button class="btn btn-small" @click="showPosterUploadModal = true">上传海报</button>
+              <button class="btn btn-small" @click="redownloadPoster(selectedGame)" :disabled="posterRedownloading">
+                {{ posterRedownloading ? '下载中...' : '重新下载' }}
+              </button>
             </div>
           </div>
           <div class="detail-info">
@@ -155,9 +171,15 @@
             <div class="info-row" v-if="selectedGame.steam_appid">
               <span class="info-label">Steam</span>
               <div class="info-value-group">
-                <span class="info-value steam-id" @click="copySteamAppid" title="点击复制">
+                <span class="info-value steam-id">
                   {{ selectedGame.steam_appid }}
                 </span>
+                <button class="btn-icon copy-btn" @click="copySteamAppid" title="复制 AppID">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
                 <a class="steam-link" :href="`https://store.steampowered.com/app/${selectedGame.steam_appid}`" target="_blank">
                   查看页面
                 </a>
@@ -257,6 +279,29 @@
           <button class="btn btn-secondary" @click="showEditGameModal = false">取消</button>
           <button class="btn btn-primary" @click="submitEditGame" :disabled="editingGame">
             {{ editingGame ? '保存中...' : '保存修改' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Poster Upload Modal -->
+    <div class="modal-overlay" v-if="showPosterUploadModal" @click.self="showPosterUploadModal = false">
+      <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+          <h3>上传海报</h3>
+          <button class="modal-close" @click="showPosterUploadModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label">选择海报图片</label>
+            <input type="file" accept="image/*" @change="handlePosterFileChange" class="input" />
+            <span class="hint">支持 JPG、PNG 等格式，建议尺寸 460x215</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showPosterUploadModal = false">取消</button>
+          <button class="btn btn-primary" @click="submitPosterUpload" :disabled="posterUploading || !posterUploadFile">
+            {{ posterUploading ? '上传中...' : '确认上传' }}
           </button>
         </div>
       </div>
@@ -494,7 +539,9 @@ import {
   updateGame as updateGameApi,
   removeNonexistentGames,
   cleanupStaleGames,
-  getGroupGames
+  getGroupGames,
+  uploadGamePoster,
+  redownloadGamePoster
 } from '../api'
 import GameCard from '../components/GameCard.vue'
 import GameGroupSidebar from '../components/GameGroupSidebar.vue'
@@ -552,6 +599,23 @@ const editForm = ref({
   description: '',
   notes: ''
 })
+
+const showPosterUploadModal = ref(false)
+const posterRedownloading = ref(false)
+const posterUploadFile = ref<File | null>(null)
+const posterUploading = ref(false)
+
+// Toast notification
+const showToast = ref(false)
+const toastMessage = ref('')
+
+function showNotification(message: string): void {
+  toastMessage.value = message
+  showToast.value = true
+  setTimeout(() => {
+    showToast.value = false
+  }, 2000)
+}
 
 // Group related state
 const groups = ref<GameGroup[]>([])
@@ -683,7 +747,7 @@ function copySteamAppid(): void {
   if (!selectedGame.value?.steam_appid) return
   navigator.clipboard.writeText(selectedGame.value.steam_appid)
     .then(() => {
-      // 可选：显示复制成功提示
+      showNotification('已复制 Steam AppID')
     })
     .catch(err => {
       console.error('复制失败:', err)
@@ -711,11 +775,69 @@ async function scrapeGame(game: Game): Promise<void> {
         selectedGame.value = res.data
       }
       loadStats()
+      showNotification('刮削完成')
     }
   } catch (err) {
     console.error('刮削失败:', err)
+    showNotification('刮削失败')
   }
   scraping.value = false
+}
+
+async function redownloadPoster(game: Game): Promise<void> {
+  posterRedownloading.value = true
+  try {
+    const res = await redownloadGamePoster(game.id, 'horizontal')
+    if (res.success) {
+      // Force refresh the poster by reloading the game
+      const idx = games.value.findIndex(g => g.id === game.id)
+      if (idx >= 0) {
+        // Trigger a re-render by updating the game
+        games.value[idx] = { ...games.value[idx] }
+      }
+      if (selectedGame.value?.id === game.id) {
+        selectedGame.value = { ...selectedGame.value }
+      }
+    } else {
+      alert('重新下载海报失败: ' + ((res as any).error || '未知错误'))
+    }
+  } catch (err) {
+    console.error('重新下载海报失败:', err)
+    alert('重新下载海报失败，请查看控制台')
+  }
+  posterRedownloading.value = false
+}
+
+function handlePosterFileChange(event: Event): void {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files.length > 0) {
+    posterUploadFile.value = target.files[0]
+  }
+}
+
+async function submitPosterUpload(): Promise<void> {
+  if (!posterUploadFile.value || !selectedGame.value) return
+
+  posterUploading.value = true
+  try {
+    const res = await uploadGamePoster(selectedGame.value.id, 'horizontal', posterUploadFile.value)
+    if (res.success) {
+      showPosterUploadModal.value = false
+      posterUploadFile.value = null
+      // Force refresh the poster
+      const idx = games.value.findIndex(g => g.id === selectedGame.value!.id)
+      if (idx >= 0) {
+        games.value[idx] = { ...games.value[idx] }
+      }
+      selectedGame.value = { ...selectedGame.value }
+    } else {
+      alert('上传海报失败: ' + ((res as any).error || '未知错误'))
+    }
+  } catch (err) {
+    console.error('上传海报失败:', err)
+    alert('上传海报失败，请查看控制台')
+  }
+  posterUploading.value = false
 }
 
 async function scrapeAll(): Promise<void> {
@@ -725,9 +847,11 @@ async function scrapeAll(): Promise<void> {
     if (res.success && res.data) {
       await loadGames()
       await loadStats()
+      showNotification(`批量刮削完成，共刮削 ${res.data.scrapedCount} 个游戏`)
     }
   } catch (err) {
     console.error('批量刮削失败:', err)
+    showNotification('批量刮削失败')
   }
   scraping.value = false
 }
@@ -739,9 +863,11 @@ async function identifyGames(): Promise<void> {
     if (res.success) {
       showIdentifyModal.value = false
       await refreshGames()
+      showNotification('游戏识别完成')
     }
   } catch (err) {
     console.error('识别失败:', err)
+    showNotification('游戏识别失败')
   }
   identifying.value = false
 }
@@ -789,9 +915,11 @@ async function bindSteamAppid(): Promise<void> {
       selectedGame.value = res.data
       showSteamSearchModal.value = false
       loadStats()
+      showNotification('已绑定 Steam AppID 并刮削')
     }
   } catch (err) {
     console.error('绑定 Steam 失败:', err)
+    showNotification('绑定 Steam 失败')
   }
   bindingSteam.value = false
 }
@@ -812,9 +940,11 @@ async function toggleExclude(game: Game): Promise<void> {
         selectedGame.value = res.data
       }
       loadStats()
+      showNotification(res.data.is_excluded ? '已排除游戏' : '已取消排除')
     }
   } catch (err) {
     console.error('排除操作失败:', err)
+    showNotification('操作失败')
   }
 }
 
@@ -830,9 +960,11 @@ async function toggleFavorite(game: Game): Promise<void> {
         selectedGame.value = res.data
       }
       loadStats()
+      showNotification(res.data.is_favorite ? '已收藏游戏' : '已取消收藏')
     }
   } catch (err) {
     console.error('收藏操作失败:', err)
+    showNotification('操作失败')
   }
 }
 
@@ -923,12 +1055,13 @@ async function promoteGame(game: Game): Promise<void> {
         selectedGame.value = res.data
       }
       loadStats()
+      showNotification('目录已提升')
     } else {
-      alert('提升失败: ' + (res as any).error || '未知错误')
+      showNotification('提升失败: ' + ((res as any).error || '未知错误'))
     }
   } catch (err) {
     console.error('提升目录失败:', err)
-    alert('提升失败，请查看控制台')
+    showNotification('提升失败')
   }
 }
 
@@ -942,19 +1075,21 @@ async function deleteSingleGame(game: Game): Promise<void> {
         selectedGame.value = null
       }
       loadStats()
+      showNotification('游戏已删除')
     }
   } catch (err) {
     console.error('删除游戏失败:', err)
+    showNotification('删除失败')
   }
 }
 
 async function submitAddGame(): Promise<void> {
   if (!addForm.value.source_path.trim()) {
-    alert('请输入游戏路径')
+    showNotification('请输入游戏路径')
     return
   }
   if (!addForm.value.title.trim()) {
-    alert('请输入游戏名称')
+    showNotification('请输入游戏名称')
     return
   }
 
@@ -984,15 +1119,13 @@ async function submitAddGame(): Promise<void> {
         short_description: '', notes: ''
       }
       await refreshGames()
-      if (hadSteamAppid) {
-        // 自动刮削在后台进行，等待刷新后显示
-      }
+      showNotification(hadSteamAppid ? '游戏已添加，正在后台刮削' : '游戏已添加')
     } else {
-      alert('添加失败: ' + (res as any).error || '未知错误')
+      showNotification('添加失败: ' + ((res as any).error || '未知错误'))
     }
   } catch (err) {
     console.error('添加游戏失败:', err)
-    alert('添加失败，请查看控制台')
+    showNotification('添加失败，请查看控制台')
   }
   addingGame.value = false
 }
@@ -1018,7 +1151,7 @@ function startEditGame(game: Game): void {
 
 async function submitEditGame(): Promise<void> {
   if (!editForm.value.title.trim()) {
-    alert('请输入游戏名称')
+    showNotification('请输入游戏名称')
     return
   }
 
@@ -1054,12 +1187,13 @@ async function submitEditGame(): Promise<void> {
       }
       selectedGame.value = res.data
       loadStats()
+      showNotification('游戏信息已更新')
     } else {
-      alert('保存失败: ' + (res as any).error || '未知错误')
+      showNotification('保存失败: ' + ((res as any).error || '未知错误'))
     }
   } catch (err) {
     console.error('编辑游戏失败:', err)
-    alert('保存失败，请查看控制台')
+    showNotification('保存失败')
   }
   editingGame.value = false
 }
@@ -1068,11 +1202,12 @@ async function removeNonexistent(): Promise<void> {
   try {
     const res = await removeNonexistentGames()
     if (res.success && res.data) {
-      alert(`已移除 ${res.data.deletedCount} 个不存在的游戏目录`)
       await refreshGames()
+      showNotification(`已移除 ${res.data.deletedCount} 个不存在的游戏目录`)
     }
   } catch (err) {
     console.error('移除失败:', err)
+    showNotification('移除失败')
   }
 }
 
@@ -1080,11 +1215,12 @@ async function handleCleanupStaleGames(): Promise<void> {
   try {
     const res = await cleanupStaleGames()
     if (res.success) {
-      alert(`清理完成，已删除 ${res.data?.deletedCount ?? 0} 个已移除路径下的游戏记录`)
       await refreshGames()
+      showNotification(`清理完成，已删除 ${res.data?.deletedCount ?? 0} 个已移除路径下的游戏记录`)
     }
   } catch (err) {
     console.error('清理失败:', err)
+    showNotification('清理失败')
   }
 }
 
@@ -1103,6 +1239,7 @@ onBeforeUnmount(() => {
 function handleEsc(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     if (selectedGame.value) { selectedGame.value = null; return }
+    if (showPosterUploadModal.value) { showPosterUploadModal.value = false; return }
     if (showGroupManager.value) { showGroupManager.value = false; return }
     if (showAddGameModal.value) { showAddGameModal.value = false; return }
     if (showSteamSearchModal.value) { showSteamSearchModal.value = false; return }
@@ -1262,16 +1399,30 @@ function handleEsc(e: KeyboardEvent): void {
 
 .detail-poster {
   flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-poster .poster-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 460 / 215;
 }
 
 .detail-poster img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
+  height: 100%;
+  object-fit: cover;
   border-radius: 8px;
 }
 
 .poster-placeholder-large {
   width: 100%;
-  aspect-ratio: 460 / 215;
+  height: 100%;
   background: linear-gradient(135deg, var(--bg) 0%, var(--border) 100%);
   border-radius: 8px;
   display: flex;
@@ -1279,8 +1430,17 @@ function handleEsc(e: KeyboardEvent): void {
   justify-content: center;
 }
 
+.poster-placeholder-large.hidden {
+  display: none;
+}
+
 .poster-placeholder-large .poster-icon {
   font-size: 64px;
+}
+
+.poster-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .detail-info {
@@ -1356,7 +1516,6 @@ function handleEsc(e: KeyboardEvent): void {
 }
 
 .info-value-group {
-  flex: 1;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1365,16 +1524,51 @@ function handleEsc(e: KeyboardEvent): void {
 .info-value.steam-id {
   font-family: monospace;
   font-size: 14px;
-  background: var(--card-bg);
-  padding: 4px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-  border: 1px solid var(--border);
-  transition: background 0.2s;
+  user-select: text;
 }
 
-.info-value.steam-id:hover {
+.btn-icon {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
   background: var(--hover-bg);
+  color: var(--accent);
+}
+
+.toast-notification {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  color: var(--text);
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 2000;
+  font-size: 14px;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
 }
 
 .steam-link {
