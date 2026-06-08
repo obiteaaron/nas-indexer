@@ -204,10 +204,10 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
   const details = await getSteamDetails(appid);
   if (!details || !details.data) {
     logger.info('无法获取 Steam 详情: appid %d', appid);
-    // 保存 appid 至少
+    // 只保存 appid，不改变 metadata_source（仍为 'unknown'）
+    // 这样前端仍显示"待刮削"，用户可重试刮削
     gameDatabase.updateGame(gameId, {
-      steam_appid: String(appid),
-      metadata_source: 'steam'
+      steam_appid: String(appid)
     });
     return gameDatabase.getGameById(gameId);
   }
@@ -230,8 +230,8 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
     poster_url: data.header_image || undefined,
     cover_url: data.capsule_images?.[0]?.capsule || undefined,
     screenshots: data.screenshots ? JSON.stringify(data.screenshots.slice(0, 5).map(s => s.path_full)) : undefined,
-    metadata_source: 'steam',
-    scraped_at: new Date().toISOString()
+    metadata_source: 'steam',  // 只有成功获取元数据才设置为 'steam'
+    scraped_at: new Date().toISOString()  // 刮削完成时间
   };
 
   // 下载海报到 profiles/games/posters/{gameId}/
