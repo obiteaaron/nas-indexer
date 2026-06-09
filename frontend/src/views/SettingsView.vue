@@ -271,6 +271,12 @@
               <span class="hint">刮削将从 Steam Store 获取游戏元数据和海报</span>
             </div>
 
+            <div class="form-group" v-if="config.gamesEnabled">
+              <label>HTTP 代理</label>
+              <input class="input" v-model="config.proxyUrl" placeholder="http://127.0.0.1:7890">
+              <span class="hint">用于 Steam API 列削的代理地址，留空则直连</span>
+            </div>
+
             <div class="form-actions">
               <button class="btn btn-primary" @click="save">保存游戏设置</button>
             </div>

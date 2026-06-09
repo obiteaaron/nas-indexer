@@ -90,6 +90,7 @@ export interface Config {
   gameScanPaths?: string[];
   gamesRules?: GameRules;
   gamesScrape?: GameScrapeConfig;
+  proxyUrl?: string;  // HTTP 代理地址，用于 Steam API 刮削
   // 前端扩展属性
   thumbnailSizeLimit?: number;
 }
