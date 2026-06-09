@@ -6,7 +6,7 @@ import { performScanWithDatabase } from './scanner';
 import { database } from './database';
 import { gameDatabase } from './games/database';
 import { runIdentification } from './games/identifier';
-import { scrapeUnscrapedGames } from './games/scraper';
+import { scrapeUnscrapedGames, initProxy } from './games/scraper';
 import { logger } from './logger';
 import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from './utils';
 import { ensureGamesDirs } from './games/storage';
@@ -147,6 +147,10 @@ app.get('*', (req: Request, res: Response, next: NextFunction) => {
 
 app.listen(PORT, async () => {
   await initDatabase();
+
+  // 初始化代理（用于 Steam API 刮削）
+  initProxy();
+
   logger.info('\n🚀 NAS Indexer v1.3.2 服务已启动');
   logger.info('📍 访问地址: http://localhost:%d', PORT);
   logger.info('📁 默认存储目录: %s\n', DEFAULT_STORAGE_PATH);

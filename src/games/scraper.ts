@@ -2,6 +2,15 @@
  * Steam 刮削模块
  */
 
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
+import { logger } from '../logger';
+import { gameDatabase } from './database';
+import { cleanGameName } from './name-cleaner';
+import { getStoragePath, loadConfig } from '../utils';
+import { PosterService } from './poster-service';
+import { ensureGamesDirs } from './storage';
+import type { Game } from '../types';
+
 /**
  * Steam 搜索结果项
  */
@@ -12,16 +21,39 @@ export interface SteamSearchItem {
   metacritic_score?: number;
 }
 
-import { logger } from '../logger';
-import { gameDatabase } from './database';
-import { cleanGameName } from './name-cleaner';
-import { getStoragePath, loadConfig } from '../utils';
-import { PosterService } from './poster-service';
-import { ensureGamesDirs } from './storage';
-import type { Game } from '../types';
-
 const STEAM_SEARCH_URL = 'https://store.steampowered.com/api/storesearch/';
 const STEAM_DETAILS_URL = 'https://store.steampowered.com/api/appdetails';
+
+// 代理 Agent（全局）
+let proxyAgent: ProxyAgent | undefined;
+
+/**
+ * 初始化代理（根据配置）
+ */
+export function initProxy(): void {
+  const config = loadConfig();
+  const proxyUrl = config.proxyUrl;
+
+  if (proxyUrl && proxyUrl.trim()) {
+    proxyAgent = new ProxyAgent(proxyUrl.trim());
+    setGlobalDispatcher(proxyAgent);
+    logger.info('[Steam刮削] 已启用代理: %s', proxyUrl.trim());
+  } else {
+    proxyAgent = undefined;
+    logger.info('[Steam刮削] 未配置代理，使用直连');
+  }
+}
+
+/**
+ * 获取当前代理状态
+ */
+export function getProxyStatus(): { enabled: boolean; url?: string } {
+  if (proxyAgent) {
+    const config = loadConfig();
+    return { enabled: true, url: config.proxyUrl };
+  }
+  return { enabled: false };
+}
 
 interface SteamSearchResult {
   total: number;

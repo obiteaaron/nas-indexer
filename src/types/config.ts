@@ -37,6 +37,7 @@ export interface Config {
   gamesRules?: import('./game').GameRules;
   gamesScrape?: import('./game').GameScrapeConfig;
   maxPosterBackups?: number;  // 每种海报类型最多保留的备份数
+  proxyUrl?: string;  // HTTP 代理地址，用于 Steam API 刮削
 }
 
 export const DEFAULT_EXCLUDE_PATTERNS: string[] = [

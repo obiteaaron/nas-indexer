@@ -183,6 +183,15 @@
             </div>
 
             <div class="form-group" v-if="config.gamesEnabled">
+              <label>扫描限制</label>
+              <div class="rule-item">
+                <label>最大递归深度</label>
+                <input class="input small" type="number" v-model.number="config.gamesRules!.maxScanDepth" min="1" max="10">
+                <span class="hint">未匹配规则时递归扫描的最大深度</span>
+              </div>
+            </div>
+
+            <div class="form-group" v-if="config.gamesEnabled">
               <label class="checkbox-label">
                 <input type="checkbox" v-model="config.gameScanPathsEnabled">
                 仅扫描指定路径
@@ -224,12 +233,6 @@
                   <input class="input" v-model="gameBlacklistPatternsStr"
                          placeholder="$Recycle.Bin, System Volume Information, .git">
                   <span class="hint">包含这些关键词的路径跳过识别，逗号分隔</span>
-                </div>
-
-                <div class="rule-item">
-                  <label>最大递归深度</label>
-                  <input class="input small" type="number" v-model.number="config.gamesRules!.maxScanDepth" min="1" max="10">
-                  <span class="hint">未匹配规则时递归扫描的最大深度</span>
                 </div>
 
                 <div class="rules-list">

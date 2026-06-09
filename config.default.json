@@ -82,5 +82,6 @@
     "autoScrape": true,
     "downloadPosters": true,
     "scrapeOnIdentify": true
-  }
+  },
+  "proxyUrl": ""
 }

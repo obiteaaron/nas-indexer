@@ -1,5 +1,6 @@
 import express, { Router, Request, Response } from 'express';
 import { loadConfig, saveConfig, getStoragePath } from '../utils';
+import { initProxy } from '../games/scraper';
 import type { Config } from '../types';
 
 const router: Router = express.Router();
@@ -22,6 +23,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const config: Config = loadConfig();
     const updatedConfig: Config = { ...config, ...newConfig };
     saveConfig(updatedConfig);
+
+    // 如果代理配置变更，重新初始化
+    if (newConfig.proxyUrl !== undefined) {
+      initProxy();
+    }
+
     res.json({ success: true, data: updatedConfig });
   } catch (err) {
     const error = err as Error;
