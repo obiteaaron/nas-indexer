@@ -651,7 +651,7 @@ const config = ref({ groupsEnabled: true })
 const isFavoriteFilter = ref(false)
 
 const page = ref(1)
-const pageSize = ref(50)
+const pageSize = ref(100)
 const total = ref(0)
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 
