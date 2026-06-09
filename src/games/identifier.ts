@@ -266,6 +266,7 @@ interface RuleMatchResult {
 /**
  * 正则规则匹配
  * 匹配任意全路径（文件或目录），不区分类型
+ * 注意：此函数只做匹配，不应用偏移；偏移逻辑统一在 smartLevelOffset 中处理
  */
 function matchRecognitionRule(
   entryPath: string,
@@ -292,24 +293,15 @@ function matchRecognitionRule(
     try {
       const regex = new RegExp(rule.pattern, 'i');
       if (regex.test(normalizedPath)) {
-        // 计算层级偏移后的游戏目录
-        // 如果匹配到文件，从文件所在目录开始计算偏移
-        let gamePath = isFile ? path.dirname(entryPath) : entryPath;
+        // 计算基准游戏目录（不应用偏移）
+        // 如果匹配到文件，从文件所在目录开始；如果是目录，直接使用该目录
+        const baseGamePath = isFile ? path.dirname(entryPath) : entryPath;
 
-        for (let i = 0; i < rule.levelOffset; i++) {
-          const parent = path.dirname(gamePath);
-          // 不能超出扫描根目录
-          if (parent === gamePath || path.resolve(parent) === path.resolve(scanRoot)) {
-            break;
-          }
-          gamePath = parent;
-        }
+        logger.info('[游戏识别] 正则匹配: %s → 基准目录: %s (规则: %s, 类型: %s)',
+          entryName, path.basename(baseGamePath), rule.pattern, isFile ? '文件' : '目录');
 
-        logger.info('[游戏识别] 正则匹配: %s → 游戏目录: %s (规则: %s, 偏移: %d, 类型: %s)',
-          entryName, path.basename(gamePath), rule.pattern, rule.levelOffset, isFile ? '文件' : '目录');
-
-        // 智能层级偏移（P1/P2/P3）
-        gamePath = smartLevelOffset(gamePath, entryPath, rule, scanRoot, rules.heuristicRules);
+        // 智能层级偏移（P1/P2/P3统一处理）
+        const gamePath = smartLevelOffset(baseGamePath, entryPath, rule, scanRoot, rules.heuristicRules);
 
         return { matched: true, gamePath, rule, matchedPath: entryPath, isFile };
       }

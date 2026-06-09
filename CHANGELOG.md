@@ -22,6 +22,9 @@
   - TaskBar 实时显示刮削进度和完成通知
 
 ### Bug 修复
+- **游戏识别双重偏移** - 修复 matchRecognitionRule 和 smartLevelOffset 都应用 levelOffset 导致偏移两次的问题
+  - matchRecognitionRule 现在只计算基准目录，不应用偏移
+  - 所有偏移逻辑（P1/P2/P3）统一在 smartLevelOffset 中处理
 - **海报备份缩略图定位** - 修复备份图片显示在页面最上面的问题
 - **海报备份 API 路由顺序** - 修复路由匹配顺序导致 404 的问题
 - **游戏分组关系残留** - 修复游戏删除后分组统计数据不准确的问题
