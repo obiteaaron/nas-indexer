@@ -497,13 +497,13 @@ export async function runIdentification(
   // 识别游戏目录
   const games = await identifyGames(scanRoots, rules);
 
-  // 通过别名表补全未识别的 steam_appid
+  // 通过 Steam DB 补全未识别的 steam_appid
   for (const game of games) {
     if (!game.steam_appid && game.original_name) {
-      const aliasAppid = gameDatabase.lookupAlias(game.original_name);
-      if (aliasAppid) {
-        game.steam_appid = aliasAppid;
-        logger.info('别名匹配: %s -> appid %s', game.original_name, aliasAppid);
+      const match = gameDatabase.lookupSteamDbByName(game.original_name);
+      if (match) {
+        game.steam_appid = match.steam_appid;
+        logger.info('Steam DB 匹配: %s -> appid %s (%s)', game.original_name, match.steam_appid, match.name);
       }
     }
   }

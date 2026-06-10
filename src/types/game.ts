@@ -215,3 +215,28 @@ export const DEFAULT_GAME_CONFIG: GameConfig = {
   gamesRules: DEFAULT_GAME_RULES,
   gamesScrape: DEFAULT_GAME_SCRAPE
 };
+
+/**
+ * Steam 数据库条目
+ * 用于存储 Steam AppID 与游戏名称的映射关系，提升刮削成功率
+ */
+export interface SteamDbEntry {
+  id?: number;               // ID 可选（导入导出时不需要）
+  steam_appid: string;        // Steam AppID（唯一）
+  name: string;               // 中文名称
+  name_en?: string;           // 英文名称
+  aliases: string[];          // 别名数组（JSON）
+  notes?: string;             // 备注
+  source: 'manual' | 'imported' | 'auto' | 'scraper';  // 来源
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Steam 数据库导入结果
+ */
+export interface SteamDbImportResult {
+  added: number;
+  updated: number;
+  skipped: number;
+}

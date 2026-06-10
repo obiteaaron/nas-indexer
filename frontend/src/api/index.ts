@@ -21,7 +21,9 @@ import type {
   SteamSearchItem,
   GameStatistics,
   GameGroup,
-  PosterBackup
+  PosterBackup,
+  SteamDbEntry,
+  SteamDbImportResult
 } from '../types'
 
 const API_BASE = '/api'
@@ -568,4 +570,55 @@ export function restoreBackup(filename: string, mode: 'merge' | 'overwrite' = 'm
 
 export function deleteBackup(filename: string): Promise<ApiResponse<void>> {
   return request<void>('/games/backup/' + filename, { method: 'DELETE' })
+}
+
+// === Steam DB API ===
+
+export interface SteamDbListResponse {
+  entries: SteamDbEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export function getSteamDbEntries(params: { search?: string; orderBy?: string; orderDir?: string; page?: number; pageSize?: number } = {}): Promise<ApiResponse<SteamDbListResponse>> {
+  const query = new URLSearchParams(
+    Object.entries(params)
+      .filter(([_, v]) => v !== undefined)
+      .map(([k, v]) => [k, String(v)])
+  ).toString()
+  return request<SteamDbListResponse>('/games/steam-db/list?' + query)
+}
+
+export function getSteamDbEntry(id: number): Promise<ApiResponse<SteamDbEntry>> {
+  return request<SteamDbEntry>('/games/steam-db/get/' + id)
+}
+
+export function createSteamDbEntry(data: Partial<SteamDbEntry>): Promise<ApiResponse<SteamDbEntry>> {
+  clearCache('/games/steam-db')
+  return request<SteamDbEntry>('/games/steam-db/create', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateSteamDbEntry(id: number, data: Partial<SteamDbEntry>): Promise<ApiResponse<SteamDbEntry>> {
+  clearCache('/games/steam-db')
+  return request<SteamDbEntry>('/games/steam-db/update/' + id, { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function deleteSteamDbEntry(id: number): Promise<ApiResponse<void>> {
+  clearCache('/games/steam-db')
+  return request<void>('/games/steam-db/delete/' + id, { method: 'POST' })
+}
+
+export function exportSteamDb(): Promise<ApiResponse<SteamDbEntry[]>> {
+  return request<SteamDbEntry[]>('/games/steam-db/export')
+}
+
+export function importSteamDb(entries: SteamDbEntry[], mode: 'merge' | 'overwrite' = 'merge'): Promise<ApiResponse<SteamDbImportResult>> {
+  clearCache('/games/steam-db')
+  return request<SteamDbImportResult>('/games/steam-db/import', { method: 'POST', body: JSON.stringify({ entries, mode }) })
+}
+
+export function lookupSteamDbByName(name: string): Promise<ApiResponse<{ steam_appid: string; name: string } | null>> {
+  return request<{ steam_appid: string; name: string } | null>('/games/steam-db/lookup?name=' + encodeURIComponent(name))
 }

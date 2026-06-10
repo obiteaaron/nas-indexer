@@ -31,17 +31,24 @@
           手动添加
         </button>
         <button class="btn btn-secondary" @click="showIdentifyModal = true">
-          重新识别
+          重新扫描
         </button>
         <button class="btn btn-secondary" @click="showBatchScrapeModal = true" :disabled="scraping">
           {{ scraping ? '刮削中...' : '批量刮削' }}
         </button>
-        <button class="btn btn-secondary" @click="showRemoveNonexistentModal = true">
-          移除不存在目录
-        </button>
-        <button class="btn btn-warning" @click="handleCleanupStaleGames">
-          清理已移除路径记录
-        </button>
+        <div class="dropdown-wrapper">
+          <button class="btn btn-secondary dropdown-toggle" @click="showMoreDropdown = !showMoreDropdown">
+            更多...
+          </button>
+          <div class="dropdown-menu" v-if="showMoreDropdown" @click.away="showMoreDropdown = false">
+            <button class="dropdown-item" @click="showMoreDropdown = false; showRemoveNonexistentModal = true">
+              移除不存在目录
+            </button>
+            <button class="dropdown-item" @click="showMoreDropdown = false; handleCleanupStaleGames()">
+              清理已移除路径记录
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -591,6 +598,7 @@ const steamSearched = ref(false)
 const bindingSteam = ref(false)
 const showBatchScrapeModal = ref(false)
 const showRemoveNonexistentModal = ref(false)
+const showMoreDropdown = ref(false)
 const showAddGameModal = ref(false)
 const addingGame = ref(false)
 const showMoreFields = ref(false)
@@ -1314,6 +1322,7 @@ onBeforeUnmount(() => {
 
 function handleEsc(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
+    if (showMoreDropdown.value) { showMoreDropdown.value = false; return }
     if (selectedGame.value) { selectedGame.value = null; return }
     if (showPosterUploadModal.value) { showPosterUploadModal.value = false; return }
     if (showGroupManager.value) { showGroupManager.value = false; return }
@@ -1374,6 +1383,45 @@ function handleEsc(e: KeyboardEvent): void {
 .header-actions {
   display: flex;
   gap: 12px;
+}
+
+.dropdown-wrapper {
+  position: relative;
+}
+
+.dropdown-toggle {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 180px;
+  padding: 4px 0;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: var(--hover-bg);
 }
 
 .filter-bar {
@@ -1705,13 +1753,14 @@ function handleEsc(e: KeyboardEvent): void {
 }
 
 .steam-link {
-  color: var(--accent);
+  color: #2563eb;
   text-decoration: none;
   font-size: 13px;
 }
 
 .steam-link:hover {
   text-decoration: underline;
+  color: #1d4ed8;
 }
 
 .modal-actions {

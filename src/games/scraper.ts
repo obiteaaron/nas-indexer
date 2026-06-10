@@ -6,6 +6,7 @@ import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { logger } from '../logger';
 import { gameDatabase } from './database';
 import { cleanGameName } from './name-cleaner';
+import { resolveGameNames } from './name-resolver';
 import { getStoragePath, loadConfig } from '../utils';
 import { PosterService } from './poster-service';
 import { ensureGamesDirs } from './storage';
@@ -220,11 +221,6 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
   } else {
     // 搜索 Steam
     appid = await searchSteamGame(game.title);
-    // 搜索成功后缓存别名映射，下次识别时直接命中
-    if (appid && game.original_name) {
-      gameDatabase.saveAlias(game.original_name, String(appid));
-      logger.info('缓存别名: %s -> appid %d', game.original_name, appid);
-    }
   }
 
   if (!appid) {
@@ -246,15 +242,48 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
 
   const data = details.data;
 
-  // 智能处理 title 和 title_en
-  // title_en 始终设置为 Steam 英文名
-  // title：如果用户已手动编辑过（is_manually_edited=1），保持原值；否则更新为 Steam 名称
+  // 刮削成功后，将数据存入/更新 steam_db
+  const existing = gameDatabase.getSteamDbByAppid(String(appid));
+  const steamName = data.name;
+  const dirName = game.original_name;
+
+  // 使用统一的游戏名处理逻辑
+  const resolved = resolveGameNames(
+    steamName,
+    dirName,
+    existing ? existing.aliases || [] : []
+  );
+
+  if (existing) {
+    // 已存在：更新对应字段
+    gameDatabase.updateSteamDbEntry(existing.id!, {
+      name: resolved.name,
+      name_en: resolved.nameEn,
+      aliases: resolved.aliases,
+      source: 'scraper'
+    });
+    logger.info('Steam DB 更新: appid %d, name=%s, name_en=%s, aliases=%d',
+      appid, resolved.name, resolved.nameEn || '-', resolved.aliases.length);
+  } else {
+    // 不存在：插入新条目
+    gameDatabase.insertSteamDbEntry({
+      steam_appid: String(appid),
+      name: resolved.name,
+      name_en: resolved.nameEn,
+      aliases: resolved.aliases,
+      source: 'scraper'
+    });
+    logger.info('Steam DB 缓存: appid %d, name=%s, name_en=%s',
+      appid, resolved.name, resolved.nameEn || steamName);
+  }
+
+  // 智能处理 title 和 title_en（使用统一逻辑）
   const shouldUpdateTitle = !game.is_manually_edited;
 
   const updateData: Partial<Game> = {
     steam_appid: String(data.steam_appid),
-    title: shouldUpdateTitle ? data.name : game.title,
-    title_en: data.name,  // Steam 英文名，用于搜索匹配
+    title: shouldUpdateTitle ? resolved.name : game.title,
+    title_en: resolved.nameEn || steamName,
     developer: data.developers?.[0] || undefined,
     publisher: data.publishers?.[0] || undefined,
     release_date: data.release_date?.date || undefined,

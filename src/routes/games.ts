@@ -15,7 +15,7 @@ import { PosterService } from '../games/poster-service';
 import { initDatabase, loadConfig, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
 import { logger } from '../logger';
 import { taskManager } from '../task-manager';
-import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup } from '../types';
+import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup, SteamDbEntry } from '../types';
 import backupRouter from './backup';
 
 const router: Router = express.Router();
@@ -977,7 +977,7 @@ router.get('/steam/search', async (req: Request, res: Response): Promise<void> =
 router.post('/:id/bind-steam', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
-    const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
+    const game: Game | null = gameDatabase.getGameById(parseInt(String(req.params.id)));
     if (!game) {
       res.status(404).json({ success: false, error: '游戏不存在' });
       return;
@@ -989,15 +989,10 @@ router.post('/:id/bind-steam', async (req: Request, res: Response): Promise<void
       return;
     }
 
-    // 保存别名映射
-    if (game.original_name) {
-      gameDatabase.saveAlias(game.original_name, String(appid));
-    }
-
     // 更新 steam_appid
     gameDatabase.updateGame(game.id, { steam_appid: String(appid) });
 
-    // 执行刮削
+    // 执行刮削（刮削成功后会自动存储到 steam_db）
     const result: Game | null = await scrapeGame(game.id, true);
 
     if (result) {
@@ -1005,6 +1000,205 @@ router.post('/:id/bind-steam', async (req: Request, res: Response): Promise<void
     } else {
       res.status(500).json({ success: false, error: '刮削失败' });
     }
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// === Steam DB 路由 ===
+
+/**
+ * 获取 Steam DB 列表
+ */
+router.get('/steam-db/list', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const { search, orderBy = 'name', orderDir = 'ASC', page = '1', pageSize = '20' } = req.query;
+    const pageNum = parseInt(String(page)) || 1;
+    const pageSizeNum = parseInt(String(pageSize)) || 20;
+    const offset = (pageNum - 1) * pageSizeNum;
+
+    const result = gameDatabase.getAllSteamDbEntries({
+      search: search as string,
+      orderBy: orderBy as string,
+      orderDir: orderDir as string,
+      limit: pageSizeNum,
+      offset
+    });
+
+    res.json({
+      success: true,
+      data: {
+        entries: result.entries,
+        total: result.total,
+        page: pageNum,
+        pageSize: pageSizeNum,
+        totalPages: Math.ceil(result.total / pageSizeNum)
+      }
+    });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 获取单个 Steam DB 条目
+ */
+router.get('/steam-db/get/:id', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const id = parseInt(String(req.params.id));
+    const entry = gameDatabase.getSteamDbById(id);
+    if (!entry) {
+      res.status(404).json({ success: false, error: '条目不存在' });
+      return;
+    }
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 创建 Steam DB 条目
+ */
+router.post('/steam-db/create', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const data: Partial<SteamDbEntry> = req.body;
+
+    if (!data.steam_appid || !data.name) {
+      res.status(400).json({ success: false, error: 'steam_appid 和 name 为必填项' });
+      return;
+    }
+
+    // 检查是否已存在
+    const existing = gameDatabase.getSteamDbByAppid(data.steam_appid);
+    if (existing) {
+      res.status(400).json({ success: false, error: `AppID ${data.steam_appid} 已存在` });
+      return;
+    }
+
+    const id = gameDatabase.insertSteamDbEntry(data);
+    if (id === 0) {
+      res.status(500).json({ success: false, error: '创建失败' });
+      return;
+    }
+
+    const entry = gameDatabase.getSteamDbById(id);
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 更新 Steam DB 条目
+ */
+router.post('/steam-db/update/:id', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const id = parseInt(String(req.params.id));
+    const entry = gameDatabase.getSteamDbById(id);
+    if (!entry) {
+      res.status(404).json({ success: false, error: '条目不存在' });
+      return;
+    }
+
+    const data: Partial<SteamDbEntry> = req.body;
+
+    // 如果要更新 steam_appid，检查是否与其他条目冲突
+    if (data.steam_appid && data.steam_appid !== entry.steam_appid) {
+      const existing = gameDatabase.getSteamDbByAppid(data.steam_appid);
+      if (existing) {
+        res.status(400).json({ success: false, error: `AppID ${data.steam_appid} 已被其他条目使用` });
+        return;
+      }
+    }
+
+    gameDatabase.updateSteamDbEntry(id, data);
+    const updated = gameDatabase.getSteamDbById(id);
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 删除 Steam DB 条目
+ */
+router.post('/steam-db/delete/:id', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const id = parseInt(String(req.params.id));
+    const entry = gameDatabase.getSteamDbById(id);
+    if (!entry) {
+      res.status(404).json({ success: false, error: '条目不存在' });
+      return;
+    }
+
+    gameDatabase.deleteSteamDbEntry(id);
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 导出 Steam DB
+ */
+router.get('/steam-db/export', async (_req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const entries = gameDatabase.exportSteamDb();
+    res.json({ success: true, data: entries });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 导入 Steam DB
+ */
+router.post('/steam-db/import', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const { entries, mode = 'merge' } = req.body;
+
+    if (!entries || !Array.isArray(entries)) {
+      res.status(400).json({ success: false, error: '请提供 entries 数组' });
+      return;
+    }
+
+    const result = gameDatabase.importSteamDb(entries as SteamDbEntry[], mode);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 按名称查找 Steam AppID
+ */
+router.get('/steam-db/lookup', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const { name } = req.query;
+    if (!name) {
+      res.status(400).json({ success: false, error: '请提供 name 参数' });
+      return;
+    }
+
+    const result = gameDatabase.lookupSteamDbByName(name as string);
+    res.json({ success: true, data: result });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

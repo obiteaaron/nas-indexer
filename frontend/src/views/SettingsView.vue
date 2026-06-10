@@ -1,5 +1,12 @@
 <template>
   <div class="settings">
+    <!-- Toast Notification -->
+    <Transition name="toast">
+      <div v-if="showToast" class="toast-notification">
+        {{ toastMessage }}
+      </div>
+    </Transition>
+
     <div class="settings-layout">
       <nav class="settings-sidebar">
         <button
@@ -356,6 +363,76 @@
           </div>
         </div>
 
+        <!-- Steam 数据库 -->
+        <div v-show="activeTab === 'steam-db'" class="tab-panel">
+          <div class="card">
+            <h3 class="section-title">Steam 数据库</h3>
+            <p class="hint">管理 Steam AppID 与游戏名称映射，提升刮削成功率。游戏识别时会自动匹配中文名、英文名或别名。</p>
+
+            <div class="steam-db-toolbar">
+              <button class="btn btn-primary btn-small" @click="openAddSteamDbModal" :disabled="!config.gamesEnabled">
+                添加记录
+              </button>
+              <button class="btn btn-secondary btn-small" @click="showImportModal = true">
+                导入 JSON
+              </button>
+              <button class="btn btn-secondary btn-small" @click="handleExportSteamDb" :disabled="steamDbTotal === 0">
+                导出 JSON
+              </button>
+            </div>
+
+            <div class="steam-db-filter">
+              <input class="input" v-model="steamDbSearch" placeholder="搜索 AppID 或名称" @keyup.enter="handleSteamDbSearch">
+              <button class="btn btn-secondary btn-small" @click="handleSteamDbSearch">搜索</button>
+              <span class="steam-db-count">共 {{ steamDbTotal }} 条记录</span>
+            </div>
+
+            <div class="steam-db-table" v-if="steamDbEntries.length">
+              <div class="steam-db-row steam-db-header-row">
+                <span class="steam-db-col-appid">AppID</span>
+                <span class="steam-db-col-name">中文名</span>
+                <span class="steam-db-col-name-en">英文名</span>
+                <span class="steam-db-col-aliases">别名</span>
+                <span class="steam-db-col-actions">操作</span>
+              </div>
+              <div class="steam-db-row" v-for="entry in steamDbEntries" :key="entry.id">
+                <span class="steam-db-col-appid">
+                  <a :href="`https://store.steampowered.com/app/${entry.steam_appid}`" target="_blank" class="steam-link">
+                    {{ entry.steam_appid }}
+                  </a>
+                </span>
+                <span class="steam-db-col-name">
+                  <a :href="`https://store.steampowered.com/app/${entry.steam_appid}`" target="_blank" class="steam-link">
+                    {{ entry.name }}
+                  </a>
+                </span>
+                <span class="steam-db-col-name-en">
+                  <a v-if="entry.name_en" :href="`https://store.steampowered.com/app/${entry.steam_appid}`" target="_blank" class="steam-link">
+                    {{ entry.name_en }}
+                  </a>
+                </span>
+                <span class="steam-db-col-aliases">
+                  <span class="alias-tag" v-for="(alias, i) in (entry.aliases || []).slice(0, 3)" :key="i">{{ alias }}</span>
+                  <span class="alias-more" v-if="(entry.aliases || []).length > 3">+{{ entry.aliases.length - 3 }}</span>
+                </span>
+                <span class="steam-db-col-actions">
+                  <button class="btn btn-secondary btn-small" @click="editSteamDbEntry(entry)">编辑</button>
+                  <button class="btn btn-danger btn-small" @click="deleteSteamDbEntryConfirm(entry)">删除</button>
+                </span>
+              </div>
+            </div>
+            <div class="steam-db-empty" v-else>
+              <p>暂无数据，请添加记录或导入 JSON</p>
+            </div>
+
+            <div class="steam-db-pagination" v-if="steamDbTotalPages > 1">
+              <button class="btn btn-secondary btn-small" @click="steamDbPage--" :disabled="steamDbPage === 1">上一页</button>
+              <span class="pagination-info">第 {{ steamDbPage }} / {{ steamDbTotalPages }} 页</span>
+              <button class="btn btn-secondary btn-small" @click="steamDbPage++" :disabled="steamDbPage >= steamDbTotalPages">下一页</button>
+            </div>
+          </div>
+        </div>
+
         <!-- 系统状态 -->
         <div v-show="activeTab === 'status'" class="tab-panel">
           <div class="card">
@@ -391,13 +468,82 @@
         </div>
       </div>
     </div>
+
+    <!-- Steam DB 添加/编辑模态框 -->
+    <div class="modal-overlay" v-if="showSteamDbModal" @click.self="closeSteamDbModal">
+      <div class="modal-content steam-db-modal">
+        <div class="modal-header">
+          <h3>{{ editingSteamDb ? '编辑 Steam DB 记录' : '添加 Steam DB 记录' }}</h3>
+          <button class="modal-close" @click="closeSteamDbModal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label">Steam AppID <span class="required">*</span></label>
+            <input class="input" v-model="steamDbForm.steam_appid" placeholder="如 1234560" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">中文名 <span class="required">*</span></label>
+            <input class="input" v-model="steamDbForm.name" placeholder="如 艾尔登法环" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">英文名</label>
+            <input class="input" v-model="steamDbForm.name_en" placeholder="如 Elden Ring" />
+          </div>
+          <div class="form-row">
+            <label class="form-label">别名</label>
+            <input class="input" v-model="steamDbForm.aliasesStr" placeholder="逗号分隔，如 ER,eldenring" />
+            <span class="hint">多个别名用逗号分隔</span>
+          </div>
+          <div class="form-row">
+            <label class="form-label">备注</label>
+            <input class="input" v-model="steamDbForm.notes" placeholder="可选备注" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="closeSteamDbModal">取消</button>
+          <button class="btn btn-primary" @click="saveSteamDbEntry" :disabled="savingSteamDb">
+            {{ savingSteamDb ? '保存中...' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Steam DB 导入模态框 -->
+    <div class="modal-overlay" v-if="showImportModal" @click.self="showImportModal = false">
+      <div class="modal-content import-modal">
+        <div class="modal-header">
+          <h3>导入 Steam DB</h3>
+          <button class="modal-close" @click="showImportModal = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label">JSON 内容</label>
+            <textarea class="textarea" v-model="importJsonStr" placeholder="粘贴 JSON 数组，格式：[{steam_appid, name, name_en, aliases}]"></textarea>
+          </div>
+          <div class="form-row">
+            <label class="form-label">导入模式</label>
+            <select class="select" v-model="importMode">
+              <option value="merge">合并（跳过已存在的 AppID）</option>
+              <option value="overwrite">覆盖（更新已存在的 AppID）</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" @click="showImportModal = false">取消</button>
+          <button class="btn btn-primary" @click="handleImportSteamDb" :disabled="importing">
+            {{ importing ? '导入中...' : '导入' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths, cleanupStaleFiles } from '../api'
-import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule, GameRules, GameScrapeConfig, GameRecognitionRule, HeuristicRulesConfig } from '../types'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths, cleanupStaleFiles,
+  getSteamDbEntries, createSteamDbEntry, updateSteamDbEntry, deleteSteamDbEntry, exportSteamDb, importSteamDb } from '../api'
+import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule, GameRules, GameScrapeConfig, GameRecognitionRule, HeuristicRulesConfig, SteamDbEntry, SteamDbListResponse } from '../types'
 
 const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
   { pattern: '\\[GOG\\]$',           levelOffset: 0, enabled: true, description: 'GOG 版游戏（目录名结尾）' },
@@ -457,12 +603,49 @@ const checkingPaths = ref(false)
 const pathStatuses = ref<PathStatus[]>([])
 const showGameDoc = ref(false)
 
+// Toast 提示
+const showToast = ref(false)
+const toastMessage = ref('')
+let toastTimeout: ReturnType<typeof setTimeout> | null = null
+
+function showNotification(message: string): void {
+  toastMessage.value = message
+  showToast.value = true
+  if (toastTimeout) clearTimeout(toastTimeout)
+  toastTimeout = setTimeout(() => {
+    showToast.value = false
+  }, 2000)
+}
+
+// Steam DB 相关
+const steamDbEntries = ref<SteamDbEntry[]>([])
+const steamDbSearch = ref('')
+const steamDbTotal = ref(0)
+const steamDbPage = ref(1)
+const steamDbPageSize = ref(20)
+const steamDbTotalPages = ref(0)
+const showSteamDbModal = ref(false)
+const showImportModal = ref(false)
+const editingSteamDb = ref<SteamDbEntry | null>(null)
+const savingSteamDb = ref(false)
+const importing = ref(false)
+const importJsonStr = ref('')
+const importMode = ref<'merge' | 'overwrite'>('merge')
+const steamDbForm = ref({
+  steam_appid: '',
+  name: '',
+  name_en: '',
+  aliasesStr: '',
+  notes: ''
+})
+
 const activeTab = ref('scan')
 const tabs = [
   { key: 'scan', label: '扫描配置' },
   { key: 'category', label: '分类规则' },
   { key: 'display', label: '偏好与显示' },
   { key: 'games', label: '游戏模块' },
+  { key: 'steam-db', label: 'Steam 数据库' },
   { key: 'status', label: '系统状态' },
 ]
 
@@ -543,6 +726,7 @@ onMounted(async () => {
   await loadConfig()
   await loadStatus()
   await checkPathsStatus()
+  await loadSteamDbEntries()
 })
 
 async function loadConfig(): Promise<void> {
@@ -612,12 +796,12 @@ async function handleCleanupStaleFiles(): Promise<void> {
   try {
     const res = await cleanupStaleFiles()
     if (res.success) {
-      alert(`清理完成，已删除 ${res.data?.deletedCount ?? 0} 条失效记录`)
+      showNotification(`清理完成，已删除 ${res.data?.deletedCount ?? 0} 条失效记录`)
     } else {
-      alert('清理失败：' + res.error)
+      showNotification('清理失败：' + res.error)
     }
   } catch (err) {
-    alert('清理失败：' + (err as Error).message)
+    showNotification('清理失败：' + (err as Error).message)
   }
 }
 
@@ -628,11 +812,11 @@ async function scanPath(index: number): Promise<void> {
   try {
     const res = await scanSinglePath(path)
     if (!res.success) {
-      alert('启动扫描失败：' + res.error)
+      showNotification('启动扫描失败：' + res.error)
     }
   } catch (err) {
     const error = err as Error
-    alert('启动扫描失败：' + error.message)
+    showNotification('启动扫描失败：' + error.message)
   }
 }
 
@@ -641,15 +825,15 @@ async function save(): Promise<void> {
   try {
     const res = await saveConfig(config.value)
     if (res.success) {
-      alert('配置已保存')
+      showNotification('配置已保存')
       window.dispatchEvent(new Event('config-saved'))
       loadStatus()
     } else {
-      alert('保存失败：' + res.error)
+      showNotification('保存失败：' + res.error)
     }
   } catch (err) {
     const error = err as Error
-    alert('保存失败：' + error.message)
+    showNotification('保存失败：' + error.message)
   }
   saving.value = false
 }
@@ -662,7 +846,7 @@ function addCategory(): void {
   if (!newCategoryName.value.trim()) return
   const name = newCategoryName.value.trim()
   if (localCategoryRules[name]) {
-    alert('分类已存在')
+    showNotification('分类已存在')
     return
   }
   localCategoryRules[name] = []
@@ -680,7 +864,7 @@ function updateCategoryName(oldName: string, event: Event): void {
   const newName = target.value.trim()
   if (!newName || newName === oldName) return
   if (localCategoryRules[newName]) {
-    alert('分类名称已存在')
+    showNotification('分类名称已存在')
     target.value = oldName
     return
   }
@@ -696,7 +880,7 @@ function addExtension(category: string): void {
   if (!ext) return
   const normalizedExt = ext.startsWith('.') ? ext.toLowerCase() : '.' + ext.toLowerCase()
   if (localCategoryRules[category].includes(normalizedExt)) {
-    alert('扩展名已存在')
+    showNotification('扩展名已存在')
     return
   }
   localCategoryRules[category].push(normalizedExt)
@@ -730,13 +914,13 @@ async function clearPreferences(): Promise<void> {
   try {
     const res = await clearPreferencesData()
     if (res.success) {
-      alert('偏好数据已清除')
+      showNotification('偏好数据已清除')
     } else {
-      alert('清除失败：' + res.error)
+      showNotification('清除失败：' + res.error)
     }
   } catch (err) {
     const error = err as Error
-    alert('清除失败：' + error.message)
+    showNotification('清除失败：' + error.message)
   }
 }
 
@@ -747,11 +931,11 @@ async function checkPathsStatus(): Promise<void> {
     if (res.success && res.data) {
       pathStatuses.value = res.data
     } else {
-      alert('检测失败：' + res.error)
+      showNotification('检测失败：' + res.error)
     }
   } catch (err) {
     const error = err as Error
-    alert('检测失败：' + error.message)
+    showNotification('检测失败：' + error.message)
   }
   checkingPaths.value = false
 }
@@ -769,6 +953,167 @@ function getPathStatusTitle(path: string): string {
   if (!ps) return '未检测'
   if (ps.isAccessible) return `可达 - 文件数: ${ps.fileCount}, 延迟: ${ps.latency}ms`
   return `不可达 - ${ps.error}`
+}
+
+// === Steam DB 方法 ===
+
+function handleSteamDbSearch(): void {
+  steamDbPage.value = 1
+  loadSteamDbEntries()
+}
+
+async function loadSteamDbEntries(): Promise<void> {
+  try {
+    const res = await getSteamDbEntries({
+      search: steamDbSearch.value,
+      page: steamDbPage.value,
+      pageSize: steamDbPageSize.value
+    })
+    if (res.success && res.data) {
+      steamDbEntries.value = res.data.entries
+      steamDbTotal.value = res.data.total
+      steamDbTotalPages.value = res.data.totalPages
+    }
+  } catch (err) {
+    console.error('加载 Steam DB 失败:', err)
+  }
+}
+
+// 监听页码变化
+watch(steamDbPage, () => {
+  loadSteamDbEntries()
+})
+
+function openAddSteamDbModal(): void {
+  editingSteamDb.value = null
+  steamDbForm.value = { steam_appid: '', name: '', name_en: '', aliasesStr: '', notes: '' }
+  showSteamDbModal.value = true
+}
+
+function editSteamDbEntry(entry: SteamDbEntry): void {
+  editingSteamDb.value = entry
+  steamDbForm.value = {
+    steam_appid: entry.steam_appid,
+    name: entry.name,
+    name_en: entry.name_en || '',
+    aliasesStr: entry.aliases?.join(', ') || '',
+    notes: entry.notes || ''
+  }
+  showSteamDbModal.value = true
+}
+
+function closeSteamDbModal(): void {
+  showSteamDbModal.value = false
+  editingSteamDb.value = null
+  steamDbForm.value = { steam_appid: '', name: '', name_en: '', aliasesStr: '', notes: '' }
+}
+
+async function saveSteamDbEntry(): Promise<void> {
+  if (!steamDbForm.value.steam_appid.trim() || !steamDbForm.value.name.trim()) {
+    showNotification('AppID 和中文名为必填项')
+    return
+  }
+
+  savingSteamDb.value = true
+  try {
+    const data = {
+      steam_appid: steamDbForm.value.steam_appid.trim(),
+      name: steamDbForm.value.name.trim(),
+      name_en: steamDbForm.value.name_en.trim() || undefined,
+      aliases: steamDbForm.value.aliasesStr.split(',').map(s => s.trim()).filter(s => s),
+      notes: steamDbForm.value.notes.trim() || undefined
+    }
+
+    let res
+    if (editingSteamDb.value && editingSteamDb.value.id) {
+      res = await updateSteamDbEntry(editingSteamDb.value.id, data)
+    } else {
+      res = await createSteamDbEntry(data)
+    }
+
+    if (res.success) {
+      closeSteamDbModal()
+      await loadSteamDbEntries()
+      showNotification(editingSteamDb.value ? '记录已更新' : '记录已添加')
+    } else {
+      showNotification('保存失败：' + res.error)
+    }
+  } catch (err) {
+    const error = err as Error
+    showNotification('保存失败：' + error.message)
+  }
+  savingSteamDb.value = false
+}
+
+async function deleteSteamDbEntryConfirm(entry: SteamDbEntry): Promise<void> {
+  if (!confirm(`确定删除 AppID ${entry.steam_appid} (${entry.name})？`)) return
+  if (!entry.id) return
+
+  try {
+    const res = await deleteSteamDbEntry(entry.id)
+    if (res.success) {
+      await loadSteamDbEntries()
+      showNotification('记录已删除')
+    } else {
+      showNotification('删除失败：' + res.error)
+    }
+  } catch (err) {
+    const error = err as Error
+    showNotification('删除失败：' + error.message)
+  }
+}
+
+async function handleExportSteamDb(): Promise<void> {
+  try {
+    const res = await exportSteamDb()
+    if (res.success && res.data) {
+      const json = JSON.stringify(res.data, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'steam-db-export.json'
+      a.click()
+      URL.revokeObjectURL(url)
+      showNotification('导出成功')
+    } else {
+      showNotification('导出失败：' + res.error)
+    }
+  } catch (err) {
+    const error = err as Error
+    showNotification('导出失败：' + error.message)
+  }
+}
+
+async function handleImportSteamDb(): Promise<void> {
+  if (!importJsonStr.value.trim()) {
+    showNotification('请输入 JSON 内容')
+    return
+  }
+
+  importing.value = true
+  try {
+    const entries = JSON.parse(importJsonStr.value) as SteamDbEntry[]
+    if (!Array.isArray(entries)) {
+      showNotification('JSON 格式错误，应为数组')
+      importing.value = false
+      return
+    }
+
+    const res = await importSteamDb(entries, importMode.value)
+    if (res.success && res.data) {
+      showImportModal.value = false
+      importJsonStr.value = ''
+      await loadSteamDbEntries()
+      showNotification(`导入完成：新增 ${res.data.added}，更新 ${res.data.updated}，跳过 ${res.data.skipped}`)
+    } else {
+      showNotification('导入失败：' + res.error)
+    }
+  } catch (err) {
+    const error = err as Error
+    showNotification('导入失败：' + error.message)
+  }
+  importing.value = false
 }
 </script>
 
@@ -1300,6 +1645,245 @@ function getPathStatusTitle(path: string): string {
   cursor: not-allowed;
 }
 
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 0;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.modal-close {
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 4px;
+}
+
+.modal-close:hover {
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Steam DB 样式 */
+.steam-db-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.steam-db-filter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.steam-db-filter .input {
+  flex: 1;
+  max-width: 300px;
+}
+
+.steam-db-count {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.steam-db-table {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.steam-db-row {
+  display: flex;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  gap: 12px;
+}
+
+.steam-db-row:last-child {
+  border-bottom: none;
+}
+
+.steam-db-header-row {
+  background: var(--bg-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.steam-db-col-appid {
+  min-width: 80px;
+  font-size: 13px;
+}
+
+.steam-db-col-name {
+  min-width: 120px;
+  font-size: 13px;
+}
+
+.steam-db-col-name-en {
+  min-width: 120px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.steam-db-col-aliases {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.steam-db-col-actions {
+  min-width: 120px;
+  display: flex;
+  gap: 8px;
+}
+
+.steam-link {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.steam-link:hover {
+  text-decoration: underline;
+}
+
+.alias-tag {
+  padding: 2px 8px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.alias-more {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.steam-db-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.steam-db-pagination {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.steam-db-modal,
+.import-modal {
+  max-width: 500px;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.form-label .required {
+  color: var(--danger);
+}
+
+.form-row .hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.modal-footer {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
 @media (max-width: 768px) {
   .settings-layout {
     flex-direction: column;
@@ -1322,5 +1906,31 @@ function getPathStatusTitle(path: string): string {
     padding: 8px 14px;
     font-size: 13px;
   }
+}
+
+/* Toast Styles */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  color: var(--text);
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 2000;
+  font-size: 14px;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
 }
 </style>

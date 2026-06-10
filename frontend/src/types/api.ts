@@ -387,3 +387,30 @@ export interface SteamSearchItem {
   tiny_image: string;
   metacritic_score?: number;
 }
+
+// Steam DB 类型
+export interface SteamDbEntry {
+  id?: number;
+  steam_appid: string;
+  name: string;
+  name_en?: string;
+  aliases: string[];
+  notes?: string;
+  source: 'manual' | 'imported' | 'auto' | 'scraper';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SteamDbListResponse {
+  entries: SteamDbEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface SteamDbImportResult {
+  added: number;
+  updated: number;
+  skipped: number;
+}

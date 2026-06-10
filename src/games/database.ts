@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { database } from '../database';
 import { logger } from '../logger';
-import type { Game, GameQueryOptions, GameStatistics, GameGroup } from '../types';
+import type { Game, GameQueryOptions, GameStatistics, GameGroup, SteamDbEntry, SteamDbImportResult } from '../types';
 // metadata-manager no longer used - game.json removed from design
 
 interface QueryResult {
@@ -95,20 +95,7 @@ class GameDatabase {
       logger.info('游戏数据库: 新增 is_root_manually_marked 列（P0手动优先级标记）');
     }
 
-    // 别名映射表：文件夹名 → steam_appid
-    database.db!.run(`
-      CREATE TABLE IF NOT EXISTS game_aliases (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        folder_name TEXT NOT NULL,
-        steam_appid TEXT NOT NULL,
-        source TEXT DEFAULT 'auto',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(folder_name)
-      )
-    `);
-    database.db!.run('CREATE INDEX IF NOT EXISTS idx_game_aliases_folder ON game_aliases(folder_name)');
-
-    // 游戏分组表
+    // Steam 数据库表：Steam AppID 与游戏名称映射
     database.db!.run(`
       CREATE TABLE IF NOT EXISTS game_groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,6 +121,23 @@ class GameDatabase {
     `);
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_group_items_group ON game_group_items(group_id)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_group_items_game ON game_group_items(game_id)');
+
+    // Steam 数据库表：Steam AppID 与游戏名称映射
+    database.db!.run(`
+      CREATE TABLE IF NOT EXISTS steam_db (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        steam_appid TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        name_en TEXT,
+        aliases TEXT DEFAULT '[]',
+        notes TEXT,
+        source TEXT DEFAULT 'manual',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME
+      )
+    `);
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_appid ON steam_db(steam_appid)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_name ON steam_db(name)');
 
     database.save();
     if (isNew) {
@@ -905,23 +909,276 @@ class GameDatabase {
     return result[0].values.map(row => this.rowToGame(result[0], row));
   }
 
-  // === 别名映射操作 ===
+  // === Steam DB 操作 ===
 
-  saveAlias(folderName: string, steamAppid: string, source: string = 'auto'): void {
-    database.db!.run(
-      'INSERT OR REPLACE INTO game_aliases (folder_name, steam_appid, source) VALUES (?, ?, ?)',
-      [folderName, steamAppid, source]
-    );
-    database.save();
+  /**
+   * 插入 Steam DB 条目
+   */
+  insertSteamDbEntry(data: Partial<SteamDbEntry>): number {
+    const { steam_appid, name, name_en = null, aliases = [], notes = null, source = 'manual' } = data;
+
+    if (!steam_appid || !name) {
+      logger.warn('插入 Steam DB 失败: 缺少 steam_appid 或 name');
+      return 0;
+    }
+
+    try {
+      database.db!.run(
+        'INSERT OR REPLACE INTO steam_db (steam_appid, name, name_en, aliases, notes, source, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime("now", "localtime"))',
+        [steam_appid, name, name_en, JSON.stringify(aliases), notes, source]
+      );
+      database.save();
+
+      const result: QueryResult[] = database.db!.exec('SELECT id FROM steam_db WHERE steam_appid = ?', [steam_appid]);
+      return result.length > 0 && result[0].values.length > 0 ? (result[0].values[0][0] as number) : 0;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      logger.error('插入 Steam DB 失败: %s', error.message);
+      return 0;
+    }
   }
 
-  lookupAlias(folderName: string): string | null {
-    const result: QueryResult[] = database.db!.exec(
-      'SELECT steam_appid FROM game_aliases WHERE folder_name = ?',
-      [folderName]
-    );
+  /**
+   * 根据 ID 获取 Steam DB 条目
+   */
+  getSteamDbById(id: number): SteamDbEntry | null {
+    const result: QueryResult[] = database.db!.exec('SELECT * FROM steam_db WHERE id = ?', [id]);
     if (result.length === 0 || result[0].values.length === 0) return null;
-    return result[0].values[0][0] as string;
+    return this.rowToSteamDbEntry(result[0], result[0].values[0]);
+  }
+
+  /**
+   * 根据 AppID 获取 Steam DB 条目
+   */
+  getSteamDbByAppid(appid: string): SteamDbEntry | null {
+    const result: QueryResult[] = database.db!.exec('SELECT * FROM steam_db WHERE steam_appid = ?', [appid]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    return this.rowToSteamDbEntry(result[0], result[0].values[0]);
+  }
+
+  /**
+   * 获取所有 Steam DB 条目（支持分页）
+   */
+  getAllSteamDbEntries(options: { search?: string; orderBy?: string; orderDir?: string; limit?: number; offset?: number } = {}): { entries: SteamDbEntry[]; total: number } {
+    const { search, orderBy = 'name', orderDir = 'ASC', limit, offset } = options;
+
+    // 先查询总数
+    let countSql = 'SELECT COUNT(*) as count FROM steam_db';
+    const countParams: unknown[] = [];
+    if (search) {
+      countSql += ' WHERE (name LIKE ? OR name_en LIKE ? OR aliases LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    const countResult: QueryResult[] = database.db!.exec(countSql, countParams);
+    const total = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0;
+
+    // 查询数据
+    let sql = 'SELECT * FROM steam_db';
+    const params: unknown[] = [];
+
+    if (search) {
+      sql += ' WHERE (name LIKE ? OR name_en LIKE ? OR aliases LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    sql += ` ORDER BY ${orderBy} ${orderDir}`;
+
+    if (limit !== undefined) {
+      sql += ' LIMIT ?';
+      params.push(limit);
+    }
+    if (offset !== undefined) {
+      sql += ' OFFSET ?';
+      params.push(offset);
+    }
+
+    const result: QueryResult[] = database.db!.exec(sql, params);
+    const entries = result.length === 0 ? [] : result[0].values.map(row => this.rowToSteamDbEntry(result[0], row));
+
+    return { entries, total };
+  }
+
+  /**
+   * 更新 Steam DB 条目
+   */
+  updateSteamDbEntry(id: number, data: Partial<SteamDbEntry>): boolean {
+    const fields: string[] = [];
+    const params: unknown[] = [];
+
+    const allowedFields = ['steam_appid', 'name', 'name_en', 'aliases', 'notes', 'source'];
+    for (const field of allowedFields) {
+      if (data[field as keyof SteamDbEntry] !== undefined) {
+        if (field === 'aliases') {
+          fields.push('aliases = ?');
+          params.push(JSON.stringify(data.aliases));
+        } else {
+          fields.push(`${field} = ?`);
+          params.push(data[field as keyof SteamDbEntry]);
+        }
+      }
+    }
+
+    if (fields.length === 0) return false;
+
+    fields.push('updated_at = datetime("now", "localtime")');
+    params.push(id);
+
+    database.db!.run(`UPDATE steam_db SET ${fields.join(', ')} WHERE id = ?`, params);
+    database.save();
+    return true;
+  }
+
+  /**
+   * 删除 Steam DB 条目
+   */
+  deleteSteamDbEntry(id: number): boolean {
+    database.db!.run('DELETE FROM steam_db WHERE id = ?', [id]);
+    database.save();
+    return true;
+  }
+
+  /**
+   * 根据名称查找 Steam AppID（匹配 name、name_en 或任意 aliases）
+   * 用于游戏识别时快速获取 appid
+   */
+  lookupSteamDbByName(searchName: string): { steam_appid: string; name: string } | null {
+    if (!searchName) return null;
+
+    const normalizedSearch = searchName.trim().toLowerCase();
+
+    // 1. 直接匹配 name
+    const nameResult: QueryResult[] = database.db!.exec(
+      'SELECT steam_appid, name FROM steam_db WHERE LOWER(name) = ?',
+      [normalizedSearch]
+    );
+    if (nameResult.length > 0 && nameResult[0].values.length > 0) {
+      return {
+        steam_appid: nameResult[0].values[0][0] as string,
+        name: nameResult[0].values[0][1] as string
+      };
+    }
+
+    // 2. 直接匹配 name_en
+    const nameEnResult: QueryResult[] = database.db!.exec(
+      'SELECT steam_appid, name FROM steam_db WHERE LOWER(name_en) = ?',
+      [normalizedSearch]
+    );
+    if (nameEnResult.length > 0 && nameEnResult[0].values.length > 0) {
+      return {
+        steam_appid: nameEnResult[0].values[0][0] as string,
+        name: nameEnResult[0].values[0][1] as string
+      };
+    }
+
+    // 3. 查找所有条目，遍历 aliases JSON 数组进行匹配
+    const allResult: QueryResult[] = database.db!.exec('SELECT steam_appid, name, aliases FROM steam_db');
+    if (allResult.length > 0) {
+      for (const row of allResult[0].values) {
+        const aliasesStr = row[2] as string;
+        if (aliasesStr) {
+          try {
+            const aliases: string[] = JSON.parse(aliasesStr);
+            for (const alias of aliases) {
+              if (alias.toLowerCase() === normalizedSearch) {
+                return {
+                  steam_appid: row[0] as string,
+                  name: row[1] as string
+                };
+              }
+            }
+          } catch {
+            // JSON 解析失败，跳过
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 导出 Steam DB（返回纯数据数组，不含 id/created_at/updated_at）
+   */
+  exportSteamDb(): SteamDbEntry[] {
+    const result: QueryResult[] = database.db!.exec(
+      'SELECT steam_appid, name, name_en, aliases, notes, source FROM steam_db ORDER BY name ASC'
+    );
+    if (result.length === 0) return [];
+    return result[0].values.map(row => ({
+      steam_appid: row[0] as string,
+      name: row[1] as string,
+      name_en: row[2] as string || undefined,
+      aliases: JSON.parse(row[3] as string || '[]'),
+      notes: row[4] as string || undefined,
+      source: row[5] as 'manual' | 'imported' | 'auto' | 'scraper'
+    }));
+  }
+
+  /**
+   * 导入 Steam DB
+   */
+  importSteamDb(entries: SteamDbEntry[], mode: 'merge' | 'overwrite' = 'merge'): SteamDbImportResult {
+    const result: SteamDbImportResult = { added: 0, updated: 0, skipped: 0 };
+
+    for (const entry of entries) {
+      if (!entry.steam_appid || !entry.name) {
+        result.skipped++;
+        continue;
+      }
+
+      const existing: QueryResult[] = database.db!.exec(
+        'SELECT id FROM steam_db WHERE steam_appid = ?',
+        [entry.steam_appid]
+      );
+
+      if (existing.length > 0 && existing[0].values.length > 0) {
+        if (mode === 'overwrite') {
+          // 覆盖模式：更新现有条目
+          const id = existing[0].values[0][0] as number;
+          database.db!.run(
+            'UPDATE steam_db SET name = ?, name_en = ?, aliases = ?, notes = ?, source = ?, updated_at = datetime("now", "localtime") WHERE id = ?',
+            [entry.name, entry.name_en || null, JSON.stringify(entry.aliases || []), entry.notes || null, 'imported', id]
+          );
+          result.updated++;
+        } else {
+          // 合并模式：跳过已存在的
+          result.skipped++;
+        }
+      } else {
+        // 新条目：插入
+        database.db!.run(
+          'INSERT INTO steam_db (steam_appid, name, name_en, aliases, notes, source) VALUES (?, ?, ?, ?, ?, ?)',
+          [entry.steam_appid, entry.name, entry.name_en || null, JSON.stringify(entry.aliases || []), entry.notes || null, 'imported']
+        );
+        result.added++;
+      }
+    }
+
+    database.save();
+    logger.info('Steam DB 导入完成: 新增 %d, 更新 %d, 跳过 %d', result.added, result.updated, result.skipped);
+    return result;
+  }
+
+  /**
+   * Steam DB 条目行转对象
+   */
+  private rowToSteamDbEntry(resultMeta: QueryResult, row: unknown[]): SteamDbEntry {
+    const obj: Record<string, unknown> = {};
+    resultMeta.columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    const entry = obj as unknown as SteamDbEntry;
+
+    // 解析 aliases JSON
+    if (typeof entry.aliases === 'string') {
+      try {
+        entry.aliases = JSON.parse(entry.aliases);
+      } catch {
+        entry.aliases = [];
+      }
+    }
+
+    return entry;
   }
 
   // === 海报路径处理 ===
