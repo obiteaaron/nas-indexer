@@ -1029,6 +1029,49 @@ class GameDatabase {
   }
 
   /**
+   * 将 SteamDB 的名称同步到所有使用该 AppID 的游戏
+   * @param steam_appid Steam AppID
+   * @param updates 要更新的字段 { name?, name_en? }
+   * @returns 更新的游戏数量
+   */
+  syncSteamDbToGames(steam_appid: string, updates: { name?: string; name_en?: string }): number {
+    try {
+      const fields: string[] = [];
+      const params: (string | null)[] = [];
+
+      if (updates.name !== undefined) {
+        fields.push('title = ?');
+        params.push(updates.name);
+      }
+      if (updates.name_en !== undefined) {
+        fields.push('title_en = ?');
+        params.push(updates.name_en || null);
+      }
+
+      if (fields.length === 0) return 0;
+
+      params.push(steam_appid);
+
+      const sql = `UPDATE games SET ${fields.join(', ')} WHERE steam_appid = ?`;
+      database.db!.run(sql, params);
+
+      const changes: QueryResult[] = database.db!.exec('SELECT changes()');
+      const count = (changes[0]?.values[0]?.[0] as number) || 0;
+
+      if (count > 0) {
+        database.save();
+        logger.info('SteamDB 同步: appid %s 更新了 %d 个游戏的名称', steam_appid, count);
+      }
+
+      return count;
+    } catch (err) {
+      const error = err as Error;
+      logger.warn('SteamDB 同步失败: appid %s - %s', steam_appid, error.message);
+      return 0;
+    }
+  }
+
+  /**
    * 删除 Steam DB 条目
    */
   deleteSteamDbEntry(id: number): boolean {

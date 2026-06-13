@@ -1120,8 +1120,19 @@ router.post('/steam-db/update/:id', async (req: Request, res: Response): Promise
       }
     }
 
+    // 更新 SteamDB
     gameDatabase.updateSteamDbEntry(id, data);
     const updated = gameDatabase.getSteamDbById(id);
+
+    // 同步到关联游戏（仅在更新 name 或 name_en 时）
+    if (updated && (data.name !== undefined || data.name_en !== undefined)) {
+      const syncCount = gameDatabase.syncSteamDbToGames(
+        updated.steam_appid,
+        { name: data.name, name_en: data.name_en }
+      );
+      logger.info('SteamDB 同步完成: appid=%s, 更新了%d个游戏', updated.steam_appid, syncCount);
+    }
+
     res.json({ success: true, data: updated });
   } catch (err) {
     const error = err as Error;
