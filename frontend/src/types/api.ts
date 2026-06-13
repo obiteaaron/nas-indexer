@@ -343,23 +343,27 @@ export interface GameRecognitionRule {
   description?: string;
 }
 
+/**
+ * 启发式规则配置
+ * @deprecated v1.5.5 删除 P3 规则，此类型保留以兼容配置文件，但字段不再生效
+ */
 export interface HeuristicRulesConfig {
-  // 规则1：exe目录名匹配
-  exeNameMatchEnabled: boolean;
-  exeNameMatchOffset: number;
+  // 规则1：exe目录名匹配（已废弃）
+  exeNameMatchEnabled?: boolean;
+  exeNameMatchOffset?: number;
 
-  // 规则2：标准子目录层级偏移
-  subdirPatterns: Array<{
+  // 规则2：标准子目录层级偏移（已废弃）
+  subdirPatterns?: Array<{
     patterns: string[];
     offset: number;
     description: string;
   }>;
-  subdirRulesEnabled: boolean;
+  subdirRulesEnabled?: boolean;
 
-  // 规则3：目录大小启发
-  sizeHeuristicEnabled: boolean;
-  sizeThresholdMB: number;
-  sizeRatioThreshold: number;
+  // 规则3：目录大小启发（已废弃）
+  sizeHeuristicEnabled?: boolean;
+  sizeThresholdMB?: number;
+  sizeRatioThreshold?: number;
 }
 
 export interface GameRules {

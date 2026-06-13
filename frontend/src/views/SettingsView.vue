@@ -227,12 +227,8 @@
                 </div>
 
                 <div class="priority-group">
-                  <span class="priority-label">识别优先级 3: 启发式规则（P2）</span>
-                  <span class="hint">基于exe目录名、标准子目录、目录大小等特征智能判断</span>
-                </div>
-
-                <div class="priority-group">
-                  <span class="priority-label">识别优先级 4: 正则规则匹配（P3）</span>
+                  <span class="priority-label">识别优先级 2: 正则规则匹配（P2）</span>
+                  <span class="hint">匹配自定义正则规则，配合 levelOffset 向上提升（兜底方案）</span>
                 </div>
 
                 <div class="rule-item">
@@ -294,7 +290,7 @@
                 <span class="doc-toggle">{{ showGameDoc ? '收起' : '展开' }}</span>
               </h4>
               <div v-if="showGameDoc" class="doc-content">
-                <p class="doc-desc">系统采用四级优先级识别游戏根目录，手动操作优先级最高：</p>
+                <p class="doc-desc">系统采用三级优先级识别游戏根目录，手动操作优先级最高：</p>
 
                 <h5>优先级说明</h5>
                 <table class="doc-table">
@@ -314,40 +310,19 @@
                     </tr>
                     <tr>
                       <td><strong>P2</strong></td>
-                      <td>启发式规则</td>
-                      <td>基于exe目录名匹配、标准子目录结构、目录大小等智能判断</td>
-                    </tr>
-                    <tr>
-                      <td><strong>P3</strong></td>
                       <td>正则规则</td>
                       <td>匹配自定义正则规则，配合 levelOffset 向上提升（兜底方案）</td>
                     </tr>
                   </tbody>
                 </table>
 
-                <h5>启发式规则详情（P2）</h5>
-                <table class="doc-table">
-                  <thead>
-                    <tr><th>规则</th><th>触发条件</th><th>处理方式</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>exe目录名匹配</td>
-                      <td>exe文件名与所在目录名相同（如 <code>Game/Game.exe</code>）</td>
-                      <td>向上提升到父目录</td>
-                    </tr>
-                    <tr>
-                      <td>标准子目录</td>
-                      <td>exe位于标准子目录（如 <code>Binaries</code>、<code>Win32</code>）</td>
-                      <td>向上提升指定的层级偏移</td>
-                    </tr>
-                    <tr>
-                      <td>目录大小启发</td>
-                      <td>exe所在目录过小（&lt;100MB），父目录明显更大（&gt;5倍）</td>
-                      <td>使用父目录作为根目录</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <h5>已删除的规则（v1.5.5）</h5>
+                <p class="doc-desc hint">以下启发式规则已删除，原因：识别逻辑不可预测，难以调试。</p>
+                <ul class="doc-list">
+                  <li><strong>exe目录名匹配</strong> — 不同打包者命名风格差异大，误判率高</li>
+                  <li><strong>标准子目录偏移</strong> — 字符串包含匹配易误触发</li>
+                  <li><strong>目录大小启发</strong> — 性能开销大，阈值不适用所有游戏</li>
+                </ul>
 
                 <h5>海报存储位置</h5>
                 <p class="doc-desc">游戏海报集中存储在 <code>profiles/games/posters/{game_id}/</code> 目录：</p>
@@ -554,19 +529,8 @@ const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
   { pattern: '/games/',              levelOffset: 0, enabled: true, description: '通用游戏目录名' },
 ]
 
-const DEFAULT_HEURISTIC_RULES: HeuristicRulesConfig = {
-  exeNameMatchEnabled: true,
-  exeNameMatchOffset: 1,
-  subdirRulesEnabled: true,
-  subdirPatterns: [
-    { patterns: ['Binaries', 'Binary', 'Bin', 'Win32', 'Win64'], offset: 1, description: '可执行文件标准子目录' },
-    { patterns: ['Redist', 'Support', 'Common'], offset: 1, description: 'redistributable/support目录' },
-    { patterns: ['Data', 'Assets', 'Resources'], offset: 0, description: '数据/资源目录（通常就是根目录）' }
-  ],
-  sizeHeuristicEnabled: true,
-  sizeThresholdMB: 100,
-  sizeRatioThreshold: 5
-}
+// 启发式规则已删除（v1.5.5），保留空对象以兼容配置
+const DEFAULT_HEURISTIC_RULES: HeuristicRulesConfig = {}
 
 const DEFAULT_GAME_RULES: GameRules = {
   recognitionRules: DEFAULT_RECOGNITION_RULES,
