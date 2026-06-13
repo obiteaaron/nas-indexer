@@ -78,12 +78,12 @@ function smartLevelOffset(
   rule: GameRecognitionRule,
   scanRoot: string,
   _heuristicRules: HeuristicRulesConfig
-): string {
+): SmartOffsetResult {
   // P1: Steam锚点优先级最高（固定启用，无需配置）
   const steamRoot = findSteamAppidUpward(initialGameDir, scanRoot);
   if (steamRoot) {
     logger.debug('[智能识别] P1成功 - steam_appid.txt锚点: %s', steamRoot);
-    return steamRoot;
+    return { gamePath: steamRoot, method: 'steam_anchor', detail: 'steam_appid.txt' };
   }
 
   // P2: 启发式规则（已删除v1.5.5）
@@ -102,9 +102,10 @@ function smartLevelOffset(
   if (result !== initialGameDir) {
     logger.debug('[智能识别] P2成功 - 配置levelOffset=%d: %s → %s',
       rule.levelOffset, initialGameDir, result);
+    return { gamePath: result, method: 'level_offset', detail: `levelOffset=${rule.levelOffset}` };
   }
 
-  return result;
+  return { gamePath: result, method: 'none' };
 }
 
 /**
@@ -127,6 +128,15 @@ function readSteamAppidFile(dirPath: string): string | null {
 }
 
 /**
+ * 智能层级偏移结果
+ */
+interface SmartOffsetResult {
+  gamePath: string;
+  method: 'steam_anchor' | 'level_offset' | 'none';
+  detail?: string;  // 具体信息，如 "steam_appid.txt" 或 "levelOffset=1"
+}
+
+/**
  * 正则规则匹配结果
  */
 interface RuleMatchResult {
@@ -135,6 +145,7 @@ interface RuleMatchResult {
   rule: GameRecognitionRule | null;
   matchedPath: string | null;  // 匹配到的原始路径（可能是文件）
   isFile: boolean;             // 匹配到的是文件还是目录
+  offsetResult?: SmartOffsetResult;  // 智能偏移结果
 }
 
 /**
@@ -174,10 +185,10 @@ function matchRecognitionRule(
         logger.debug('[游戏识别] 正则匹配: %s → 基准目录: %s (规则: %s, 类型: %s)',
           entryName, path.basename(baseGamePath), rule.pattern, isFile ? '文件' : '目录');
 
-        // 智能层级偏移（P1/P2/P3统一处理）
-        const gamePath = smartLevelOffset(baseGamePath, entryPath, rule, scanRoot, rules.heuristicRules);
+        // 智能层级偏移（P1/P2统一处理）
+        const offsetResult = smartLevelOffset(baseGamePath, entryPath, rule, scanRoot, rules.heuristicRules);
 
-        return { matched: true, gamePath, rule, matchedPath: entryPath, isFile };
+        return { matched: true, gamePath: offsetResult.gamePath, rule, matchedPath: entryPath, isFile, offsetResult };
       }
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
@@ -291,7 +302,20 @@ function scanEntry(
       }
     } catch {}
 
-    logger.info('识别游戏(正则匹配): %s [depth=%d]', path.basename(gamePath), depth);
+    // 构建丰富的日志信息
+    const logParts: string[] = [path.basename(gamePath)];
+    logParts.push(`规则=${matchResult.rule?.pattern || 'unknown'}`);
+    logParts.push(`类型=${matchResult.isFile ? '文件' : '目录'}`);
+    if (matchResult.offsetResult) {
+      if (matchResult.offsetResult.method === 'steam_anchor') {
+        logParts.push(`识别=Steam锚点`);
+      } else if (matchResult.offsetResult.method === 'level_offset') {
+        logParts.push(`识别=${matchResult.offsetResult.detail}`);
+      }
+    }
+    logParts.push(`depth=${depth}`);
+
+    logger.info('识别游戏: %s', logParts.join(', '));
     return games;
   }
 
