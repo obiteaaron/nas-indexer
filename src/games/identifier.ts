@@ -386,6 +386,25 @@ function scanEntry(
       return games;
     }
 
+    // 新增：检查游戏是否已存在于数据库（跳过日志输出）
+    const existingGame = gameDatabase.getGameByPath(gamePathNormalized);
+    if (existingGame) {
+      // 已存在，只标记为已处理，不创建新记录，不打印日志
+      processedPaths.add(gamePathNormalized);
+      processedPaths.add(normalizedPath);
+
+      // 标记游戏目录下所有内容为已处理
+      try {
+        const entries = fs.readdirSync(gamePath, { withFileTypes: true });
+        for (const entry of entries) {
+          processedPaths.add(path.resolve(path.join(gamePath, entry.name)));
+        }
+      } catch {}
+
+      return games;  // 返回空数组
+    }
+
+    // 新游戏，创建记录并打印日志
     games.push(createGameRecord(gamePath));
     processedPaths.add(gamePathNormalized);
     processedPaths.add(normalizedPath);
