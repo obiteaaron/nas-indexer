@@ -43,9 +43,21 @@ function createLogger(options: LoggerOptions = {}): Logger {
     options: { destination: logFilePath }
   });
 
+  // 本地时区时间戳函数
+  const localTime = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hour = String(now.getHours()).padStart(2, '0');
+    const minute = String(now.getMinutes()).padStart(2, '0');
+    const second = String(now.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+  };
+
   return pino({
     level: logLevel,
-    timestamp: pino.stdTimeFunctions.isoTime
+    timestamp: localTime
   }, pino.transport({ targets: transports }));
 }
 
