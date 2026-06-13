@@ -82,7 +82,7 @@ function smartLevelOffset(
   // P1: Steam锚点优先级最高（固定启用，无需配置）
   const steamRoot = findSteamAppidUpward(initialGameDir, scanRoot);
   if (steamRoot) {
-    logger.info('[智能识别] P1成功 - steam_appid.txt锚点: %s', steamRoot);
+    logger.debug('[智能识别] P1成功 - steam_appid.txt锚点: %s', steamRoot);
     return steamRoot;
   }
 
@@ -100,7 +100,7 @@ function smartLevelOffset(
   }
 
   if (result !== initialGameDir) {
-    logger.info('[智能识别] P2成功 - 配置levelOffset=%d: %s → %s',
+    logger.debug('[智能识别] P2成功 - 配置levelOffset=%d: %s → %s',
       rule.levelOffset, initialGameDir, result);
   }
 
@@ -171,7 +171,7 @@ function matchRecognitionRule(
         // 如果匹配到文件，从文件所在目录开始；如果是目录，直接使用该目录
         const baseGamePath = isFile ? path.dirname(entryPath) : entryPath;
 
-        logger.info('[游戏识别] 正则匹配: %s → 基准目录: %s (规则: %s, 类型: %s)',
+        logger.debug('[游戏识别] 正则匹配: %s → 基准目录: %s (规则: %s, 类型: %s)',
           entryName, path.basename(baseGamePath), rule.pattern, isFile ? '文件' : '目录');
 
         // 智能层级偏移（P1/P2/P3统一处理）
