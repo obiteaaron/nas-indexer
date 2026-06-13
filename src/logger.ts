@@ -27,7 +27,7 @@ function createLogger(options: LoggerOptions = {}): Logger {
       target: 'pino-pretty',
       options: {
         colorize: true,
-        translateTime: 'SYS:HH:MM:ss.l',
+        translateTime: undefined,  // 已使用本地时间，无需转换
         ignore: 'pid,hostname'
       }
     });
@@ -43,7 +43,7 @@ function createLogger(options: LoggerOptions = {}): Logger {
     options: { destination: logFilePath }
   });
 
-  // 本地时区时间戳函数
+  // 本地时区时间戳函数（返回 JSON 片段格式）
   const localTime = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -52,7 +52,8 @@ function createLogger(options: LoggerOptions = {}): Logger {
     const hour = String(now.getHours()).padStart(2, '0');
     const minute = String(now.getMinutes()).padStart(2, '0');
     const second = String(now.getSeconds()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+    const ms = String(now.getMilliseconds()).padStart(3, '0');
+    return `,"time":"${year}-${month}-${day} ${hour}:${minute}:${second}.${ms}"`;
   };
 
   return pino({
