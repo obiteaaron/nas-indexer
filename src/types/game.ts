@@ -60,27 +60,25 @@ export interface GameRecognitionRule {
 
 /**
  * 启发式规则配置
+ * @deprecated v1.5.5 删除 P3 规则，此类型保留以兼容配置文件，但字段不再生效
  */
 export interface HeuristicRulesConfig {
-  // 规则1：exe目录名匹配
-  exeNameMatchEnabled: boolean;     // 是否启用exe名与目录名相同判断
-  exeNameMatchOffset: number;       // 向上提升层级（默认1）
+  // 规则1：exe目录名匹配（已废弃）
+  exeNameMatchEnabled?: boolean;     // 已废弃，不再生效
+  exeNameMatchOffset?: number;       // 已废弃
 
-  // 规则2：标准子目录层级偏移
-  subdirPatterns: Array<{           // 子目录模式列表
-    patterns: string[];             // 目录名模式（如 Binaries, Win32）
-    offset: number;                 // 层级偏移
-    description: string;            // 说明
+  // 规则2：标准子目录层级偏移（已废弃）
+  subdirPatterns?: Array<{           // 已废弃
+    patterns: string[];
+    offset: number;
+    description: string;
   }>;
-  subdirRulesEnabled: boolean;      // 是否启用标准子目录规则
+  subdirRulesEnabled?: boolean;      // 已废弃
 
-  // 规则3：目录大小启发
-  sizeHeuristicEnabled: boolean;    // 是否启用目录大小判断
-  sizeThresholdMB: number;          // 小目录阈值（MB），小于此值可能需向上
-  sizeRatioThreshold: number;       // 父目录大小倍数阈值（父目录>子目录*此值）
-
-  // Steam锚点规则（固定启用）
-  // steam_appid.txt向上查找始终启用，无需配置
+  // 规则3：目录大小启发（已废弃）
+  sizeHeuristicEnabled?: boolean;    // 已废弃
+  sizeThresholdMB?: number;          // 已废弃
+  sizeRatioThreshold?: number;       // 已废弃
 }
 
 /**
@@ -163,38 +161,10 @@ export const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
 
 /**
  * 默认启发式规则配置
+ * @deprecated v1.5.5 规则已删除，保留空对象以兼容配置
  */
 export const DEFAULT_HEURISTIC_RULES: HeuristicRulesConfig = {
-  // 规则1：exe目录名匹配
-  exeNameMatchEnabled: true,
-  exeNameMatchOffset: 1,              // Game/Game.exe → Game/
-
-  // 规则2：标准子目录层级偏移
-  subdirRulesEnabled: true,
-  subdirPatterns: [
-    {
-      patterns: ['Binaries', 'Binary', 'Bin', 'Win32', 'Win64'],
-      offset: 1,
-      description: '可执行文件标准子目录'
-    },
-    {
-      patterns: ['Redist', 'Support', 'Common'],
-      offset: 1,
-      description: ' redistributable/support目录'
-    },
-    {
-      patterns: ['Data', 'Assets', 'Resources'],
-      offset: 0,
-      description: '数据/资源目录（通常就是根目录）'
-    }
-  ],
-
-  // 规则3：目录大小启发
-  sizeHeuristicEnabled: true,
-  sizeThresholdMB: 100,               // 小于此值可能只是子目录
-  sizeRatioThreshold: 5,              // 父目录需大于子目录5倍
-
-  // Steam锚点：steam_appid.txt向上查找始终启用（无需配置）
+  // 所有规则已删除，配置不再生效
 };
 
 export const DEFAULT_GAME_RULES: GameRules = {

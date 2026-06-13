@@ -1,7 +1,7 @@
 # 游戏识别规则配置说明
 
-> 版本：v1.5.3
-> 更新日期：2026-06-08
+> 版本：v1.5.5
+> 更新日期：2026-06-13
 
 ---
 
@@ -9,21 +9,19 @@
 
 v1.5.3移除了`game.json`本地元数据文件机制，改为集中存储。这导致游戏根目录识别失去了人工锚点。本方案通过多级优先级规则解决此问题。
 
-**重要补充（v1.5.4设计）**：
-- P0: 用户手动标记（最高优先级）
-- P4: 批量识别后人工确认
+**v1.5.5 更新**：
+- 删除 P2 启发式规则，简化识别逻辑
+- 保留 P0/P1/P2 三级优先级（原 P3 重命名为 P2）
 
 ---
 
-## 五级识别优先级（完整设计）
+## 三级识别优先级
 
 | 优先级 | 方法 | 准确度 | 可配置 | 说明 |
 |--------|------|--------|--------|------|
 | **P0** | 手动标记 | ★★★★★ | ❌ | 用户明确指定根目录（最高优先级） |
 | **P1** | Steam锚点 | ★★★★★ | ❌ | steam_appid.txt向上查找 |
-| **P2** | 启发式规则 | ★★★★☆ | ✅ | 结构特征自动判断 |
-| **P3** | 配置levelOffset | ★★★☆☆ | ✅ | 正则规则配置偏移 |
-| **P4** | 人工确认 | ★★★★★ | ❌ | 批量识别后审查修正 |
+| **P2** | 配置levelOffset | ★★★☆☆ | ✅ | 正则规则配置偏移（兜底） |
 
 ---
 
@@ -39,7 +37,6 @@ v1.5.3移除了`game.json`本地元数据文件机制，改为集中存储。这
 |------|---------|------|
 | 手动添加游戏 | ✅ | 创建时自动标记为已确认 |
 | 提升游戏目录 | ✅ | 提升后自动标记为已确认 |
-| 识别确认界面 | ✅ | 点击"确认"后标记 |
 | API调用 | ✅ | `/api/games/:id/mark-root` |
 
 **数据库标记**：
@@ -49,18 +46,8 @@ is_root_manually_marked = 1  -- 表示用户已确认
 
 **识别流程检查**：
 - 扫描时先检查 `is_root_manually_marked` 字段
-- 如果为1，跳过P1/P2/P3自动识别
+- 如果为1，跳过P1/P2自动识别
 - 保持用户指定路径不变
-
-**无法配置原因**：
-- 这是用户决策，不应被配置覆盖
-- 人工判断永远高于自动规则
-
----
-
-## P1-P3: 自动识别规则
-
-（内容保持不变，参见前文）
 
 ---
 
@@ -87,96 +74,9 @@ E:\SteamLibrary\steamapps\common\Portal 2\
 
 ---
 
-## P2: 启发式规则（可配置）
+## P2: 配置levelOffset（兜底）
 
-### 规则2.1：exe目录名匹配
-
-**原理**：当exe所在目录名与exe文件名相同，通常需要向上提升。
-
-**示例**：
-```
-E:\Games\Elden Ring\
-  └── Elden Ring\        ← 目录名"Elden Ring"
-      └── game.exe       ← exe文件名"game"（不匹配）
-```
-
-```
-E:\Games\Minecraft\
-  └── Minecraft\         ← 目录名"Minecraft"
-      └── Minecraft.exe   ← exe文件名"Minecraft"（匹配！）
-```
-
-**配置项**：
-```typescript
-exeNameMatchEnabled: boolean;     // 是否启用（默认true）
-exeNameMatchOffset: number;       // 向上提升层级（默认1）
-```
-
-### 规则2.2：标准子目录层级偏移
-
-**原理**：游戏常使用标准子目录结构，识别后需向上提升。
-
-**示例**：
-```
-E:\Games\The Witcher 3\
-  └── Binaries\
-      └── witcher3.exe   ← Binaries是标准子目录
-```
-
-**配置项**：
-```typescript
-subdirRulesEnabled: boolean;      // 是否启用（默认true）
-subdirPatterns: Array<{
-  patterns: string[];             // 目录名模式
-  offset: number;                 // 层级偏移
-  description: string;            // 说明
-}>;
-```
-
-**默认配置**：
-| 模式 | 层级偏移 | 说明 |
-|------|---------|------|
-| `Binaries, Binary, Bin, Win32, Win64` | 1 | 可执行文件标准子目录 |
-| `Redist, Support, Common` | 1 | redistributable/support目录 |
-| `Data, Assets, Resources` | 0 | 数据/资源目录（通常就是根目录） |
-
-**自定义示例**：
-```json
-{
-  "patterns": ["GOG", "NOCD"],
-  "offset": 1,
-  "description": "GOG版/破解版子目录"
-}
-```
-
-### 规则2.3：目录大小启发
-
-**原理**：游戏根目录通常较大（>1GB），子目录较小。
-
-**示例**：
-```
-E:\Games\Cyberpunk 2077\
-  ├── (总大小>50GB)       ← 根目录
-  └── REDIST\
-      └── setup.exe       ← exe所在目录<100MB
-```
-
-**配置项**：
-```typescript
-sizeHeuristicEnabled: boolean;    // 是否启用（默认true）
-sizeThresholdMB: number;          // 小目录阈值（默认100MB）
-sizeRatioThreshold: number;       // 父目录倍数阈值（默认5倍）
-```
-
-**识别逻辑**：
-- 如果exe目录 < `sizeThresholdMB`，向上查找父目录
-- 如果父目录 > exe目录 × `sizeRatioThreshold`，使用父目录作为根目录
-
----
-
-## P3: 正则规则levelOffset（兜底）
-
-当P1、P2都未生效时，使用正则规则配置的`levelOffset`。
+当P1未生效时，使用正则规则配置的`levelOffset`进行层级调整。
 
 **配置位置**：`GameRecognitionRule.levelOffset`
 
@@ -184,6 +84,35 @@ sizeRatioThreshold: number;       // 父目录倍数阈值（默认5倍）
 ```typescript
 { pattern: 'FitGirl.*Repack$', levelOffset: 1, description: 'FitGirl压缩包 → 父目录' }
 ```
+
+**工作原理**：
+- 正则规则匹配到路径后，获得基准目录
+- 根据 `levelOffset` 配置向上提升层级
+- 例如 `levelOffset=1` 表示从匹配目录向上提升一层
+
+---
+
+## 已删除的规则（v1.5.5）
+
+以下启发式规则已删除，原因：识别逻辑不可预测，难以调试。
+
+### ~~规则2.1：exe目录名匹配~~
+
+**原逻辑**：当exe所在目录名与exe文件名相同，向上提升。
+
+**删除原因**：不同打包者命名风格差异大，规则误判率高。
+
+### ~~规则2.2：标准子目录层级偏移~~
+
+**原逻辑**：匹配 Binaries/Win32/Data 等标准子目录，按配置偏移。
+
+**删除原因**：字符串包含匹配易误触发（如 `GameData` 匹配 `Data`）。
+
+### ~~规则2.3：目录大小启发~~
+
+**原逻辑**：根据目录大小判断是否需要向上提升。
+
+**删除原因**：大小计算性能开销大，阈值不适用于所有游戏类型。
 
 ---
 
@@ -193,29 +122,29 @@ sizeRatioThreshold: number;       // 父目录倍数阈值（默认5倍）
 
 **位置**：`src/types/game.ts`
 
-**修改默认配置**：
+**默认识别规则**：
 ```typescript
-export const DEFAULT_HEURISTIC_RULES: HeuristicRulesConfig = {
-  exeNameMatchEnabled: true,
-  exeNameMatchOffset: 1,
-  
-  subdirRulesEnabled: true,
-  subdirPatterns: [
-    // 自定义添加...
-  ],
-  
-  sizeHeuristicEnabled: true,
-  sizeThresholdMB: 100,
-  sizeRatioThreshold: 5
-};
+export const DEFAULT_RECOGNITION_RULES: GameRecognitionRule[] = [
+  { pattern: '\\[GOG\\]$',           levelOffset: 0, enabled: true, description: 'GOG 版游戏' },
+  { pattern: '\\[Steam\\]$',         levelOffset: 0, enabled: true, description: 'Steam 版游戏' },
+  { pattern: '/steamapps/',          levelOffset: 0, enabled: true, description: 'Steam 游戏库目录' },
+  { pattern: 'FitGirl.*Repack$',     levelOffset: 1, enabled: true, description: 'FitGirl压缩包 → 父目录' },
+];
 ```
 
-### 用户配置（TODO）
+### 自定义规则
 
-**计划**：在设置界面添加游戏识别规则配置面板，允许用户：
-- 启用/禁用各项启发式规则
-- 自定义标准子目录模式
-- 调整目录大小阈值
+用户可在配置文件中添加自定义正则规则：
+
+```json
+{
+  "gamesRules": {
+    "recognitionRules": [
+      { "pattern": "YourPattern$", "levelOffset": 1, "enabled": true, "description": "自定义规则" }
+    ]
+  }
+}
+```
 
 ---
 
@@ -253,34 +182,23 @@ E:\SteamLibrary\steamapps\common\Portal 2\
 
 **预期结果**：识别为`Portal 2\`（而非`Binaries\`）
 
-### exe目录名匹配测试
+### levelOffset测试
 
 ```bash
-# 应通过P2.1识别
-E:\Games\Minecraft\
-  └── Minecraft\Minecraft.exe
+# 通过配置levelOffset=1识别
+E:\Games\FitGirl Repack\
+  └── setup.exe
 ```
 
-**预期结果**：识别为`Minecraft\`（而非`Minecraft\Minecraft\`）
-
-### 标准子目录测试
-
-```bash
-# 应通过P2.2识别
-E:\Games\The Witcher 3\
-  └── Binaries\witcher3.exe
-```
-
-**预期结果**：识别为`The Witcher 3\`（而非`Binaries\`）
+**预期结果**：匹配规则 `FitGirl.*Repack$`，levelOffset=1 → 提升到父目录
 
 ---
 
 ## 调优建议
 
 1. **Steam游戏为主** - P1已覆盖，无需调整
-2. **非Steam游戏** - 重点调优P2规则
-3. **特殊结构游戏** - 添加自定义子目录模式到P2.2
-4. **识别失败** - 检查P3 levelOffset是否合理
+2. **非Steam游戏** - 通过正则规则 levelOffset 配置
+3. **识别不准确** - 手动标记（P0）修正
 
 ---
 
