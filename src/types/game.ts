@@ -194,7 +194,19 @@ export interface SteamDbEntry {
   name_en?: string;           // 英文名称
   aliases: string[];          // 别名数组（JSON）
   notes?: string;             // 备注
+
+  // 查询字段
+  release_date?: string;      // 发行日期 YYYY-MM-DD
+  genres?: string;            // 类型 JSON 数组
+  rating?: number;            // Metacritic 评分
+  languages?: string;         // 语言 JSON 数组
+  tags?: string;              // 标签 JSON 数组
+
+  // 原始数据
+  raw_data?: string;          // Steam API 完整返回 JSON
+
   source: 'manual' | 'imported' | 'auto' | 'scraper';  // 来源
+  scraped_at?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -206,4 +218,31 @@ export interface SteamDbImportResult {
   added: number;
   updated: number;
   skipped: number;
+}
+
+/**
+ * 缓存统计接口
+ */
+export interface SteamCacheStats {
+  totalEntries: number;
+  completeEntries: number;    // 元数据 + 图片完整
+  missingImagesEntries: number; // 缺失图片
+  totalPosters: number;
+  totalScreenshots: number;
+  totalSizeMB: number;
+}
+
+/**
+ * 缓存状态接口
+ */
+export interface SteamCacheStatus {
+  appid: string;
+  name: string;
+  name_en?: string;
+  hasMetadata: boolean;
+  hasHeader: boolean;
+  hasCapsule: boolean;
+  hasBackground: boolean;
+  screenshotCount: number;
+  scraped_at?: string;
 }
