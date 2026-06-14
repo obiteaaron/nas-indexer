@@ -54,16 +54,70 @@ fs.writeFileSync(
 // 创建启动脚本
 console.log('创建启动脚本...');
 const startBat = `@echo off
+chcp 65001 >nul 2>&1
 cd /d "%~dp0"
-echo NAS Indexer v${pkg.version}
-echo 正在启动服务...
+
+echo ========================================
+echo    NAS Indexer v${pkg.version}
+echo ========================================
+echo.
+
+:: 检查 Node.js 是否已安装
+where node >nul 2>&1
+if errorlevel 1 (
+    echo [错误] 未检测到 Node.js！
+    echo.
+    echo 请先安装 Node.js (v16 或更高版本)
+    echo 下载地址: https://nodejs.org/
+    echo.
+    echo 安装完成后重新运行此脚本。
+    echo ========================================
+    pause
+    exit /b 1
+)
+
+:: 检查 Node.js 版本
+for /f "tokens=1 delims=v" %%i in ('node -v') do set NODE_VER=%%i
+for /f "tokens=1 delims=." %%i in ("%NODE_VER%") do set NODE_MAJOR=%%i
+
+if %NODE_MAJOR% LSS 16 (
+    echo [警告] Node.js 版本过低: v%NODE_VER%
+    echo.
+    echo 当前需要 Node.js v16 或更高版本
+    echo 建议升级到最新 LTS 版本
+    echo 下载地址: https://nodejs.org/
+    echo.
+    echo 按任意键继续尝试启动（可能失败）...
+    pause >nul
+) else (
+    echo [检查] Node.js 版本: v%NODE_VER% ✓
+)
+
+echo.
+echo [启动] 正在启动服务...
+echo.
+
 node dist\\server.js
+
 if errorlevel 1 (
     echo.
-    echo 启动失败！请确保 Node.js 已安装。
-    echo 下载地址: https://nodejs.org/
+    echo ========================================
+    echo [错误] 服务启动失败！
+    echo.
+    echo 可能的原因：
+    echo   1. Node.js 版本不兼容
+    echo   2. 缺少依赖模块
+    echo   3. profiles 目录权限问题
+    echo.
+    echo 请检查上方错误信息，或联系开发者
+    echo ========================================
     pause
+    exit /b 1
 )
+
+echo.
+echo [提示] 服务已启动，访问地址: http://localhost:3000
+echo 按 Ctrl+C 可停止服务
 `;
 fs.writeFileSync(path.join(DIST_RELEASE, 'start.bat'), startBat);
 
