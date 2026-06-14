@@ -364,12 +364,63 @@ GET /static/games/steam-cache/{appid}/screenshots/{index}.jpg
 2. 新增游戏配置 API
 3. 图片静态服务路径调整
 
-### Phase 4: 前端页面
+### Phase 4: 前端页面重构
 
-1. 新增游戏 TAB 导航结构
-2. 新增 Steam 管理页面
-3. 新增游戏设置页面
-4. 调整全局设置页（移除游戏配置）
+#### 4.1 GameWallView.vue 模块化拆分
+
+当前 GameWallView.vue 有 1923 行，过于庞大，需要模块化拆分。
+
+**Composables（逻辑层）**：
+
+| 文件 | 内容 |
+|------|------|
+| `composables/useGames.ts` | 游戏列表加载、刷新、分页 |
+| `composables/useGameFilters.ts` | 搜索、筛选、排序 |
+| `composables/useGameGroups.ts` | 分组选择、分组操作 |
+| `composables/useSteamSearch.ts` | Steam 搜索、绑定 |
+| `composables/usePoster.ts` | 海报上传、下载、备份 |
+| `composables/useToast.ts` | Toast 通知 |
+
+**子组件（模板层）**：
+
+| 文件 | 内容 |
+|------|------|
+| `components/GameDetailModal.vue` | 游戏详情模态框 |
+| `components/EditGameModal.vue` | 编辑游戏模态框 |
+| `components/AddGameModal.vue` | 添加游戏模态框 |
+| `components/SteamSearchModal.vue` | Steam 搜索模态框 |
+| `components/GameFilterBar.vue` | 筛选栏组件 |
+| `components/GameStatsBar.vue` | 统计栏组件 |
+
+**拆分后 GameWallView.vue 预估行数**：~200-300 行
+
+#### 4.2 新增游戏 TAB 导航结构
+
+1. 新增 `/game` 路由入口
+2. 新增子路由：
+   - `/game/wall` - 游戏墙（默认）
+   - `/game/steam` - Steam 管理
+   - `/game/groups` - 分组管理
+   - `/game/settings` - 游戏设置
+
+#### 4.3 新增 Steam 管理页面
+
+- 统计卡片（缓存数量、图片占用）
+- 操作按钮（刷新全部、导入导出）
+- 缓存列表（搜索、筛选、单条刷新/删除）
+- 缓存详情弹窗（海报预览、截图预览）
+
+#### 4.4 新增游戏设置页面
+
+- 扫描路径配置
+- 识别规则配置
+- 刮削配置
+- Steam 代理配置
+
+#### 4.5 调整全局设置页
+
+- 移除游戏扫描规则、刮削配置等
+- 仅保留游戏模块开关（gamesEnabled）
 
 ---
 
