@@ -366,7 +366,45 @@ GET /static/games/steam-cache/{appid}/screenshots/{index}.jpg
 
 ### Phase 4: 前端页面重构
 
-#### 4.1 GameWallView.vue 模块化拆分
+#### 4.1 前端目录结构规范
+
+**模块化原则**：所有 Game 模块相关文件统一放入 `game/` 子目录，文件名使用 `Game` 前缀。
+
+```
+frontend/src/
+├─ views/
+│   └─ game/                    # Game 模块视图目录
+│       ├─ GameWallView.vue     # 游戏墙
+│       ├─ GameSteamView.vue    # Steam 管理
+│       ├─ GameSettingsView.vue # 游戏设置
+│       └─ GameGroupsView.vue   # 分组管理
+│
+├─ components/
+│   └─ game/                    # Game 模块组件目录
+│       ├─ GameCard.vue
+│       ├─ GameFilterBar.vue
+│       ├─ GameStatsBar.vue
+│       ├─ GameDetailModal.vue
+│       ├─ GameEditModal.vue
+│       ├─ GameAddModal.vue
+│       ├─ GameSteamSearchModal.vue
+│       ├─ GameGroupSidebar.vue
+│       └─ GameGroupManager.vue
+│
+├─ composables/
+│   └─ game/                    # Game 模块 Composables 目录
+│       ├─ useGameList.ts
+│       ├─ useGameFilters.ts
+│       ├─ useGameGroups.ts
+│       ├─ useGameSteamSearch.ts
+│       ├─ useGamePoster.ts
+│       └─ useGameToast.ts
+│
+└─ types/
+    └─ game.ts                  # Game 模块类型定义
+```
+
+#### 4.2 GameWallView.vue 模块化拆分
 
 当前 GameWallView.vue 有 1923 行，过于庞大，需要模块化拆分。
 
@@ -374,27 +412,27 @@ GET /static/games/steam-cache/{appid}/screenshots/{index}.jpg
 
 | 文件 | 内容 |
 |------|------|
-| `composables/useGames.ts` | 游戏列表加载、刷新、分页 |
-| `composables/useGameFilters.ts` | 搜索、筛选、排序 |
-| `composables/useGameGroups.ts` | 分组选择、分组操作 |
-| `composables/useSteamSearch.ts` | Steam 搜索、绑定 |
-| `composables/usePoster.ts` | 海报上传、下载、备份 |
-| `composables/useToast.ts` | Toast 通知 |
+| `composables/game/useGameList.ts` | 游戏列表加载、刷新、分页 |
+| `composables/game/useGameFilters.ts` | 搜索、筛选、排序 |
+| `composables/game/useGameGroups.ts` | 分组选择、分组操作 |
+| `composables/game/useGameSteamSearch.ts` | Steam 搜索、绑定 |
+| `composables/game/useGamePoster.ts` | 海报上传、下载、备份 |
+| `composables/game/useGameToast.ts` | Toast 通知 |
 
 **子组件（模板层）**：
 
 | 文件 | 内容 |
 |------|------|
-| `components/GameDetailModal.vue` | 游戏详情模态框 |
-| `components/EditGameModal.vue` | 编辑游戏模态框 |
-| `components/AddGameModal.vue` | 添加游戏模态框 |
-| `components/SteamSearchModal.vue` | Steam 搜索模态框 |
-| `components/GameFilterBar.vue` | 筛选栏组件 |
-| `components/GameStatsBar.vue` | 统计栏组件 |
+| `components/game/GameDetailModal.vue` | 游戏详情模态框 |
+| `components/game/GameEditModal.vue` | 编辑游戏模态框 |
+| `components/game/GameAddModal.vue` | 添加游戏模态框 |
+| `components/game/GameSteamSearchModal.vue` | Steam 搜索模态框 |
+| `components/game/GameFilterBar.vue` | 筛选栏组件 |
+| `components/game/GameStatsBar.vue` | 统计栏组件 |
 
 **拆分后 GameWallView.vue 预估行数**：~200-300 行
 
-#### 4.2 新增游戏 TAB 导航结构
+#### 4.3 新增游戏 TAB 导航结构
 
 1. 新增 `/game` 路由入口
 2. 新增子路由：
