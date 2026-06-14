@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { database } from '../database';
 import { logger } from '../logger';
-import type { Game, GameQueryOptions, GameStatistics, GameGroup, SteamDbEntry, SteamDbImportResult } from '../types';
+import type { Game, GameQueryOptions, GameStatistics, GameGroup, SteamDbEntry, SteamDbImportResult, SteamCacheStats } from '../types';
 // metadata-manager no longer used - game.json removed from design
 
 interface QueryResult {
@@ -1213,7 +1213,99 @@ class GameDatabase {
       }
     }
 
+    // 解析 genres JSON
+    if (typeof entry.genres === 'string') {
+      try {
+        entry.genres = JSON.parse(entry.genres);
+      } catch {
+        entry.genres = '[]';
+      }
+    }
+
+    // 解析 languages JSON
+    if (typeof entry.languages === 'string') {
+      try {
+        entry.languages = JSON.parse(entry.languages);
+      } catch {
+        entry.languages = '[]';
+      }
+    }
+
+    // 解析 tags JSON
+    if (typeof entry.tags === 'string') {
+      try {
+        entry.tags = JSON.parse(entry.tags);
+      } catch {
+        entry.tags = '[]';
+      }
+    }
+
     return entry;
+  }
+
+  /**
+   * 获取 Steam 缓存统计
+   */
+  getSteamCacheStats(): SteamCacheStats {
+    const totalResult: QueryResult[] = database.db!.exec('SELECT COUNT(*) as count FROM steam_db');
+    const totalEntries = totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0;
+
+    // 统计有元数据的条目
+    const metadataResult: QueryResult[] = database.db!.exec(
+      "SELECT COUNT(*) as count FROM steam_db WHERE raw_data IS NOT NULL AND raw_data != ''"
+    );
+    const hasMetadata = metadataResult.length > 0 ? (metadataResult[0].values[0][0] as number) : 0;
+
+    return {
+      totalEntries,
+      completeEntries: 0,      // 图片完整性需配合文件检查
+      missingImagesEntries: totalEntries - hasMetadata, // 无元数据的条目数
+      totalPosters: 0,
+      totalScreenshots: 0,
+      totalSizeMB: 0
+    };
+  }
+
+  /**
+   * 获取所有已缓存的 AppID 列表（用于批量刷新）
+   */
+  getAllSteamDbAppids(): string[] {
+    const result: QueryResult[] = database.db!.exec(
+      "SELECT steam_appid FROM steam_db WHERE raw_data IS NOT NULL AND raw_data != ''"
+    );
+    if (result.length === 0) return [];
+    return result[0].values.map(row => row[0] as string);
+  }
+
+  /**
+   * 更新 Steam 缓存完整数据（增量更新）
+   */
+  updateSteamDbFull(appid: string, data: Partial<SteamDbEntry>): boolean {
+    const fields: string[] = [];
+    const params: unknown[] = [];
+
+    const allowedFields = ['name', 'name_en', 'aliases', 'release_date', 'genres', 'rating',
+                           'languages', 'tags', 'raw_data', 'notes', 'source'];
+    for (const field of allowedFields) {
+      if (data[field as keyof SteamDbEntry] !== undefined) {
+        if (field === 'aliases' || field === 'genres' || field === 'languages' || field === 'tags') {
+          fields.push(`${field} = ?`);
+          params.push(JSON.stringify(data[field as keyof SteamDbEntry]));
+        } else {
+          fields.push(`${field} = ?`);
+          params.push(data[field as keyof SteamDbEntry]);
+        }
+      }
+    }
+
+    if (fields.length === 0) return false;
+
+    fields.push('updated_at = datetime("now", "localtime")');
+    params.push(appid);
+
+    database.db!.run(`UPDATE steam_db SET ${fields.join(', ')} WHERE steam_appid = ?`, params);
+    database.save();
+    return true;
   }
 
   // === 海报路径处理 ===
