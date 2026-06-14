@@ -1250,16 +1250,10 @@ class GameDatabase {
     const totalResult: QueryResult[] = database.db!.exec('SELECT COUNT(*) as count FROM steam_db');
     const totalEntries = totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0;
 
-    // 统计有元数据的条目
-    const metadataResult: QueryResult[] = database.db!.exec(
-      "SELECT COUNT(*) as count FROM steam_db WHERE raw_data IS NOT NULL AND raw_data != ''"
-    );
-    const hasMetadata = metadataResult.length > 0 ? (metadataResult[0].values[0][0] as number) : 0;
-
     return {
       totalEntries,
-      completeEntries: 0,      // 图片完整性需配合文件检查
-      missingImagesEntries: totalEntries - hasMetadata, // 无元数据的条目数
+      completeEntries: 0,       // 图片完整性需配合文件检查
+      missingImagesEntries: 0,  // 图片完整性需配合文件检查
       totalPosters: 0,
       totalScreenshots: 0,
       totalSizeMB: 0
