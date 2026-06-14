@@ -1,6 +1,6 @@
 {
   "name": "nas-indexer",
-  "version": "1.5.4",
+  "version": "1.5.6",
   "description": "NAS 文件索引服务 - 离线文件索引、搜索、预览、管理",
   "main": "dist/server.js",
   "bin": "dist/server.js",

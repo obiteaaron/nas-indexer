@@ -230,6 +230,21 @@ function getGameScanPaths(config: Config): string[] {
   return config.scanPaths;
 }
 
+function addToBlacklistPatterns(pathToAdd: string): boolean {
+  const config = loadConfig();
+  if (!config.gamesRules) {
+    config.gamesRules = DEFAULT_GAME_RULES;
+  }
+  // 检查是否已存在（避免重复添加）
+  const normalizedPath = pathToAdd.replace(/\\/g, '/');
+  if (!config.gamesRules.blacklistPatterns.some(p => p.replace(/\\/g, '/') === normalizedPath)) {
+    config.gamesRules.blacklistPatterns.push(pathToAdd);
+    saveConfig(config);
+    logger.info('已添加黑名单路径: %s', pathToAdd);
+  }
+  return true;
+}
+
 export {
   PROJECT_ROOT,
   DEFAULT_STORAGE_PATH,
@@ -244,5 +259,6 @@ export {
   loadConfig,
   saveConfig,
   getFileScanPaths,
-  getGameScanPaths
+  getGameScanPaths,
+  addToBlacklistPatterns
 };

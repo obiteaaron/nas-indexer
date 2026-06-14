@@ -57,7 +57,6 @@ class GameDatabase {
 
         scraped_at DATETIME,
         is_manually_edited INTEGER DEFAULT 0,
-        is_excluded INTEGER DEFAULT 0,
         is_favorite INTEGER DEFAULT 0,
         is_root_manually_marked INTEGER DEFAULT 0,
 
@@ -71,7 +70,6 @@ class GameDatabase {
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_steam_appid ON games(steam_appid)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_metadata_source ON games(metadata_source)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_release_date ON games(release_date)');
-    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_excluded ON games(is_excluded)');
 
     // 兼容已存在表：检查 is_favorite 列是否存在
     const colCheck: QueryResult[] = database.db!.exec(
@@ -253,7 +251,7 @@ class GameDatabase {
   }
 
   getGames(options: GameQueryOptions = {}): Game[] {
-    const { genre, year, search, scraped, excluded, favorite, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
+    const { genre, year, search, scraped, favorite, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
 
     let sql: string = 'SELECT * FROM games';
     const params: unknown[] = [];
@@ -278,12 +276,6 @@ class GameDatabase {
       conditions.push('(scraped_at IS NOT NULL OR metadata_source = \'manual\')');
     } else if (scraped === 'false') {
       conditions.push('(scraped_at IS NULL AND metadata_source != \'manual\')');
-    }
-
-    if (excluded === 'true' || excluded === 'only') {
-      conditions.push('is_excluded = 1');
-    } else {
-      conditions.push('is_excluded = 0');
     }
 
     if (favorite === 'true') {
@@ -313,7 +305,7 @@ class GameDatabase {
   }
 
   getGameCount(options: GameQueryOptions = {}): number {
-    const { genre, year, search, scraped, excluded, favorite } = options;
+    const { genre, year, search, scraped, favorite } = options;
 
     let sql: string = 'SELECT COUNT(*) as count FROM games';
     const params: unknown[] = [];
@@ -338,12 +330,6 @@ class GameDatabase {
       conditions.push('(scraped_at IS NOT NULL OR metadata_source = \'manual\')');
     } else if (scraped === 'false') {
       conditions.push('(scraped_at IS NULL AND metadata_source != \'manual\')');
-    }
-
-    if (excluded === 'true' || excluded === 'only') {
-      conditions.push('is_excluded = 1');
-    } else {
-      conditions.push('is_excluded = 0');
     }
 
     if (favorite === 'true') {
@@ -404,18 +390,6 @@ class GameDatabase {
   clearAllGames(): void {
     database.db!.run('DELETE FROM games');
     database.save();
-  }
-
-  toggleExclude(id: number): Game | null {
-    const game: Game | null = this.getGameById(id);
-    if (!game) return null;
-    const newVal: number = game.is_excluded ? 0 : 1;
-    database.db!.run(
-      'UPDATE games SET is_excluded = ?, updated_at = datetime(\'now\', \'localtime\') WHERE id = ?',
-      [newVal, id]
-    );
-    database.save();
-    return this.getGameById(id);
   }
 
   toggleFavorite(id: number): Game | null {
@@ -661,7 +635,7 @@ class GameDatabase {
   }
 
   getGroupGames(groupId: number, options: GameQueryOptions = {}): Game[] {
-    const { genre, year, search, scraped, excluded, favorite, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
+    const { genre, year, search, scraped, favorite, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
 
     let sql: string = `
       SELECT g.* FROM games g
@@ -692,13 +666,6 @@ class GameDatabase {
       conditions.push('(g.scraped_at IS NULL AND g.metadata_source != \'local\')');
     }
 
-    // 分组内游戏默认不显示已排除的，除非明确筛选
-    if (excluded === 'true' || excluded === 'only') {
-      conditions.push('g.is_excluded = 1');
-    } else {
-      conditions.push('g.is_excluded = 0');
-    }
-
     if (favorite === 'true') {
       conditions.push('g.is_favorite = 1');
     } else if (favorite === 'false') {
@@ -725,7 +692,7 @@ class GameDatabase {
   }
 
   getGroupGameCount(groupId: number, options: GameQueryOptions = {}): number {
-    const { genre, year, search, scraped, excluded, favorite } = options;
+    const { genre, year, search, scraped, favorite } = options;
 
     let sql: string = `
       SELECT COUNT(*) as count FROM games g
@@ -756,12 +723,6 @@ class GameDatabase {
       conditions.push('(g.scraped_at IS NULL AND g.metadata_source != \'local\')');
     }
 
-    if (excluded === 'true' || excluded === 'only') {
-      conditions.push('g.is_excluded = 1');
-    } else {
-      conditions.push('g.is_excluded = 0');
-    }
-
     if (favorite === 'true') {
       conditions.push('g.is_favorite = 1');
     } else if (favorite === 'false') {
@@ -781,7 +742,6 @@ class GameDatabase {
     const result: QueryResult[] = database.db!.exec(`
       SELECT * FROM games
       WHERE id NOT IN (SELECT game_id FROM game_group_items WHERE group_id = ?)
-        AND is_excluded = 0
       ORDER BY title ASC
     `, [groupId]);
     if (result.length === 0) return [];
@@ -818,11 +778,6 @@ class GameDatabase {
     const scrapedGames: number = scrapedResult.length > 0 ? (scrapedResult[0].values[0][0] as number) : 0;
 
     const unscrapedGames: number = totalGames - scrapedGames;
-
-    const excludedResult: QueryResult[] = database.db!.exec(
-      'SELECT COUNT(*) as count FROM games WHERE is_excluded = 1'
-    );
-    const excludedGames: number = excludedResult.length > 0 ? (excludedResult[0].values[0][0] as number) : 0;
 
     const favoriteResult: QueryResult[] = database.db!.exec(
       'SELECT COUNT(*) as count FROM games WHERE is_favorite = 1'
@@ -861,7 +816,7 @@ class GameDatabase {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
-    return { totalGames, scrapedGames, unscrapedGames, excludedGames, favoriteGames, byYear, byGenre };
+    return { totalGames, scrapedGames, unscrapedGames, favoriteGames, byYear, byGenre };
   }
 
   getGenres(): string[] {

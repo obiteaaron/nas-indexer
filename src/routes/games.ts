@@ -12,7 +12,7 @@ import { gameDatabase } from '../games/database';
 import { scrapeGame, scrapeUnscrapedGames, searchSteamCandidates } from '../games/scraper';
 import { runIdentification } from '../games/identifier';
 import { PosterService } from '../games/poster-service';
-import { initDatabase, loadConfig, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
+import { initDatabase, loadConfig, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths, addToBlacklistPatterns } from '../utils';
 import { logger } from '../logger';
 import { taskManager } from '../task-manager';
 import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup, SteamDbEntry } from '../types';
@@ -52,7 +52,7 @@ function openDirectory(dirPath: string): void {
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
-    const { genre, year, search, scraped, excluded, favorite, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
+    const { genre, year, search, scraped, favorite, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
     const offset: number = (parseInt(page as string) - 1) * parseInt(pageSize as string);
     const limit: number = parseInt(pageSize as string);
 
@@ -61,7 +61,6 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       year: year as string,
       search: search as string,
       scraped: scraped as 'true' | 'false' | undefined,
-      excluded: excluded as 'true' | 'false' | 'only' | undefined,
       favorite: favorite as 'true' | 'false' | undefined,
       orderBy: (orderBy as 'title' | 'release_date' | 'rating' | 'scraped_at') || undefined,
       orderDir: (orderDir as 'ASC' | 'DESC') || undefined,
@@ -235,13 +234,12 @@ router.get('/groups/:id/games', async (req: Request, res: Response): Promise<voi
       res.status(404).json({ success: false, error: '分组不存在' });
       return;
     }
-    const { genre, year, search, scraped, excluded, favorite, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
+    const { genre, year, search, scraped, favorite, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
     const options: GameQueryOptions = {
       genre: genre as string,
       year: year as string,
       search: search as string,
       scraped: scraped as 'true' | 'false' | undefined,
-      excluded: excluded as 'true' | 'false' | 'only' | undefined,
       favorite: favorite as 'true' | 'false' | undefined,
       orderBy: orderBy as 'title' | 'rating' | 'release_date',
       orderDir: orderDir as 'ASC' | 'DESC',
@@ -454,17 +452,25 @@ router.post('/delete/:id', async (req: Request, res: Response): Promise<void> =>
 });
 
 /**
- * 切换游戏排除状态
+ * 排除游戏：加入黑名单并删除
  */
 router.post('/:id/exclude', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
-    const updated: Game | null = gameDatabase.toggleExclude(parseInt(req.params.id as string));
-    if (!updated) {
+    const gameId = parseInt(req.params.id as string);
+    const game: Game | null = gameDatabase.getGameById(gameId);
+    if (!game) {
       res.status(404).json({ success: false, error: '游戏不存在' });
       return;
     }
-    res.json({ success: true, data: updated });
+
+    // 将路径加入黑名单
+    addToBlacklistPatterns(game.source_path);
+
+    // 删除游戏记录
+    gameDatabase.deleteGame(gameId);
+
+    res.json({ success: true, data: { deletedId: gameId, blacklistPath: game.source_path } });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

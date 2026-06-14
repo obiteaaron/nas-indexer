@@ -162,8 +162,10 @@ function matchRecognitionRule(
   // 黑名单检查
   const normalizedPathLower = entryPath.replace(/\\/g, '/').toLowerCase();
   for (const blacklist of rules.blacklistPatterns) {
-    if (normalizedPathLower.includes(blacklist.toLowerCase())) {
-      logger.debug('[游戏识别] 黑名单跳过: %s', entryPath);
+    // 黑名单路径也需要标准化（统一使用 / 分隔符）
+    const normalizedBlacklist = blacklist.replace(/\\/g, '/').toLowerCase();
+    if (normalizedPathLower.includes(normalizedBlacklist)) {
+      logger.debug('[游戏识别] 黑名单跳过: %s (匹配: %s)', entryPath, blacklist);
       return { matched: false, gamePath: null, rule: null, matchedPath: null, isFile: false };
     }
   }

@@ -400,9 +400,9 @@ export function openGame(id: number): Promise<ApiResponse<void>> {
   return request<void>('/games/' + id + '/open', { method: 'POST' })
 }
 
-export function toggleExcludeGame(id: number): Promise<ApiResponse<Game>> {
+export function excludeAndDeleteGame(id: number): Promise<ApiResponse<{ deletedId: number; blacklistPath: string }>> {
   clearCache('/games')
-  return request<Game>('/games/' + id + '/exclude', { method: 'POST' })
+  return request<{ deletedId: number; blacklistPath: string }>('/games/' + id + '/exclude', { method: 'POST' })
 }
 
 export function toggleFavoriteGame(id: number): Promise<ApiResponse<Game>> {
@@ -427,11 +427,6 @@ export function createGame(data: {
     method: 'POST',
     body: JSON.stringify(data)
   })
-}
-
-export function promoteGame(id: number): Promise<ApiResponse<Game>> {
-  clearCache('/games')
-  return request<Game>('/games/' + id + '/promote', { method: 'POST' })
 }
 
 export function removeNonexistentGames(): Promise<ApiResponse<{ deletedCount: number; deletedIds: number[] }>> {

@@ -36,7 +36,6 @@ export interface Game {
   metadata_path?: string;
   scraped_at?: string;
   is_manually_edited: number;
-  is_excluded: number;
   is_favorite: number;
   is_root_manually_marked: number;  // P0手动优先级标记
 
@@ -108,7 +107,6 @@ export interface GameQueryOptions {
   year?: string;
   search?: string;
   scraped?: string;
-  excluded?: 'true' | 'false' | 'only';
   favorite?: 'true' | 'false' | undefined;
   orderBy?: 'title' | 'rating' | 'release_date' | 'scraped_at';
   orderDir?: 'ASC' | 'DESC';
@@ -120,7 +118,6 @@ export interface GameStatistics {
   totalGames: number;
   scrapedGames: number;
   unscrapedGames: number;
-  excludedGames: number;
   favoriteGames: number;
   byYear: { year: string; count: number }[];
   byGenre: { genre: string; count: number }[];

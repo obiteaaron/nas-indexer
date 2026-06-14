@@ -79,7 +79,6 @@
           <option value="">全部状态</option>
           <option value="true">已刮削</option>
           <option value="false">待刮削</option>
-          <option value="excluded">已排除</option>
         </select>
       </div>
       <div class="filter-group">
@@ -95,7 +94,6 @@
       <span class="stat-item">总计 {{ stats.totalGames }} 个游戏</span>
       <span class="stat-item">已刮削 {{ stats.scrapedGames }} 个</span>
       <span class="stat-item">待刮削 {{ stats.unscrapedGames }} 个</span>
-      <span class="stat-item" v-if="stats.excludedGames > 0">已排除 {{ stats.excludedGames }} 个</span>
       <span class="stat-item" v-if="stats.favoriteGames > 0">收藏 {{ stats.favoriteGames }} 个</span>
     </div>
 
@@ -108,7 +106,6 @@
         @open="openGameDir"
         @detail="showGameDetail"
         @exclude="toggleExclude"
-        @promote="promoteGame"
         @delete="deleteSingleGame"
         @favorite="toggleFavorite"
       />
@@ -242,6 +239,11 @@
           <button class="modal-close" @click="showEditGameModal = false">✕</button>
         </div>
         <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label">游戏路径 <span class="required">*</span></label>
+            <input v-model="editForm.source_path" class="input" placeholder="E:\Games\游戏名称" />
+            <span class="hint">游戏所在目录的绝对路径</span>
+          </div>
           <div class="form-row">
             <label class="form-label">游戏名称 <span class="required">*</span></label>
             <input v-model="editForm.title" class="input" placeholder="游戏名称" />
@@ -560,9 +562,8 @@ import {
   identifyGames as identifyGamesApi,
   searchSteamGames,
   bindSteamGame,
-  toggleExcludeGame,
+  excludeAndDeleteGame,
   toggleFavoriteGame,
-  promoteGame as promoteGameApi,
   createGame as createGameApi,
   updateGame as updateGameApi,
   removeNonexistentGames,
@@ -619,6 +620,7 @@ const showEditGameModal = ref(false)
 const editingGame = ref(false)
 const showEditMoreFields = ref(false)
 const editForm = ref({
+  source_path: '',
   title: '',
   title_en: '',
   steam_appid: '',
@@ -701,7 +703,6 @@ const genresArray = computed(() => {
 async function loadGames(): Promise<void> {
   loading.value = true
   try {
-    const isExcluded = filterScraped.value === 'excluded'
     const isFavorite = isFavoriteFilter.value
 
     if (selectedGroupId.value !== null) {
@@ -710,8 +711,7 @@ async function loadGames(): Promise<void> {
         search: searchQuery.value,
         genre: filterGenre.value,
         year: filterYear.value,
-        scraped: isExcluded || isFavorite ? undefined : filterScraped.value,
-        excluded: isExcluded ? 'true' : undefined,
+        scraped: isFavorite ? undefined : filterScraped.value,
         favorite: isFavorite ? 'true' : undefined,
         orderBy: orderBy.value,
         orderDir: 'ASC',
@@ -727,8 +727,7 @@ async function loadGames(): Promise<void> {
         search: searchQuery.value,
         genre: filterGenre.value,
         year: filterYear.value,
-        scraped: isExcluded || isFavorite ? undefined : filterScraped.value,
-        excluded: isExcluded ? 'true' : undefined,
+        scraped: isFavorite ? undefined : filterScraped.value,
         favorite: isFavorite ? 'true' : undefined,
         orderBy: orderBy.value,
         orderDir: 'ASC',
@@ -1013,18 +1012,22 @@ function showGameDetail(game: Game): void {
 }
 
 async function toggleExclude(game: Game): Promise<void> {
+  // 确认排除操作
+  if (!confirm(`确定要排除游戏「${game.title}」吗？\n\n该路径将加入黑名单，游戏记录将被删除。`)) return
+
   try {
-    const res = await toggleExcludeGame(game.id)
-    if (res.success && res.data) {
-      const idx = games.value.findIndex(g => g.id === game.id)
-      if (idx >= 0) {
-        games.value[idx] = res.data
-      }
+    const res = await excludeAndDeleteGame(game.id)
+    if (res.success) {
+      // 从列表中移除游戏
+      games.value = games.value.filter(g => g.id !== game.id)
       if (selectedGame.value?.id === game.id) {
-        selectedGame.value = res.data
+        selectedGame.value = null
       }
+      total.value -= 1
       loadStats()
-      showNotification(res.data.is_excluded ? '已排除游戏' : '已取消排除')
+      showNotification('游戏已排除并删除')
+    } else {
+      showNotification('排除失败: ' + ((res as any).error || '未知错误'))
     }
   } catch (err) {
     console.error('排除操作失败:', err)
@@ -1125,30 +1128,6 @@ async function handleReorderGroups(items: Array<{ id: number; sort_order: number
   }
 }
 
-async function promoteGame(game: Game): Promise<void> {
-  const parentPath = game.source_path.replace(/\\/g, '/').split('/').slice(0, -1).join('/')
-  if (!confirm(`将「${game.title}」的游戏目录提升一级至父目录？\n\n当前: ${game.source_path}\n提升后: ${parentPath}`)) return
-  try {
-    const res = await promoteGameApi(game.id)
-    if (res.success && res.data) {
-      const idx = games.value.findIndex(g => g.id === game.id)
-      if (idx >= 0) {
-        games.value[idx] = res.data
-      }
-      if (selectedGame.value?.id === game.id) {
-        selectedGame.value = res.data
-      }
-      loadStats()
-      showNotification('目录已提升')
-    } else {
-      showNotification('提升失败: ' + ((res as any).error || '未知错误'))
-    }
-  } catch (err) {
-    console.error('提升目录失败:', err)
-    showNotification('提升失败')
-  }
-}
-
 async function deleteSingleGame(game: Game): Promise<void> {
   if (!confirm(`确定要删除游戏「${game.title}」吗？此操作不可撤销。`)) return
   try {
@@ -1217,6 +1196,7 @@ async function submitAddGame(): Promise<void> {
 function startEditGame(game: Game): void {
   // 填充表单
   editForm.value = {
+    source_path: game.source_path || '',
     title: game.title || '',
     title_en: game.title_en || '',
     steam_appid: game.steam_appid || '',
@@ -1234,6 +1214,10 @@ function startEditGame(game: Game): void {
 }
 
 async function submitEditGame(): Promise<void> {
+  if (!editForm.value.source_path.trim()) {
+    showNotification('请输入游戏路径')
+    return
+  }
   if (!editForm.value.title.trim()) {
     showNotification('请输入游戏名称')
     return
@@ -1248,6 +1232,7 @@ async function submitEditGame(): Promise<void> {
       : undefined
 
     const updateData: Partial<Game> = {
+      source_path: editForm.value.source_path.trim(),
       title: editForm.value.title.trim(),
       title_en: editForm.value.title_en.trim() || undefined,
       steam_appid: editForm.value.steam_appid.toString().trim() || undefined,
