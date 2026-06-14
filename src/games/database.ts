@@ -120,7 +120,7 @@ class GameDatabase {
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_group_items_group ON game_group_items(group_id)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_group_items_game ON game_group_items(game_id)');
 
-    // Steam 数据库表：Steam AppID 与游戏名称映射
+    // Steam 数据库表：完整缓存表
     database.db!.run(`
       CREATE TABLE IF NOT EXISTS steam_db (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,14 +128,51 @@ class GameDatabase {
         name TEXT NOT NULL,
         name_en TEXT,
         aliases TEXT DEFAULT '[]',
+
+        -- 查询字段
+        release_date TEXT,
+        genres TEXT,
+        rating REAL,
+        languages TEXT,
+        tags TEXT,
+
+        -- 原始数据
+        raw_data TEXT,
+
+        -- 元信息
         notes TEXT,
         source TEXT DEFAULT 'manual',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME
+        scraped_at DATETIME,
+        updated_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_appid ON steam_db(steam_appid)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_name ON steam_db(name)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_release_date ON steam_db(release_date)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_rating ON steam_db(rating)');
+
+    // 兼容已存在表：检查新列是否存在
+    const steamDbColumns = ['release_date', 'genres', 'languages', 'tags', 'raw_data', 'scraped_at', 'updated_at'];
+    for (const col of steamDbColumns) {
+      const colCheck: QueryResult[] = database.db!.exec(
+        `SELECT COUNT(*) as cnt FROM pragma_table_info('steam_db') WHERE name='${col}'`
+      );
+      const hasCol = colCheck.length > 0 && (colCheck[0].values[0][0] as number) > 0;
+      if (!hasCol) {
+        database.db!.run(`ALTER TABLE steam_db ADD COLUMN ${col} TEXT`);
+        logger.info('Steam DB 表: 新增 %s 列', col);
+      }
+    }
+    // rating 是 REAL 类型，单独处理
+    const ratingCheck: QueryResult[] = database.db!.exec(
+      "SELECT COUNT(*) as cnt FROM pragma_table_info('steam_db') WHERE name='rating'"
+    );
+    const hasRating = ratingCheck.length > 0 && (ratingCheck[0].values[0][0] as number) > 0;
+    if (!hasRating) {
+      database.db!.run('ALTER TABLE steam_db ADD COLUMN rating REAL');
+      logger.info('Steam DB 表: 新增 rating 列');
+    }
 
     database.save();
     if (isNew) {
