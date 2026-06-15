@@ -28,6 +28,26 @@
   - 缓存完整时直接提取元数据，缺失图片自动补齐
   - 新增强制刷新方法（手动触发重新刮削）
   - Steam API 完整返回存入 raw_data 字段
+- **Steam 管理页面** - 新增 GameSteamView.vue，提供 Steam 缓存管理界面
+  - 缓存统计卡片显示（游戏数、图片数、缓存大小）
+  - 缓存列表展示（含状态标识：完整/缺失图片/仅元数据）
+  - 支持单个缓存刷新、删除、详情查看
+  - 支持批量刷新所有缓存
+  - 支持导出 Steam DB
+- **游戏设置页面** - 新增 GameSettingsView.vue，提供游戏配置管理界面
+  - 扫描路径配置（启用独立路径、添加/删除路径）
+  - 刮削配置（自动刮削、下载海报、代理设置）
+- **前端模块化重构** - 拆分 Game 模块为 composables 和独立组件
+  - useGameToast - Toast 通知逻辑
+  - useGameFilters - 筛选逻辑（搜索、类型、年份、状态、排序）
+  - GameFilterBar - 筛选栏组件
+  - GameStatsBar - 统计栏组件
+  - GameSteamCacheDetailModal - 缓存详情弹窗
+- **路由结构更新** - 新增嵌套路由 /game 子路径
+  - /game/wall - 游戏墙（原 /games 重定向至此）
+  - /game/steam - Steam 管理
+  - /game/settings - 游戏设置
+- **游戏子导航** - App.vue 新增游戏模块子导航栏（游戏墙、Steam 管理、游戏设置）
 
 ### 技术改进
 - **前端目录重构** - 游戏模块文件移至 game/ 子目录

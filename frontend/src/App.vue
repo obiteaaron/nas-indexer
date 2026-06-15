@@ -6,7 +6,7 @@
         <nav class="nav">
           <router-link to="/" class="nav-link">首页</router-link>
           <router-link to="/files" class="nav-link">文件列表</router-link>
-          <router-link v-if="config?.gamesEnabled" to="/games" class="nav-link">游戏</router-link>
+          <router-link v-if="config?.gamesEnabled" to="/game" class="nav-link">游戏</router-link>
           <router-link to="/search" class="nav-link">搜索</router-link>
           <router-link to="/statistics" class="nav-link">统计</router-link>
           <router-link to="/tags" class="nav-link">标签管理</router-link>
@@ -26,6 +26,12 @@
         </a>
       </div>
     </header>
+    <!-- 游戏子导航 -->
+    <div class="game-subnav" v-if="config?.gamesEnabled && $route.path.startsWith('/game')">
+      <router-link to="/game/wall" class="subnav-link">游戏墙</router-link>
+      <router-link to="/game/steam" class="subnav-link">Steam 管理</router-link>
+      <router-link to="/game/settings" class="subnav-link">游戏设置</router-link>
+    </div>
     <main class="main">
       <router-view />
     </main>
@@ -126,6 +132,33 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.game-subnav {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.subnav-link {
+  padding: 6px 12px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.subnav-link:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.subnav-link.router-link-active {
+  background: var(--primary);
+  color: white;
+}
+
 .theme-toggle {
   background: none;
   border: 1px solid var(--border);
