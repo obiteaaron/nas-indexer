@@ -147,12 +147,8 @@ class GameDatabase {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
-    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_appid ON steam_db(steam_appid)');
-    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_name ON steam_db(name)');
-    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_release_date ON steam_db(release_date)');
-    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_rating ON steam_db(rating)');
 
-    // 兼容已存在表：检查新列是否存在
+    // 兼容已存在表：检查新列是否存在（迁移逻辑必须在创建索引之前）
     const steamDbColumns = ['release_date', 'genres', 'languages', 'tags', 'raw_data', 'scraped_at', 'updated_at'];
     for (const col of steamDbColumns) {
       const colCheck: QueryResult[] = database.db!.exec(
@@ -173,6 +169,12 @@ class GameDatabase {
       database.db!.run('ALTER TABLE steam_db ADD COLUMN rating REAL');
       logger.info('Steam DB 表: 新增 rating 列');
     }
+
+    // 索引创建（在迁移后执行，确保列存在）
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_appid ON steam_db(steam_appid)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_name ON steam_db(name)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_release_date ON steam_db(release_date)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_rating ON steam_db(rating)');
 
     database.save();
     if (isNew) {
