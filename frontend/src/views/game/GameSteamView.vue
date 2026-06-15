@@ -555,6 +555,16 @@ onMounted(() => {
   margin-bottom: 24px;
   flex-wrap: wrap;  /* 允许换行 */
 }
+.steam-link {
+  color: var(--primary);
+  text-decoration: none;
+}
+.steam-link:hover {
+  text-decoration: underline;
+}
+.alias-tag {
+  display: inline-block;
+  padding: 2px 6px;
   background: var(--bg-secondary);
   border-radius: 4px;
   font-size: 12px;
