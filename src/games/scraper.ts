@@ -2,15 +2,17 @@
  * Steam 刮削模块
  */
 
+import fs from 'fs';
+import path from 'path';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { logger } from '../logger';
 import { gameDatabase } from './database';
 import { cleanGameName } from './name-cleaner';
 import { resolveGameNames } from './name-resolver';
 import { getStoragePath, loadConfig } from '../utils';
-import { PosterService } from './poster-service';
-import { ensureGamesDirs } from './storage';
-import type { Game } from '../types';
+import { ensureGamesDirs, ensurePosterDir, getPosterPath } from './storage';
+import { SteamCacheService, getSteamCacheDir } from './steam-cache-service';
+import type { Game, SteamDbEntry } from '../types';
 
 /**
  * Steam 搜索结果项
@@ -188,24 +190,43 @@ async function getSteamDetails(appid: number): Promise<SteamAppDetails | null> {
 }
 
 /**
- * 下载图片
+ * 将 Steam 缓存图片复制到游戏海报目录
+ * steam-cache/{appid}/ -> posters/{gameId}/
  */
-async function downloadImage(url: string): Promise<Buffer | null> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      return null;
+function copySteamCacheToPosters(storagePath: string, appid: string, gameId: number): void {
+  const cacheDir = getSteamCacheDir(storagePath, appid);
+  if (!fs.existsSync(cacheDir)) {
+    logger.warn('Steam 缓存目录不存在，无法复制海报: appid %s', appid);
+    return;
+  }
+
+  ensurePosterDir(storagePath, gameId);
+
+  // 图片映射: steam-cache 文件名 -> posters 文件名
+  const imageMap: Record<string, string> = {
+    'header.jpg': 'horizontal.jpg',    // 横版海报
+    'capsule.jpg': 'vertical.jpg',     // 竖版海报 (capsule)
+    'background.jpg': 'background.jpg' // 背景图
+  };
+
+  for (const [cacheFile, posterFile] of Object.entries(imageMap)) {
+    const cachePath = path.join(cacheDir, cacheFile);
+    const posterPath = getPosterPath(storagePath, gameId, posterFile.replace('.jpg', '') as 'horizontal' | 'vertical' | 'banner' | 'background');
+
+    if (fs.existsSync(cachePath)) {
+      // 只有目标不存在时才复制，避免覆盖用户手动上传的海报
+      if (!fs.existsSync(posterPath)) {
+        fs.copyFileSync(cachePath, posterPath);
+        logger.info('复制 Steam 缓存海报: %s -> gameId=%d %s', cacheFile, gameId, posterFile);
+      } else {
+        logger.debug('海报已存在，跳过复制: gameId=%d %s', gameId, posterFile);
+      }
     }
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  } catch (err) {
-    logger.warn('下载图片失败: %s', url);
-    return null;
   }
 }
 
 /**
- * 刮削单个游戏
+ * 刮削单个游戏（本地优先）
  */
 export async function scrapeGame(gameId: number, downloadPosters: boolean = true): Promise<Game | null> {
   const game = gameDatabase.getGameById(gameId);
@@ -214,12 +235,11 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
     return null;
   }
 
-  // 如果已经有 Steam appid，直接用
+  // 获取或搜索 AppID
   let appid: number | null = null;
   if (game.steam_appid) {
     appid = parseInt(game.steam_appid);
   } else {
-    // 搜索 Steam
     appid = await searchSteamGame(game.title);
   }
 
@@ -228,60 +248,119 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
     return game;
   }
 
-  // 获取详情
-  const details = await getSteamDetails(appid);
-  if (!details || !details.data) {
-    logger.info('无法获取 Steam 详情: appid %d', appid);
-    // 只保存 appid，不改变 metadata_source（仍为 'unknown'）
-    // 这样前端仍显示"待刮削"，用户可重试刮削
-    gameDatabase.updateGame(gameId, {
-      steam_appid: String(appid)
-    });
+  const appidStr = String(appid);
+
+  // === 本地优先逻辑 ===
+  const existingCache = gameDatabase.getSteamDbByAppid(appidStr);
+
+  if (existingCache && existingCache.raw_data) {
+    // 有完整缓存：从 raw_data 提取元数据
+    logger.info('使用本地缓存: appid %d', appid);
+
+    try {
+      const rawData = JSON.parse(existingCache.raw_data);
+      const updateData = extractMetadataFromRawData(rawData, game);
+      gameDatabase.updateGame(gameId, updateData);
+
+      // 检查图片完整性，缺失则补充
+      if (downloadPosters) {
+        const config = loadConfig();
+        const storagePath = getStoragePath(config);
+        const cacheService = new SteamCacheService(storagePath);
+        await cacheService.downloadMissingImages(appidStr, {
+          header_image: rawData.header_image,
+          capsule_image: rawData.capsule_images?.[0]?.capsule,
+          background: rawData.background,
+          screenshots: rawData.screenshots?.map(s => s.path_full)
+        });
+        // 复制 Steam 缓存图片到游戏海报目录
+        copySteamCacheToPosters(storagePath, appidStr, gameId);
+      }
+    } catch (err) {
+      logger.warn('解析缓存数据失败，将重新刮削: appid %d', appid);
+      // 缓存解析失败，走远程刮削流程
+      return await scrapeFromRemote(game, appid, downloadPosters);
+    }
+
     return gameDatabase.getGameById(gameId);
   }
 
-  const data = details.data;
+  // 无缓存或缓存不完整：远程刮削
+  return await scrapeFromRemote(game, appid, downloadPosters);
+}
 
-  // 刮削成功后，将数据存入/更新 steam_db
-  const existing = gameDatabase.getSteamDbByAppid(String(appid));
+/**
+ * 从远程 API 刮削
+ */
+async function scrapeFromRemote(game: Game, appid: number, downloadPosters: boolean): Promise<Game | null> {
+  const details = await getSteamDetails(appid);
+  if (!details || !details.data) {
+    logger.info('无法获取 Steam 详情: appid %d', appid);
+    gameDatabase.updateGame(game.id!, { steam_appid: String(appid) });
+    return gameDatabase.getGameById(game.id!);
+  }
+
+  const data = details.data;
+  const appidStr = String(appid);
+
+  // 存入 steam_db 缓存
+  const existing = gameDatabase.getSteamDbByAppid(appidStr);
   const steamName = data.name;
   const dirName = game.original_name;
 
-  // 使用统一的游戏名处理逻辑
   const resolved = resolveGameNames(
     steamName,
     dirName,
     existing ? existing.aliases || [] : []
   );
 
+  // 提取图片 URL
+  const headerImage = data.header_image;
+  const capsuleImage = data.capsule_images?.[0]?.capsule;
+  const background = data.background;
+  const screenshots = data.screenshots?.map(s => s.path_full);
+
+  // 存入完整缓存
+  const cacheData: Partial<SteamDbEntry> = {
+    steam_appid: appidStr,
+    name: resolved.name,
+    name_en: resolved.nameEn,
+    aliases: resolved.aliases,
+    release_date: data.release_date?.date,
+    genres: data.genres ? JSON.stringify(data.genres.map(g => g.description)) : undefined,
+    rating: data.metacritic?.score,
+    languages: data.supported_languages,
+    raw_data: JSON.stringify(data),  // 存储完整原始数据
+    source: 'scraper',
+    scraped_at: new Date().toISOString()
+  };
+
   if (existing) {
-    // 已存在：更新对应字段
-    gameDatabase.updateSteamDbEntry(existing.id!, {
-      name: resolved.name,
-      name_en: resolved.nameEn,
-      aliases: resolved.aliases,
-      source: 'scraper'
-    });
-    logger.info('Steam DB 更新: appid %d, name=%s, name_en=%s, aliases=%d',
-      appid, resolved.name, resolved.nameEn || '-', resolved.aliases.length);
+    gameDatabase.updateSteamDbFull(appidStr, cacheData);
   } else {
-    // 不存在：插入新条目
-    gameDatabase.insertSteamDbEntry({
-      steam_appid: String(appid),
-      name: resolved.name,
-      name_en: resolved.nameEn,
-      aliases: resolved.aliases,
-      source: 'scraper'
-    });
-    logger.info('Steam DB 缓存: appid %d, name=%s, name_en=%s',
-      appid, resolved.name, resolved.nameEn || steamName);
+    gameDatabase.insertSteamDbEntry(cacheData);
   }
 
-  // 智能处理 title 和 title_en（使用统一逻辑）
-  const shouldUpdateTitle = !game.is_manually_edited;
+  // 下载图片到 steam-cache/{appid}/
+  if (downloadPosters) {
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    ensureGamesDirs(storagePath);
+    const cacheService = new SteamCacheService(storagePath);
+    await cacheService.downloadAllImages(appidStr, {
+      header_image: headerImage,
+      capsule_image: capsuleImage,
+      background: background,
+      screenshots: screenshots
+    });
+    // 复制 Steam 缓存图片到游戏海报目录
+    copySteamCacheToPosters(storagePath, appidStr, game.id!);
+  }
 
+  // 更新 games 表
+  const shouldUpdateTitle = !game.is_manually_edited;
   const updateData: Partial<Game> = {
-    steam_appid: String(data.steam_appid),
+    steam_appid: appidStr,
     title: shouldUpdateTitle ? resolved.name : game.title,
     title_en: resolved.nameEn || steamName,
     developer: data.developers?.[0] || undefined,
@@ -292,46 +371,100 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
     description: data.detailed_description || undefined,
     short_description: data.short_description || undefined,
     languages: data.supported_languages || undefined,
-    poster_url: data.header_image || undefined,
-    cover_url: data.capsule_images?.[0]?.capsule || undefined,
-    screenshots: data.screenshots ? JSON.stringify(data.screenshots.slice(0, 5).map(s => s.path_full)) : undefined,
-    metadata_source: 'steam',  // 只有成功获取元数据才设置为 'steam'
-    scraped_at: new Date().toISOString()  // 刮削完成时间
+    metadata_source: 'steam',
+    scraped_at: new Date().toISOString()
   };
 
-  // 下载海报到 profiles/games/posters/{gameId}/
-  if (downloadPosters && game.source_path) {
-    try {
-      const config = loadConfig();
-      const storagePath = getStoragePath(config);
-      ensureGamesDirs(storagePath);
-      const posterService = new PosterService(storagePath);
+  gameDatabase.updateGame(game.id!, updateData);
+  logger.info('刮削完成: %s (appid %d)', game.title, appid);
 
-      // 横版海报 (header_image)
-      if (data.header_image) {
-        const horizontalData = await downloadImage(data.header_image);
-        if (horizontalData) {
-          posterService.saveFromBuffer(game.id, 'horizontal', horizontalData);
-        }
-      }
+  return gameDatabase.getGameById(game.id!);
+}
 
-      // 背景图
-      if (data.background) {
-        const backgroundData = await downloadImage(data.background);
-        if (backgroundData) {
-          posterService.saveFromBuffer(game.id, 'background', backgroundData);
-        }
-      }
-    } catch (err) {
-      logger.warn('下载海报失败: %s', game.title);
-    }
+/**
+ * 从 raw_data 提取元数据
+ */
+function extractMetadataFromRawData(rawData: any, game: Game): Partial<Game> {
+  const shouldUpdateTitle = !game.is_manually_edited;
+
+  return {
+    steam_appid: String(rawData.steam_appid),
+    title: shouldUpdateTitle ? game.title : game.title,  // 不更新标题
+    title_en: game.title_en || rawData.name,
+    developer: rawData.developers?.[0] || game.developer,
+    publisher: rawData.publishers?.[0] || game.publisher,
+    release_date: rawData.release_date?.date || game.release_date,
+    genres: rawData.genres ? JSON.stringify(rawData.genres.map(g => g.description)) : game.genres,
+    rating: rawData.metacritic?.score || game.rating,
+    description: rawData.detailed_description || game.description,
+    short_description: rawData.short_description || game.short_description,
+    languages: rawData.supported_languages || game.languages,
+    metadata_source: 'steam',
+    scraped_at: new Date().toISOString()
+  };
+}
+
+/**
+ * 强制刷新 Steam 缓存（手动触发）
+ * 刷新时保留已有的中文名/英文名，只更新元数据和图片
+ */
+export async function refreshSteamCache(appid: string): Promise<boolean> {
+  const details = await getSteamDetails(parseInt(appid));
+  if (!details || !details.data) {
+    logger.warn('刷新缓存失败: 无法获取 Steam 详情 appid %s', appid);
+    return false;
   }
 
-  // 更新数据库
-  gameDatabase.updateGame(gameId, updateData);
+  const data = details.data;
 
-  logger.info('刮削完成: %s (appid %d)', game.title, appid);
-  return gameDatabase.getGameById(gameId);
+  // 增量更新缓存
+  const existing = gameDatabase.getSteamDbByAppid(appid);
+  const steamName = data.name;
+
+  // 刷新策略：保留已有的 name 和 name_en，只更新元数据
+  // 如果 existing 不存在或 name/name_en 为空，则使用 resolveGameNames 计算
+  const cacheData: Partial<SteamDbEntry> = {
+    // 保留已有的名称（不覆盖）
+    name: existing?.name || undefined,
+    name_en: existing?.name_en || undefined,
+    aliases: existing?.aliases || [],
+    // 更新元数据
+    release_date: data.release_date?.date,
+    genres: data.genres ? JSON.stringify(data.genres.map(g => g.description)) : undefined,
+    rating: data.metacritic?.score,
+    languages: data.supported_languages,
+    raw_data: JSON.stringify(data),
+    source: 'scraper',
+    scraped_at: new Date().toISOString()
+  };
+
+  // 如果是新条目，需要解析名称
+  if (!existing) {
+    const resolved = resolveGameNames(steamName, '', []);
+    cacheData.name = resolved.name;
+    cacheData.name_en = resolved.nameEn;
+    cacheData.aliases = resolved.aliases;
+    gameDatabase.insertSteamDbEntry({
+      steam_appid: appid,
+      ...cacheData
+    });
+  } else {
+    gameDatabase.updateSteamDbFull(appid, cacheData);
+  }
+
+  // 增量下载图片
+  const config = loadConfig();
+  const storagePath = getStoragePath(config);
+  const cacheService = new SteamCacheService(storagePath);
+  await cacheService.downloadMissingImages(appid, {
+    header_image: data.header_image,
+    capsule_image: data.capsule_images?.[0]?.capsule,
+    background: data.background,
+    screenshots: data.screenshots?.map(s => s.path_full)
+  });
+
+  logger.info('缓存刷新完成: appid %s', appid);
+  return true;
 }
 
 /**

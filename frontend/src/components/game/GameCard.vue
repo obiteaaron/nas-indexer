@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { Game } from '../types'
+import type { Game } from '../../types'
 
 interface Props {
   game: Game

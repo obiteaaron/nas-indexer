@@ -62,7 +62,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import Sortable from 'sortablejs'
-import type { GameGroup } from '../types'
+import type { GameGroup } from '../../types'
 
 interface Props {
   groups: GameGroup[]

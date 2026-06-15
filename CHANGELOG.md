@@ -1,5 +1,88 @@
 # 更新日志
 
+## [v1.5.6] - 2026-06-16
+
+### Bug 修复
+- **正则规则列表 UI 改进** - GameSettingsView 正则规则表格优化
+  - 添加表头（排序、正则表达式、启用、层偏移、说明、操作）
+  - 启用勾选框移至规则名称后面
+- **Steam 搜索栏换行修复** - "共 X 条记录"添加 nowrap 样式防止换行
+- **海报同步机制** - 刮削时将 Steam 缓存图片复制到游戏海报目录
+  - header.jpg -> horizontal.jpg（横版海报）
+  - capsule.jpg -> vertical.jpg（竖版海报）
+  - background.jpg -> background.jpg（背景图）
+  - 不会覆盖已存在的海报，保持用户手动上传的海报
+- **Steam DB 数据写入修复** - insertSteamDbEntry 现正确写入 release_date、rating 等元数据字段
+- **Steam 列表即时搜索** - 输入时自动触发搜索（300ms 防抖）
+
+### 技术改进
+- **SettingsView 精简** - 移除已迁移的 Steam DB 和游戏详细配置
+  - 游戏模块仅保留 gamesEnabled 总开关
+  - Steam 数据库管理迁移至 GameSteamView
+  - 游戏详细配置迁移至 GameSettingsView
+
+## [v1.5.6] - 2026-06-15
+
+### 新增功能
+- **Steam 缓存管理 API** - 新增 /api/steam-cache 路由，提供缓存管理接口
+  - GET /stats - 获取缓存统计（条目数、图片数、总大小）
+  - GET /list - 分页获取缓存列表（含图片状态）
+  - GET /:appid - 获取单个缓存详情
+  - POST /:appid/refresh - 强制刷新单个缓存
+  - DELETE /:appid - 删除单个缓存
+  - POST /refresh-all - 批量刷新所有缓存（SSE 流式响应）
+  - GET /images/:appid - 获取缓存图片列表
+- **游戏配置 API** - 新增 /api/games-config 路由，管理独立游戏配置
+  - GET / - 获取游戏配置（games-config.json）
+  - PUT / - 保存游戏配置
+- **前端 API 扩展** - frontend/src/api/index.ts 新增 Steam 缓存和游戏配置 API 函数
+  - getSteamCacheStats、getSteamCacheList、getSteamCacheDetail、refreshSteamCache
+  - deleteSteamCache、refreshAllSteamCache
+  - getGamesConfig、saveGamesConfig
+- **Steam 缓存图片管理服务** - 新增 steam-cache-service.ts，支持按 AppID 存储图片缓存
+  - 支持下载 header/capsule/background/poster 等多种类型图片
+  - 支持截图批量下载和增量补齐
+  - 支持缓存完整性检查和统计
+  - 支持缓存删除和清理
+- **刮削流程重构** - 本地优先逻辑，减少网络请求
+  - 刮削前先检查本地缓存（steam_db 表 raw_data 字段）
+  - 缓存完整时直接提取元数据，缺失图片自动补齐
+  - 新增强制刷新方法（手动触发重新刮削）
+  - Steam API 完整返回存入 raw_data 字段
+- **Steam 管理页面** - 新增 GameSteamView.vue，提供 Steam 缓存管理界面
+  - 缓存统计卡片显示（游戏数、图片数、缓存大小）
+  - 缓存列表展示（含状态标识：完整/缺失图片/仅元数据）
+  - 支持单个缓存刷新、删除、详情查看
+  - 支持批量刷新所有缓存
+  - 支持导出 Steam DB
+- **游戏设置页面** - 新增 GameSettingsView.vue，提供游戏配置管理界面
+  - 扫描路径配置（启用独立路径、添加/删除路径）
+  - 刮削配置（自动刮削、下载海报、代理设置）
+- **前端模块化重构** - 拆分 Game 模块为 composables 和独立组件
+  - useGameToast - Toast 通知逻辑
+  - useGameFilters - 筛选逻辑（搜索、类型、年份、状态、排序）
+  - GameFilterBar - 筛选栏组件
+  - GameStatsBar - 统计栏组件
+  - GameSteamCacheDetailModal - 缓存详情弹窗
+- **路由结构更新** - 新增嵌套路由 /game 子路径
+  - /game/wall - 游戏墙（原 /games 重定向至此）
+  - /game/steam - Steam 管理
+  - /game/settings - 游戏设置
+- **游戏子导航** - App.vue 新增游戏模块子导航栏（游戏墙、Steam 管理、游戏设置）
+
+### 技术改进
+- **前端目录重构** - 游戏模块文件移至 game/ 子目录
+  - views/game/GameWallView.vue
+  - components/game/GameCard.vue, GameGroupSidebar.vue, GameGroupManager.vue
+  - composables/game/ 目录创建
+  - router/index.ts 和 GameWallView.vue 导入路径更新
+- **游戏配置独立模块** - 游戏配置拆分为 games-config.json，支持从旧 config.json 迁移
+- **配置类型精简** - Config 类型仅保留 gamesEnabled 开关，详细配置移至 GamesConfig 类型
+- **utils.ts 导出清理** - 移除游戏配置相关导出，改用 games-config.ts 的 getGameScanPathsFromConfig
+- **server.ts 路由集成** - 注册 steam-cache 和 games-config 路由，新增 Steam 缓存静态文件服务
+  - 新增 /static/games 路径映射到 storage/games 目录
+  - 支持访问 /static/games/steam-cache/{appid}/xxx.jpg 图片
+
 ## [v1.5.6] - 2026-06-14
 
 ### 功能改进

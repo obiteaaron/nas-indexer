@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { database } from '../database';
 import { logger } from '../logger';
-import type { Game, GameQueryOptions, GameStatistics, GameGroup, SteamDbEntry, SteamDbImportResult } from '../types';
+import type { Game, GameQueryOptions, GameStatistics, GameGroup, SteamDbEntry, SteamDbImportResult, SteamCacheStats } from '../types';
 // metadata-manager no longer used - game.json removed from design
 
 interface QueryResult {
@@ -120,7 +120,7 @@ class GameDatabase {
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_group_items_group ON game_group_items(group_id)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_group_items_game ON game_group_items(game_id)');
 
-    // Steam 数据库表：Steam AppID 与游戏名称映射
+    // Steam 数据库表：完整缓存表
     database.db!.run(`
       CREATE TABLE IF NOT EXISTS steam_db (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -128,14 +128,53 @@ class GameDatabase {
         name TEXT NOT NULL,
         name_en TEXT,
         aliases TEXT DEFAULT '[]',
+
+        -- 查询字段
+        release_date TEXT,
+        genres TEXT,
+        rating REAL,
+        languages TEXT,
+        tags TEXT,
+
+        -- 原始数据
+        raw_data TEXT,
+
+        -- 元信息
         notes TEXT,
         source TEXT DEFAULT 'manual',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME
+        scraped_at DATETIME,
+        updated_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // 兼容已存在表：检查新列是否存在（迁移逻辑必须在创建索引之前）
+    const steamDbColumns = ['release_date', 'genres', 'languages', 'tags', 'raw_data', 'scraped_at', 'updated_at'];
+    for (const col of steamDbColumns) {
+      const colCheck: QueryResult[] = database.db!.exec(
+        `SELECT COUNT(*) as cnt FROM pragma_table_info('steam_db') WHERE name='${col}'`
+      );
+      const hasCol = colCheck.length > 0 && (colCheck[0].values[0][0] as number) > 0;
+      if (!hasCol) {
+        database.db!.run(`ALTER TABLE steam_db ADD COLUMN ${col} TEXT`);
+        logger.info('Steam DB 表: 新增 %s 列', col);
+      }
+    }
+    // rating 是 REAL 类型，单独处理
+    const ratingCheck: QueryResult[] = database.db!.exec(
+      "SELECT COUNT(*) as cnt FROM pragma_table_info('steam_db') WHERE name='rating'"
+    );
+    const hasRating = ratingCheck.length > 0 && (ratingCheck[0].values[0][0] as number) > 0;
+    if (!hasRating) {
+      database.db!.run('ALTER TABLE steam_db ADD COLUMN rating REAL');
+      logger.info('Steam DB 表: 新增 rating 列');
+    }
+
+    // 索引创建（在迁移后执行，确保列存在）
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_appid ON steam_db(steam_appid)');
     database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_name ON steam_db(name)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_release_date ON steam_db(release_date)');
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_steam_db_rating ON steam_db(rating)');
 
     database.save();
     if (isNew) {
@@ -870,7 +909,8 @@ class GameDatabase {
    * 插入 Steam DB 条目
    */
   insertSteamDbEntry(data: Partial<SteamDbEntry>): number {
-    const { steam_appid, name, name_en = null, aliases = [], notes = null, source = 'manual' } = data;
+    const { steam_appid, name, name_en = null, aliases = [], notes = null, source = 'manual',
+            release_date = null, genres = null, rating = null, languages = null, raw_data = null } = data;
 
     if (!steam_appid || !name) {
       logger.warn('插入 Steam DB 失败: 缺少 steam_appid 或 name');
@@ -879,8 +919,11 @@ class GameDatabase {
 
     try {
       database.db!.run(
-        'INSERT OR REPLACE INTO steam_db (steam_appid, name, name_en, aliases, notes, source, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime("now", "localtime"))',
-        [steam_appid, name, name_en, JSON.stringify(aliases), notes, source]
+        `INSERT OR REPLACE INTO steam_db
+         (steam_appid, name, name_en, aliases, notes, source, release_date, genres, rating, languages, raw_data, scraped_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now", "localtime"), datetime("now", "localtime"))`,
+        [steam_appid, name, name_en, JSON.stringify(aliases), notes, source,
+         release_date, genres, rating, languages, raw_data]
       );
       database.save();
 
@@ -1176,7 +1219,93 @@ class GameDatabase {
       }
     }
 
+    // 解析 genres JSON
+    if (typeof entry.genres === 'string') {
+      try {
+        entry.genres = JSON.parse(entry.genres);
+      } catch {
+        entry.genres = '[]';
+      }
+    }
+
+    // 解析 languages JSON
+    if (typeof entry.languages === 'string') {
+      try {
+        entry.languages = JSON.parse(entry.languages);
+      } catch {
+        entry.languages = '[]';
+      }
+    }
+
+    // 解析 tags JSON
+    if (typeof entry.tags === 'string') {
+      try {
+        entry.tags = JSON.parse(entry.tags);
+      } catch {
+        entry.tags = '[]';
+      }
+    }
+
     return entry;
+  }
+
+  /**
+   * 获取 Steam 缓存统计
+   */
+  getSteamCacheStats(): SteamCacheStats {
+    const totalResult: QueryResult[] = database.db!.exec('SELECT COUNT(*) as count FROM steam_db');
+    const totalEntries = totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0;
+
+    return {
+      totalEntries,
+      completeEntries: 0,       // 图片完整性需配合文件检查
+      missingImagesEntries: 0,  // 图片完整性需配合文件检查
+      totalPosters: 0,
+      totalScreenshots: 0,
+      totalSizeMB: 0
+    };
+  }
+
+  /**
+   * 获取所有已缓存的 AppID 列表（用于批量刷新）
+   */
+  getAllSteamDbAppids(): string[] {
+    const result: QueryResult[] = database.db!.exec(
+      "SELECT steam_appid FROM steam_db WHERE raw_data IS NOT NULL AND raw_data != ''"
+    );
+    if (result.length === 0) return [];
+    return result[0].values.map(row => row[0] as string);
+  }
+
+  /**
+   * 更新 Steam 缓存完整数据（增量更新）
+   */
+  updateSteamDbFull(appid: string, data: Partial<SteamDbEntry>): boolean {
+    const fields: string[] = [];
+    const params: unknown[] = [];
+
+    const allowedFields = ['name', 'name_en', 'aliases', 'release_date', 'genres', 'rating',
+                           'languages', 'tags', 'raw_data', 'notes', 'source'];
+    for (const field of allowedFields) {
+      if (data[field as keyof SteamDbEntry] !== undefined) {
+        if (field === 'aliases' || field === 'genres' || field === 'languages' || field === 'tags') {
+          fields.push(`${field} = ?`);
+          params.push(JSON.stringify(data[field as keyof SteamDbEntry]));
+        } else {
+          fields.push(`${field} = ?`);
+          params.push(data[field as keyof SteamDbEntry]);
+        }
+      }
+    }
+
+    if (fields.length === 0) return false;
+
+    fields.push('updated_at = datetime("now", "localtime")');
+    params.push(appid);
+
+    database.db!.run(`UPDATE steam_db SET ${fields.join(', ')} WHERE steam_appid = ?`, params);
+    database.save();
+    return true;
   }
 
   // === 海报路径处理 ===

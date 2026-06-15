@@ -574,12 +574,12 @@ import {
   getGamePosterBackups,
   restoreGamePosterBackup,
   deleteGamePosterBackup
-} from '../api'
-import GameCard from '../components/GameCard.vue'
-import GameGroupSidebar from '../components/GameGroupSidebar.vue'
-import GameGroupManager from '../components/GameGroupManager.vue'
-import Pagination from '../components/Pagination.vue'
-import type { Game, GameStatistics, GameGroup, SteamSearchItem, PosterBackup } from '../types'
+} from '../../api'
+import GameCard from '../../components/game/GameCard.vue'
+import GameGroupSidebar from '../../components/game/GameGroupSidebar.vue'
+import GameGroupManager from '../../components/game/GameGroupManager.vue'
+import Pagination from '../../components/Pagination.vue'
+import type { Game, GameStatistics, GameGroup, SteamSearchItem, PosterBackup } from '../../types'
 
 const games = ref<Game[]>([])
 const stats = ref<GameStatistics | null>(null)
