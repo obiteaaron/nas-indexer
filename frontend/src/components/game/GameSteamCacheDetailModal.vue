@@ -12,17 +12,26 @@
           <img :src="`/static/games/steam-cache/${entry.steam_appid}/header.jpg`" alt="header" @error="onImageError" />
         </div>
         <!-- 截图列表 -->
-        <div class="screenshots-preview">
-          <img v-for="i in (entry.screenshotCount || 0)" :key="i"
+        <div class="screenshots-preview" v-if="screenshotCount > 0">
+          <img v-for="i in screenshotCount" :key="i"
             :src="`/static/games/steam-cache/${entry.steam_appid}/screenshots/${i}.jpg`"
             @error="onImageError" />
         </div>
+        <p class="no-screenshots" v-else>暂无截图</p>
         <!-- 元数据 -->
         <div class="metadata">
           <p><strong>AppID:</strong> {{ entry.steam_appid }}</p>
           <p><strong>英文名:</strong> {{ entry.name_en || '-' }}</p>
           <p><strong>发行日期:</strong> {{ entry.release_date || '-' }}</p>
           <p><strong>评分:</strong> {{ entry.rating || '-' }}</p>
+          <p><strong>图片状态:</strong>
+            <span v-if="imageStatus?.hasHeader">✅海报</span>
+            <span v-else>❌海报</span>
+            <span v-if="imageStatus?.hasCapsule">✅胶囊</span>
+            <span v-else>❌胶囊</span>
+            <span v-if="imageStatus?.hasBackground">✅背景</span>
+            <span v-else>❌背景</span>
+          </p>
         </div>
       </div>
       <div class="modal-actions">
@@ -34,16 +43,27 @@
 </template>
 
 <script setup lang="ts">
-import type { SteamCacheEntry } from '../../api';
+import { computed } from 'vue';
+import type { SteamCacheEntry, SteamCacheImageStatus } from '../../api';
 
-defineProps<{
-  entry: SteamCacheEntry;
+const props = defineProps<{
+  entry: SteamCacheEntry & {
+    imageStatus?: SteamCacheImageStatus;
+    originalUrls?: { header?: string; capsule?: string; background?: string; screenshots?: string[] };
+  };
 }>();
 
 defineEmits<{
   close: [];
   refresh: [];
 }>();
+
+// 从 imageStatus 或 entry 中获取截图数量
+const screenshotCount = computed(() => {
+  return props.entry.imageStatus?.screenshotCount || props.entry.screenshotCount || 0;
+});
+
+const imageStatus = computed(() => props.entry.imageStatus);
 
 function onImageError(e: Event): void {
   (e.target as HTMLImageElement).style.display = 'none';
@@ -105,6 +125,11 @@ function onImageError(e: Event): void {
 }
 .metadata p {
   margin: 8px 0;
+}
+.no-screenshots {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 16px;
 }
 .modal-actions {
   display: flex;
