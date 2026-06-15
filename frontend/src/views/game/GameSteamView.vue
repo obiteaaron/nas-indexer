@@ -1,6 +1,11 @@
 <!-- frontend/src/views/game/GameSteamView.vue -->
 <template>
   <div class="steam-management">
+    <!-- Toast 提示 -->
+    <div class="toast-container" v-if="showToast">
+      <div class="toast-message">{{ toastMessage }}</div>
+    </div>
+
     <h2 class="section-title">Steam 数据库管理</h2>
     <p class="hint">管理 Steam AppID 与游戏名称映射，提升刮削成功率。刷新缓存时保留已有的中文名/英文名。</p>
 
@@ -196,7 +201,7 @@ import type { SteamDbEntry } from '../../types';
 import { useGameToast } from '../../composables/game/useGameToast';
 import GameSteamCacheDetailModal from '../../components/game/GameSteamCacheDetailModal.vue';
 
-const { showNotification } = useGameToast();
+const { showNotification, showToast, toastMessage } = useGameToast();
 
 // Steam 缓存统计
 const stats = ref<SteamCacheStats | null>(null);
@@ -688,5 +693,28 @@ onMounted(() => {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+/* Toast 提示 */
+.toast-container {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+}
+.toast-message {
+  background: var(--primary);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: fadeInOut 2s ease-in-out;
+}
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(-10px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-10px); }
 }
 </style>

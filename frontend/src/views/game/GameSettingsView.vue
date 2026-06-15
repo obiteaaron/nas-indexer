@@ -1,6 +1,11 @@
 <!-- frontend/src/views/game/GameSettingsView.vue -->
 <template>
   <div class="game-settings">
+    <!-- Toast 提示 -->
+    <div class="toast-container" v-if="showToast">
+      <div class="toast-message">{{ toastMessage }}</div>
+    </div>
+
     <h2 class="section-title">游戏设置</h2>
 
     <!-- 扫描路径 -->
@@ -138,7 +143,7 @@ import { ref, computed, onMounted } from 'vue';
 import { getGamesConfig, saveGamesConfig, type GamesConfig } from '../../api';
 import { useGameToast } from '../../composables/game/useGameToast';
 
-const { showNotification } = useGameToast();
+const { showNotification, showToast, toastMessage } = useGameToast();
 
 const defaultConfig: GamesConfig = {
   gameScanPathsEnabled: false,
@@ -413,5 +418,28 @@ onMounted(() => loadConfig());
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+/* Toast 提示 */
+.toast-container {
+  position: fixed;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+}
+.toast-message {
+  background: var(--primary);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: fadeInOut 2s ease-in-out;
+}
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(-10px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-10px); }
 }
 </style>
