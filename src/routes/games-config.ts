@@ -11,7 +11,7 @@ const router: Router = Router();
 /**
  * 获取游戏配置
  */
-router.get('/', (req: Request, res: Response): void => {
+router.get('/', (_req: Request, res: Response): void => {
   try {
     const config = loadGamesConfig();
     res.json({ success: true, data: config });

@@ -5,8 +5,6 @@
 import fs from 'fs';
 import path from 'path';
 import { logger } from '../logger';
-import { loadConfig, getStoragePath } from '../utils';
-import { ensureGamesDirs } from './storage';
 
 const STEAM_CACHE_DIR = 'steam-cache';
 const SCREENSHOTS_DIR = 'screenshots';

@@ -8,9 +8,8 @@ import { gameDatabase } from './database';
 import { cleanGameName } from './name-cleaner';
 import { resolveGameNames } from './name-resolver';
 import { getStoragePath, loadConfig } from '../utils';
-import { PosterService } from './poster-service';
 import { ensureGamesDirs } from './storage';
-import { SteamCacheService, getSteamCacheDir, ensureSteamCacheDir } from './steam-cache-service';
+import { SteamCacheService } from './steam-cache-service';
 import type { Game, SteamDbEntry } from '../types';
 
 /**
@@ -184,23 +183,6 @@ async function getSteamDetails(appid: number): Promise<SteamAppDetails | null> {
   } catch (err) {
     const error = err as Error;
     logger.error('Steam 详情获取失败: appid %d - %s', appid, error.message);
-    return null;
-  }
-}
-
-/**
- * 下载图片
- */
-async function downloadImage(url: string): Promise<Buffer | null> {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) {
-      return null;
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
-  } catch (err) {
-    logger.warn('下载图片失败: %s', url);
     return null;
   }
 }

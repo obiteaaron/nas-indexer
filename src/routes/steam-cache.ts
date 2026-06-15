@@ -9,8 +9,6 @@ import { gameDatabase } from '../games/database';
 import { SteamCacheService, getSteamCacheDir } from '../games/steam-cache-service';
 import { refreshSteamCache } from '../games/scraper';
 import { loadConfig, getStoragePath, initDatabase } from '../utils';
-import { logger } from '../logger';
-import type { SteamCacheStatus, SteamCacheStats } from '../types/game';
 
 const router: Router = Router();
 
@@ -25,7 +23,7 @@ async function init(): Promise<void> {
 /**
  * 获取缓存统计
  */
-router.get('/stats', async (req: Request, res: Response): Promise<void> => {
+router.get('/stats', async (_req: Request, res: Response): Promise<void> => {
   await init();
   try {
     const config = loadConfig();
@@ -111,7 +109,7 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
 router.get('/:appid', async (req: Request, res: Response): Promise<void> => {
   await init();
   try {
-    const appid = req.params.appid;
+    const appid = req.params.appid as string;
     const entry = gameDatabase.getSteamDbByAppid(appid);
 
     if (!entry) {
@@ -126,7 +124,7 @@ router.get('/:appid', async (req: Request, res: Response): Promise<void> => {
     const status = cacheService.checkStatus(appid);
 
     // 解析 raw_data 提取图片 URL
-    let imageUrl = null;
+    let imageUrl: { header?: string; capsule?: string; background?: string; screenshots?: string[] } | undefined = undefined;
     if (entry.raw_data) {
       try {
         const rawData = JSON.parse(entry.raw_data);
@@ -159,7 +157,7 @@ router.get('/:appid', async (req: Request, res: Response): Promise<void> => {
 router.post('/:appid/refresh', async (req: Request, res: Response): Promise<void> => {
   await init();
   try {
-    const appid = req.params.appid;
+    const appid = req.params.appid as string;
     const success = await refreshSteamCache(appid);
 
     if (success) {
@@ -179,7 +177,7 @@ router.post('/:appid/refresh', async (req: Request, res: Response): Promise<void
 router.delete('/:appid', async (req: Request, res: Response): Promise<void> => {
   await init();
   try {
-    const appid = req.params.appid;
+    const appid = req.params.appid as string;
 
     // 删除数据库记录
     const entry = gameDatabase.getSteamDbByAppid(appid);
@@ -205,7 +203,7 @@ router.delete('/:appid', async (req: Request, res: Response): Promise<void> => {
 /**
  * 批量刷新所有缓存
  */
-router.post('/refresh-all', async (req: Request, res: Response): Promise<void> => {
+router.post('/refresh-all', async (_req: Request, res: Response): Promise<void> => {
   await init();
   try {
     const appids = gameDatabase.getAllSteamDbAppids();
@@ -249,7 +247,7 @@ router.post('/refresh-all', async (req: Request, res: Response): Promise<void> =
 router.get('/images/:appid', async (req: Request, res: Response): Promise<void> => {
   await init();
   try {
-    const appid = req.params.appid;
+    const appid = req.params.appid as string;
     const config = loadConfig();
     const storagePath = getStoragePath(config);
     const cacheDir = getSteamCacheDir(storagePath, appid);

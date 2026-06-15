@@ -6,7 +6,8 @@ import { gameDatabase } from '../games/database';
 import { runIdentification } from '../games/identifier';
 import { scrapeUnscrapedGames } from '../games/scraper';
 import { taskManager } from '../task-manager';
-import { initDatabase, loadConfig, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths } from '../utils';
+import { initDatabase, loadConfig } from '../utils';
+import { loadGamesConfig, getGameScanPathsFromConfig } from '../games-config';
 import type { Config, FileExtensionFilter, ScanProgressEvent } from '../types';
 
 const router: Router = express.Router();
@@ -50,14 +51,15 @@ router.post('/', async (_req: Request, res: Response): Promise<void> => {
         );
 
         // 游戏模块集成：扫描完成后识别游戏（独立目录模式下跳过，由游戏模块自行管理）
-        console.log('[扫描全部] 文件扫描完成, gamesEnabled:', config.gamesEnabled, 'gameScanPathsEnabled:', config.gameScanPathsEnabled);
-        if (config.gamesEnabled && !config.gameScanPathsEnabled) {
+        console.log('[扫描全部] 文件扫描完成, gamesEnabled:', config.gamesEnabled);
+        if (config.gamesEnabled) {
           try {
             gameDatabase.createGameTables();
 
-            const rules = config.gamesRules || DEFAULT_GAME_RULES;
-            const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
-            const gameRoots = getGameScanPaths(config);
+            const gamesConfig = loadGamesConfig();
+            const rules = gamesConfig.gamesRules;
+            const scrapeConfig = gamesConfig.gamesScrape;
+            const gameRoots = getGameScanPathsFromConfig();
 
             const staleGames = gameDatabase.deleteStaleByScanRoots(gameRoots);
             if (staleGames > 0) {
@@ -160,16 +162,17 @@ router.post('/path', async (req: Request, res: Response): Promise<void> => {
           }
         );
 
-        // 游戏模块集成：扫描完成后识别游戏（独立目录模式下跳过，由游戏模块自行管理）
-        console.log(`[单路径扫描] 文件扫描完成, scanPath: ${scanPath}, gamesEnabled: ${config.gamesEnabled}, gameScanPathsEnabled: ${config.gameScanPathsEnabled}`);
-        if (config.gamesEnabled && !config.gameScanPathsEnabled) {
+        // 游戏模块集成：扫描完成后识别游戏
+        console.log(`[单路径扫描] 文件扫描完成, scanPath: ${scanPath}, gamesEnabled: ${config.gamesEnabled}`);
+        if (config.gamesEnabled) {
           try {
             gameDatabase.createGameTables();
 
-            const rules = config.gamesRules || DEFAULT_GAME_RULES;
-            const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
-            const gameRoots = (config.gameScanPathsEnabled && config.gameScanPaths && config.gameScanPaths.length > 0)
-              ? config.gameScanPaths
+            const gamesConfig = loadGamesConfig();
+            const rules = gamesConfig.gamesRules;
+            const scrapeConfig = gamesConfig.gamesScrape;
+            const gameRoots = gamesConfig.gameScanPathsEnabled && gamesConfig.gameScanPaths.length > 0
+              ? gamesConfig.gameScanPaths
               : [scanPath];
 
             console.log('[单路径扫描] 游戏识别规则:', JSON.stringify(rules, null, 2));

@@ -12,7 +12,8 @@ import { gameDatabase } from '../games/database';
 import { scrapeGame, scrapeUnscrapedGames, searchSteamCandidates } from '../games/scraper';
 import { runIdentification } from '../games/identifier';
 import { PosterService } from '../games/poster-service';
-import { initDatabase, loadConfig, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE, getGameScanPaths, addToBlacklistPatterns } from '../utils';
+import { initDatabase, loadConfig, getStoragePath } from '../utils';
+import { loadGamesConfig, saveGamesConfig, getGameScanPathsFromConfig } from '../games-config';
 import { logger } from '../logger';
 import { taskManager } from '../task-manager';
 import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup, SteamDbEntry } from '../types';
@@ -465,7 +466,13 @@ router.post('/:id/exclude', async (req: Request, res: Response): Promise<void> =
     }
 
     // 将路径加入黑名单
-    addToBlacklistPatterns(game.source_path);
+    const gamesConfig = loadGamesConfig();
+    const normalizedPath = game.source_path.replace(/\\/g, '/');
+    if (!gamesConfig.gamesRules.blacklistPatterns.some(p => p.replace(/\\/g, '/') === normalizedPath)) {
+      gamesConfig.gamesRules.blacklistPatterns.push(game.source_path);
+      saveGamesConfig(gamesConfig);
+      logger.info('已添加黑名单路径: %s', game.source_path);
+    }
 
     // 删除游戏记录
     gameDatabase.deleteGame(gameId);
@@ -533,8 +540,7 @@ router.post('/remove-nonexistent', async (_req: Request, res: Response): Promise
 router.post('/cleanup-stale', async (_req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
-    const config = loadConfig();
-    const gameRoots = getGameScanPaths(config);
+    const gameRoots = getGameScanPathsFromConfig();
     const count = gameDatabase.deleteStaleByScanRoots(gameRoots);
     res.json({ success: true, data: { deletedCount: count } });
   } catch (err) {
@@ -891,15 +897,15 @@ router.post('/:id/open', async (req: Request, res: Response): Promise<void> => {
 router.post('/identify', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
-    const config = loadConfig();
+    const gamesConfig = loadGamesConfig();
     let { scanRoots } = req.body;
 
     if (!scanRoots || scanRoots.length === 0) {
-      scanRoots = getGameScanPaths(config);
+      scanRoots = getGameScanPathsFromConfig();
     }
 
-    const rules: GameRules = config.gamesRules || DEFAULT_GAME_RULES;
-    const scrapeConfig: GameScrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
+    const rules: GameRules = gamesConfig.gamesRules;
+    const scrapeConfig: GameScrapeConfig = gamesConfig.gamesScrape;
 
     const { games, ids } = await runIdentification(scanRoots, rules, scrapeConfig);
 
