@@ -1,5 +1,12 @@
 # 更新日志
 
+## [v1.5.6] - 2026-06-15
+
+### 技术改进
+- **游戏配置独立模块** - 游戏配置拆分为 games-config.json，支持从旧 config.json 迁移
+- **配置类型精简** - Config 类型仅保留 gamesEnabled 开关，详细配置移至 GamesConfig 类型
+- **utils.ts 导出清理** - 移除游戏配置相关导出，改用 games-config.ts 的 getGameScanPathsFromConfig
+
 ## [v1.5.6] - 2026-06-14
 
 ### 功能改进

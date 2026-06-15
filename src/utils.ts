@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import { logger } from './logger';
 import type { Config } from './types';
-import { DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from './types/game';
+import { DEFAULT_GAMES_CONFIG } from './types/games-config';
 
 const PROJECT_ROOT: string = path.join(__dirname, '..');
 const DEFAULT_STORAGE_PATH: string = path.join(PROJECT_ROOT, 'profiles');
@@ -69,10 +69,10 @@ function getDefaultConfig(): Config {
     },
     categories: ['电影/视频', '音乐/音频', '文档/资料', '软件/安装包', '图片/照片', '项目/代码', '备份/归档', '其他'],
     gamesEnabled: false,
-    gameScanPathsEnabled: false,
-    gameScanPaths: [],
-    gamesRules: DEFAULT_GAME_RULES,
-    gamesScrape: DEFAULT_GAME_SCRAPE
+    gameScanPathsEnabled: DEFAULT_GAMES_CONFIG.gameScanPathsEnabled,
+    gameScanPaths: DEFAULT_GAMES_CONFIG.gameScanPaths,
+    gamesRules: DEFAULT_GAMES_CONFIG.gamesRules,
+    gamesScrape: DEFAULT_GAMES_CONFIG.gamesScrape
   };
 
   try {
@@ -223,34 +223,10 @@ function getFileScanPaths(config: Config): string[] {
   return config.scanPaths;
 }
 
-function getGameScanPaths(config: Config): string[] {
-  if (config.gameScanPathsEnabled && config.gameScanPaths && config.gameScanPaths.length > 0) {
-    return config.gameScanPaths;
-  }
-  return config.scanPaths;
-}
-
-function addToBlacklistPatterns(pathToAdd: string): boolean {
-  const config = loadConfig();
-  if (!config.gamesRules) {
-    config.gamesRules = DEFAULT_GAME_RULES;
-  }
-  // 检查是否已存在（避免重复添加）
-  const normalizedPath = pathToAdd.replace(/\\/g, '/');
-  if (!config.gamesRules.blacklistPatterns.some(p => p.replace(/\\/g, '/') === normalizedPath)) {
-    config.gamesRules.blacklistPatterns.push(pathToAdd);
-    saveConfig(config);
-    logger.info('已添加黑名单路径: %s', pathToAdd);
-  }
-  return true;
-}
-
 export {
   PROJECT_ROOT,
   DEFAULT_STORAGE_PATH,
   DEFAULT_CONFIG_FILE,
-  DEFAULT_GAME_RULES,
-  DEFAULT_GAME_SCRAPE,
   initDatabase,
   getStoragePath,
   getStorageFilePath,
@@ -258,7 +234,5 @@ export {
   getDefaultConfig,
   loadConfig,
   saveConfig,
-  getFileScanPaths,
-  getGameScanPaths,
-  addToBlacklistPatterns
+  getFileScanPaths
 };
