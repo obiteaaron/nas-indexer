@@ -12,6 +12,14 @@
   - capsule.jpg -> vertical.jpg（竖版海报）
   - background.jpg -> background.jpg（背景图）
   - 不会覆盖已存在的海报，保持用户手动上传的海报
+- **Steam DB 数据写入修复** - insertSteamDbEntry 现正确写入 release_date、rating 等元数据字段
+- **Steam 列表即时搜索** - 输入时自动触发搜索（300ms 防抖）
+
+### 技术改进
+- **SettingsView 精简** - 移除已迁移的 Steam DB 和游戏详细配置
+  - 游戏模块仅保留 gamesEnabled 总开关
+  - Steam 数据库管理迁移至 GameSteamView
+  - 游戏详细配置迁移至 GameSettingsView
 
 ## [v1.5.6] - 2026-06-15
 

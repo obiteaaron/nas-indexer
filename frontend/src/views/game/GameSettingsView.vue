@@ -64,15 +64,22 @@
 
       <div class="rules-list">
         <label>正则规则列表</label>
+        <div class="rule-row rule-header-row">
+          <span class="rule-header-col rule-header-order">排序</span>
+          <span class="rule-header-col rule-header-pattern">正则表达式</span>
+          <span class="rule-header-col rule-header-enabled">启用</span>
+          <span class="rule-header-col rule-header-offset">层偏移</span>
+          <span class="rule-header-col rule-header-desc">说明</span>
+          <span class="rule-header-col rule-header-action">操作</span>
+        </div>
         <div class="rule-row" v-for="(rule, i) in config.gamesRules.recognitionRules" :key="i">
           <div class="rule-order">
             <button class="btn btn-small order-btn" @click="moveRuleUp(Number(i))" :disabled="i === 0">↑</button>
             <button class="btn btn-small order-btn" @click="moveRuleDown(Number(i))" :disabled="i === config.gamesRules.recognitionRules.length - 1">↓</button>
           </div>
           <input v-model="rule.pattern" type="text" class="input pattern-input" placeholder="正则表达式" />
-          <input v-model.number="rule.levelOffset" type="number" min="0" max="5" class="input small offset-input" />
-          <span class="offset-label">层偏移</span>
           <input type="checkbox" v-model="rule.enabled" class="rule-checkbox" />
+          <input v-model.number="rule.levelOffset" type="number" min="0" max="5" class="input small offset-input" />
           <input v-model="rule.description" type="text" class="input small desc-input" placeholder="说明" />
           <button class="btn btn-small btn-danger" @click="removeRecognitionRule(Number(i))">删除</button>
         </div>
@@ -314,12 +321,8 @@ onMounted(() => loadConfig());
 .input.desc-input {
   width: 120px;
 }
-.offset-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
 .rule-checkbox {
-  margin: 0 8px;
+  margin: 0;
 }
 .priority-info {
   margin-bottom: 16px;
@@ -343,6 +346,35 @@ onMounted(() => loadConfig());
   font-size: 14px;
   margin-bottom: 8px;
   display: block;
+}
+.rule-header-row {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.rule-header-col {
+  text-align: center;
+}
+.rule-header-order {
+  width: 52px;
+}
+.rule-header-pattern {
+  flex: 1;
+  text-align: left;
+}
+.rule-header-enabled {
+  width: 32px;
+}
+.rule-header-offset {
+  width: 68px;
+}
+.rule-header-desc {
+  width: 128px;
+}
+.rule-header-action {
+  width: 52px;
 }
 .rule-row {
   display: flex;

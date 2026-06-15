@@ -41,7 +41,7 @@
 
     <!-- 搜索栏 -->
     <div class="filter-bar">
-      <input class="input" v-model="steamDbSearch" placeholder="搜索 AppID 或名称" @keyup.enter="handleSearch" />
+      <input class="input" v-model="steamDbSearch" placeholder="搜索 AppID 或名称" @input="debouncedSearch" />
       <button class="btn btn-secondary btn-small" @click="handleSearch">搜索</button>
       <span class="count-info">共 {{ steamDbTotal }} 条记录</span>
     </div>
@@ -214,6 +214,7 @@ const steamDbPage = ref(1);
 const steamDbPageSize = ref(20);
 const steamDbTotal = ref(0);
 const steamDbTotalPages = computed(() => Math.ceil(steamDbTotal.value / steamDbPageSize.value));
+let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // 详情弹窗
 const selectedEntry = ref<SteamCacheEntry | null>(null);
@@ -262,6 +263,16 @@ async function loadSteamDbList(): Promise<void> {
 function handleSearch(): void {
   steamDbPage.value = 1;
   loadSteamDbList();
+}
+
+// 防抖搜索（即时触发）
+function debouncedSearch(): void {
+  if (searchTimeout) {
+    clearTimeout(searchTimeout);
+  }
+  searchTimeout = setTimeout(() => {
+    handleSearch();
+  }, 300);
 }
 
 // 打开添加模态框
@@ -515,6 +526,7 @@ onMounted(() => {
 .count-info {
   color: var(--text-secondary);
   font-size: 14px;
+  white-space: nowrap;
 }
 .steam-db-table {
   display: flex;
