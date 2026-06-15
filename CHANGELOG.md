@@ -2,6 +2,13 @@
 
 ## [v1.5.6] - 2026-06-15
 
+### 新增功能
+- **Steam 缓存图片管理服务** - 新增 steam-cache-service.ts，支持按 AppID 存储图片缓存
+  - 支持下载 header/capsule/background/poster 等多种类型图片
+  - 支持截图批量下载和增量补齐
+  - 支持缓存完整性检查和统计
+  - 支持缓存删除和清理
+
 ### 技术改进
 - **游戏配置独立模块** - 游戏配置拆分为 games-config.json，支持从旧 config.json 迁移
 - **配置类型精简** - Config 类型仅保留 gamesEnabled 开关，详细配置移至 GamesConfig 类型
