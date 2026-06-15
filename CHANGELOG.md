@@ -11,6 +11,9 @@
   - DELETE /:appid - 删除单个缓存
   - POST /refresh-all - 批量刷新所有缓存（SSE 流式响应）
   - GET /images/:appid - 获取缓存图片列表
+- **游戏配置 API** - 新增 /api/games-config 路由，管理独立游戏配置
+  - GET / - 获取游戏配置（games-config.json）
+  - PUT / - 保存游戏配置
 - **Steam 缓存图片管理服务** - 新增 steam-cache-service.ts，支持按 AppID 存储图片缓存
   - 支持下载 header/capsule/background/poster 等多种类型图片
   - 支持截图批量下载和增量补齐
