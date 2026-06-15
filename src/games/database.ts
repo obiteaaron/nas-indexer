@@ -909,7 +909,8 @@ class GameDatabase {
    * 插入 Steam DB 条目
    */
   insertSteamDbEntry(data: Partial<SteamDbEntry>): number {
-    const { steam_appid, name, name_en = null, aliases = [], notes = null, source = 'manual' } = data;
+    const { steam_appid, name, name_en = null, aliases = [], notes = null, source = 'manual',
+            release_date = null, genres = null, rating = null, languages = null, raw_data = null } = data;
 
     if (!steam_appid || !name) {
       logger.warn('插入 Steam DB 失败: 缺少 steam_appid 或 name');
@@ -918,8 +919,11 @@ class GameDatabase {
 
     try {
       database.db!.run(
-        'INSERT OR REPLACE INTO steam_db (steam_appid, name, name_en, aliases, notes, source, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime("now", "localtime"))',
-        [steam_appid, name, name_en, JSON.stringify(aliases), notes, source]
+        `INSERT OR REPLACE INTO steam_db
+         (steam_appid, name, name_en, aliases, notes, source, release_date, genres, rating, languages, raw_data, scraped_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime("now", "localtime"), datetime("now", "localtime"))`,
+        [steam_appid, name, name_en, JSON.stringify(aliases), notes, source,
+         release_date, genres, rating, languages, raw_data]
       );
       database.save();
 

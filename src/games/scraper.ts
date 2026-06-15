@@ -2,14 +2,16 @@
  * Steam 刮削模块
  */
 
+import fs from 'fs';
+import path from 'path';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { logger } from '../logger';
 import { gameDatabase } from './database';
 import { cleanGameName } from './name-cleaner';
 import { resolveGameNames } from './name-resolver';
 import { getStoragePath, loadConfig } from '../utils';
-import { ensureGamesDirs } from './storage';
-import { SteamCacheService } from './steam-cache-service';
+import { ensureGamesDirs, ensurePosterDir, getPosterPath } from './storage';
+import { SteamCacheService, getSteamCacheDir } from './steam-cache-service';
 import type { Game, SteamDbEntry } from '../types';
 
 /**
@@ -188,6 +190,42 @@ async function getSteamDetails(appid: number): Promise<SteamAppDetails | null> {
 }
 
 /**
+ * 将 Steam 缓存图片复制到游戏海报目录
+ * steam-cache/{appid}/ -> posters/{gameId}/
+ */
+function copySteamCacheToPosters(storagePath: string, appid: string, gameId: number): void {
+  const cacheDir = getSteamCacheDir(storagePath, appid);
+  if (!fs.existsSync(cacheDir)) {
+    logger.warn('Steam 缓存目录不存在，无法复制海报: appid %s', appid);
+    return;
+  }
+
+  ensurePosterDir(storagePath, gameId);
+
+  // 图片映射: steam-cache 文件名 -> posters 文件名
+  const imageMap: Record<string, string> = {
+    'header.jpg': 'horizontal.jpg',    // 横版海报
+    'capsule.jpg': 'vertical.jpg',     // 竖版海报 (capsule)
+    'background.jpg': 'background.jpg' // 背景图
+  };
+
+  for (const [cacheFile, posterFile] of Object.entries(imageMap)) {
+    const cachePath = path.join(cacheDir, cacheFile);
+    const posterPath = getPosterPath(storagePath, gameId, posterFile.replace('.jpg', '') as 'horizontal' | 'vertical' | 'banner' | 'background');
+
+    if (fs.existsSync(cachePath)) {
+      // 只有目标不存在时才复制，避免覆盖用户手动上传的海报
+      if (!fs.existsSync(posterPath)) {
+        fs.copyFileSync(cachePath, posterPath);
+        logger.info('复制 Steam 缓存海报: %s -> gameId=%d %s', cacheFile, gameId, posterFile);
+      } else {
+        logger.debug('海报已存在，跳过复制: gameId=%d %s', gameId, posterFile);
+      }
+    }
+  }
+}
+
+/**
  * 刮削单个游戏（本地优先）
  */
 export async function scrapeGame(gameId: number, downloadPosters: boolean = true): Promise<Game | null> {
@@ -235,6 +273,8 @@ export async function scrapeGame(gameId: number, downloadPosters: boolean = true
           background: rawData.background,
           screenshots: rawData.screenshots?.map(s => s.path_full)
         });
+        // 复制 Steam 缓存图片到游戏海报目录
+        copySteamCacheToPosters(storagePath, appidStr, gameId);
       }
     } catch (err) {
       logger.warn('解析缓存数据失败，将重新刮削: appid %d', appid);
@@ -313,6 +353,8 @@ async function scrapeFromRemote(game: Game, appid: number, downloadPosters: bool
       background: background,
       screenshots: screenshots
     });
+    // 复制 Steam 缓存图片到游戏海报目录
+    copySteamCacheToPosters(storagePath, appidStr, game.id!);
   }
 
   // 更新 games 表
