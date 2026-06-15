@@ -78,6 +78,7 @@
           <span v-else class="status-error">❌元数据</span>
         </span>
         <span class="col-actions">
+          <button class="btn btn-secondary btn-small" @click="showDetail(entry)">详情</button>
           <button class="btn btn-secondary btn-small" @click="openEditModal(entry)">编辑</button>
           <button class="btn btn-secondary btn-small" @click="refreshSingle(entry.steam_appid)">刷新</button>
           <button class="btn btn-danger btn-small" @click="deleteConfirm(entry)">删除</button>
@@ -162,6 +163,14 @@
         </div>
       </div>
     </div>
+
+    <!-- 详情弹窗 -->
+    <GameSteamCacheDetailModal
+      v-if="selectedEntry"
+      :entry="selectedEntry"
+      @close="closeDetail"
+      @refresh="refreshFromDetail(selectedEntry.steam_appid)"
+    />
   </div>
 </template>
 
@@ -174,6 +183,7 @@ import {
   deleteSteamCache,
   refreshAllSteamCache,
   getSteamDbEntries,
+  getSteamCacheDetail,
   createSteamDbEntry,
   updateSteamDbEntry,
   deleteSteamDbEntry as deleteSteamDbEntryApi,
@@ -184,6 +194,7 @@ import {
 } from '../../api';
 import type { SteamDbEntry } from '../../types';
 import { useGameToast } from '../../composables/game/useGameToast';
+import GameSteamCacheDetailModal from '../../components/game/GameSteamCacheDetailModal.vue';
 
 const { showNotification } = useGameToast();
 
@@ -198,6 +209,10 @@ const steamDbPage = ref(1);
 const steamDbPageSize = ref(20);
 const steamDbTotal = ref(0);
 const steamDbTotalPages = computed(() => Math.ceil(steamDbTotal.value / steamDbPageSize.value));
+
+// 详情弹窗
+const selectedEntry = ref<SteamCacheEntry | null>(null);
+const detailLoading = ref(false);
 
 // 编辑模态框
 const showEditModal = ref(false);
@@ -336,6 +351,39 @@ async function refreshSingle(appid: string): Promise<void> {
     loadStats();
   } else {
     showNotification('刷新失败');
+  }
+}
+
+// 显示详情弹窗
+async function showDetail(entry: SteamCacheEntry): Promise<void> {
+  detailLoading.value = true;
+  try {
+    const res = await getSteamCacheDetail(entry.steam_appid);
+    if (res.success && res.data) {
+      selectedEntry.value = res.data;
+    } else {
+      showNotification('获取详情失败');
+    }
+  } catch (err) {
+    showNotification('获取详情失败');
+  }
+  detailLoading.value = false;
+}
+
+// 关闭详情弹窗
+function closeDetail(): void {
+  selectedEntry.value = null;
+}
+
+// 从详情弹窗刷新
+async function refreshFromDetail(appid: string): Promise<void> {
+  await refreshSingle(appid);
+  // 重新获取详情
+  if (selectedEntry.value) {
+    const res = await getSteamCacheDetail(appid);
+    if (res.success && res.data) {
+      selectedEntry.value = res.data;
+    }
   }
 }
 
