@@ -641,6 +641,7 @@ export interface SteamCacheEntry {
   languages?: string;
   tags?: string;
   source?: string;
+  notes?: string;
   scraped_at?: string;
   cacheStatus?: 'complete' | 'missing_images' | 'metadata_only';
   hasHeader?: boolean;

@@ -364,6 +364,7 @@ function extractMetadataFromRawData(rawData: any, game: Game): Partial<Game> {
 
 /**
  * 强制刷新 Steam 缓存（手动触发）
+ * 刷新时保留已有的中文名/英文名，只更新元数据和图片
  */
 export async function refreshSteamCache(appid: string): Promise<boolean> {
   const details = await getSteamDetails(parseInt(appid));
@@ -378,14 +379,14 @@ export async function refreshSteamCache(appid: string): Promise<boolean> {
   const existing = gameDatabase.getSteamDbByAppid(appid);
   const steamName = data.name;
 
-  const resolved = existing
-    ? resolveGameNames(steamName, '', existing.aliases || [])
-    : { name: steamName, nameEn: undefined, aliases: [] };
-
+  // 刷新策略：保留已有的 name 和 name_en，只更新元数据
+  // 如果 existing 不存在或 name/name_en 为空，则使用 resolveGameNames 计算
   const cacheData: Partial<SteamDbEntry> = {
-    name: resolved.name,
-    name_en: resolved.nameEn,
-    aliases: resolved.aliases,
+    // 保留已有的名称（不覆盖）
+    name: existing?.name || undefined,
+    name_en: existing?.name_en || undefined,
+    aliases: existing?.aliases || [],
+    // 更新元数据
     release_date: data.release_date?.date,
     genres: data.genres ? JSON.stringify(data.genres.map(g => g.description)) : undefined,
     rating: data.metacritic?.score,
@@ -395,13 +396,18 @@ export async function refreshSteamCache(appid: string): Promise<boolean> {
     scraped_at: new Date().toISOString()
   };
 
-  if (existing) {
-    gameDatabase.updateSteamDbFull(appid, cacheData);
-  } else {
+  // 如果是新条目，需要解析名称
+  if (!existing) {
+    const resolved = resolveGameNames(steamName, '', []);
+    cacheData.name = resolved.name;
+    cacheData.name_en = resolved.nameEn;
+    cacheData.aliases = resolved.aliases;
     gameDatabase.insertSteamDbEntry({
       steam_appid: appid,
       ...cacheData
     });
+  } else {
+    gameDatabase.updateSteamDbFull(appid, cacheData);
   }
 
   // 增量下载图片
