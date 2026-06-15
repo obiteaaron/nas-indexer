@@ -50,7 +50,7 @@ body {
   height: 60px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;  /* 居中整体内容 */
   position: sticky;
   top: 0;
   z-index: 100;
@@ -60,6 +60,8 @@ body {
   display: flex;
   align-items: center;
   gap: 32px;
+  flex: 1;
+  justify-content: center;  /* 居中 logo 和 nav */
 }
 
 .logo {
@@ -71,6 +73,7 @@ body {
 .nav {
   display: flex;
   gap: 8px;
+  justify-content: center;  /* 居中 nav 按钮 */
 }
 
 .nav-link {
@@ -95,6 +98,8 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
+  position: absolute;
+  right: 24px;  /* 固定在右边 */
 }
 
 .header-right .status {

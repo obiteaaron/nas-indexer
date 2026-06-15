@@ -253,7 +253,7 @@ onMounted(() => loadConfig());
 <style scoped>
 .game-settings {
   padding: 24px;
-  max-width: 800px;
+  width: 100%;  /* 占满宽度 */
 }
 .section-title {
   font-size: 24px;

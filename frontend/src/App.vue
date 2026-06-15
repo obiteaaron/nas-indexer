@@ -138,6 +138,7 @@ onUnmounted(() => {
   padding: 8px 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+  justify-content: center;  /* 居中子导航 */
 }
 
 .subnav-link {

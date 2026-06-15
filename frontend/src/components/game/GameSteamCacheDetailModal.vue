@@ -83,10 +83,11 @@ function onImageError(e: Event): void {
 .modal-content {
   background: var(--bg-card);
   border-radius: 12px;
-  max-width: 600px;
   width: 90%;
+  max-width: 800px;  /* 加宽 */
   max-height: 90vh;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 .modal-header {
   display: flex;
@@ -102,23 +103,28 @@ function onImageError(e: Event): void {
 }
 .modal-body {
   padding: 24px;
+  overflow-y: auto;  /* body 可滚动 */
+  flex: 1;
 }
 .poster-preview img {
   width: 100%;
-  max-height: 200px;
+  max-height: 250px;  /* 加大海报高度 */
   object-fit: cover;
   border-radius: 8px;
 }
 .screenshots-preview {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   margin-top: 16px;
+  overflow-x: auto;  /* 截图区域横向滚动 */
+  padding: 8px 0;
 }
 .screenshots-preview img {
-  width: 120px;
-  height: 60px;
+  width: 160px;
+  height: 90px;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 8px;
+  flex-shrink: 0;  /* 不压缩 */
 }
 .metadata {
   margin-top: 16px;

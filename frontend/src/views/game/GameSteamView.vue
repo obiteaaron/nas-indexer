@@ -543,17 +543,18 @@ onMounted(() => {
 .col-name-en { width: 150px; }
 .col-aliases { width: 150px; }
 .col-status { width: 80px; }
-.col-actions { width: 180px; display: flex; gap: 8px; }
-.steam-link {
-  color: var(--primary);
-  text-decoration: none;
+.col-actions {
+  width: 240px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;  /* 允许换行但不影响布局 */
 }
-.steam-link:hover {
-  text-decoration: underline;
+.action-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;  /* 允许换行 */
 }
-.alias-tag {
-  display: inline-block;
-  padding: 2px 6px;
   background: var(--bg-secondary);
   border-radius: 4px;
   font-size: 12px;
@@ -687,8 +688,9 @@ onMounted(() => {
   border-color: #ef4444;
 }
 .btn-small {
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: 6px 12px;
+  font-size: 13px;
+  white-space: nowrap;  /* 防止换行 */
 }
 .btn:disabled {
   opacity: 0.5;
