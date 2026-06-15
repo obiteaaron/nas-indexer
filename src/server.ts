@@ -1,6 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import cron from 'node-cron';
 import { performScanWithDatabase } from './scanner';
 import { database } from './database';
@@ -8,7 +9,8 @@ import { gameDatabase } from './games/database';
 import { runIdentification } from './games/identifier';
 import { scrapeUnscrapedGames, initProxy } from './games/scraper';
 import { logger } from './logger';
-import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir, getStoragePath, DEFAULT_GAME_RULES, DEFAULT_GAME_SCRAPE } from './utils';
+import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir, getStoragePath } from './utils';
+import { DEFAULT_GAMES_CONFIG } from './types/games-config';
 import { ensureGamesDirs } from './games/storage';
 import type { Config, FileExtensionFilter, ScanProgressEvent } from './types';
 
@@ -22,6 +24,8 @@ import recommendationsRouter from './routes/recommendations';
 import trackingRouter from './routes/tracking';
 import gamesRouter from './routes/games';
 import { router as statsRouter, setScanJob } from './routes/stats';
+import steamCacheRouter from './routes/steam-cache';
+import gamesConfigRouter from './routes/games-config';
 
 const app = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
@@ -58,8 +62,8 @@ async function runScan(config: Config, onProgress: ((event: ScanProgressEvent) =
       try {
         gameDatabase.createGameTables();
 
-        const rules = config.gamesRules || DEFAULT_GAME_RULES;
-        const scrapeConfig = config.gamesScrape || DEFAULT_GAME_SCRAPE;
+        const rules = config.gamesRules || DEFAULT_GAMES_CONFIG.gamesRules;
+        const scrapeConfig = config.gamesScrape || DEFAULT_GAMES_CONFIG.gamesScrape;
 
         if (onProgress) {
           onProgress({
@@ -134,10 +138,24 @@ app.use('/api/preview', previewRouter);
 app.use('/api/recommendations', recommendationsRouter);
 app.use('/api/tracking', trackingRouter);
 app.use('/api/stats', statsRouter);
+app.use('/api/steam-cache', steamCacheRouter);
+app.use('/api/games-config', gamesConfigRouter);
 
 // Static files - serve Vue frontend
 const frontendPath: string = path.join(PROJECT_ROOT, 'frontend', 'dist');
 app.use(express.static(frontendPath));
+
+// Steam 缓存图片静态服务（延迟初始化）
+app.use('/static/games', (req: Request, res: Response, next: NextFunction) => {
+  const config = loadConfig();
+  const storagePath = getStoragePath(config);
+  const gamesPath = path.join(storagePath, 'games');
+  if (fs.existsSync(gamesPath)) {
+    express.static(gamesPath)(req, res, next);
+  } else {
+    next();
+  }
+});
 app.get('*', (req: Request, res: Response, next: NextFunction) => {
   if (req.path.startsWith('/api/')) {
     return next();
