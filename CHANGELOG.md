@@ -3,6 +3,14 @@
 ## [v1.5.6] - 2026-06-15
 
 ### 新增功能
+- **Steam 缓存管理 API** - 新增 /api/steam-cache 路由，提供缓存管理接口
+  - GET /stats - 获取缓存统计（条目数、图片数、总大小）
+  - GET /list - 分页获取缓存列表（含图片状态）
+  - GET /:appid - 获取单个缓存详情
+  - POST /:appid/refresh - 强制刷新单个缓存
+  - DELETE /:appid - 删除单个缓存
+  - POST /refresh-all - 批量刷新所有缓存（SSE 流式响应）
+  - GET /images/:appid - 获取缓存图片列表
 - **Steam 缓存图片管理服务** - 新增 steam-cache-service.ts，支持按 AppID 存储图片缓存
   - 支持下载 header/capsule/background/poster 等多种类型图片
   - 支持截图批量下载和增量补齐
