@@ -617,3 +617,111 @@ export function importSteamDb(entries: SteamDbEntry[], mode: 'merge' | 'overwrit
 export function lookupSteamDbByName(name: string): Promise<ApiResponse<{ steam_appid: string; name: string } | null>> {
   return request<{ steam_appid: string; name: string } | null>('/games/steam-db/lookup?name=' + encodeURIComponent(name))
 }
+
+// === Steam 缓存 API ===
+
+export interface SteamCacheStats {
+  totalEntries: number;
+  completeEntries: number;
+  missingImagesEntries: number;
+  totalPosters: number;
+  totalScreenshots: number;
+  totalSizeMB: number;
+}
+
+export interface SteamCacheEntry {
+  id?: number;
+  steam_appid: string;
+  name: string;
+  name_en?: string;
+  aliases?: string[];
+  release_date?: string;
+  genres?: string;
+  rating?: number;
+  languages?: string;
+  tags?: string;
+  source?: string;
+  scraped_at?: string;
+  cacheStatus?: 'complete' | 'missing_images' | 'metadata_only';
+  hasHeader?: boolean;
+  hasCapsule?: boolean;
+  hasBackground?: boolean;
+  screenshotCount?: number;
+}
+
+export interface SteamCacheImageStatus {
+  hasHeader: boolean;
+  hasCapsule: boolean;
+  hasBackground: boolean;
+  screenshotCount: number;
+}
+
+export function getSteamCacheStats(): Promise<ApiResponse<SteamCacheStats>> {
+  return request<SteamCacheStats>('/steam-cache/stats');
+}
+
+export function getSteamCacheList(params?: { search?: string; page?: number; pageSize?: number }): Promise<ApiResponse<{
+  entries: SteamCacheEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}>> {
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.pageSize) query.set('pageSize', String(params.pageSize));
+  return request(`/steam-cache/list?${query.toString()}`);
+}
+
+export function getSteamCacheDetail(appid: string): Promise<ApiResponse<SteamCacheEntry & {
+  imageStatus: SteamCacheImageStatus;
+  originalUrls?: { header?: string; capsule?: string; background?: string; screenshots?: string[] };
+}>> {
+  return request(`/steam-cache/${appid}`);
+}
+
+export function refreshSteamCache(appid: string): Promise<ApiResponse<void>> {
+  return request(`/steam-cache/${appid}/refresh`, { method: 'POST' });
+}
+
+export function deleteSteamCache(appid: string): Promise<ApiResponse<void>> {
+  return request(`/steam-cache/${appid}`, { method: 'DELETE' });
+}
+
+export function refreshAllSteamCache(): Promise<void> {
+  // SSE 流式响应
+  return new Promise((resolve) => {
+    const eventSource = new EventSource('/api/steam-cache/refresh-all');
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.done) {
+        eventSource.close();
+        resolve();
+      }
+    };
+    eventSource.onerror = () => {
+      eventSource.close();
+      resolve();
+    };
+  });
+}
+
+// === 游戏配置 API ===
+
+export interface GamesConfig {
+  gameScanPathsEnabled: boolean;
+  gameScanPaths: string[];
+  gamesRules: any;
+  gamesScrape: any;
+  maxPosterBackups: number;
+  proxyUrl: string;
+}
+
+export function getGamesConfig(): Promise<ApiResponse<GamesConfig>> {
+  return request<GamesConfig>('/games-config');
+}
+
+export function saveGamesConfig(config: Partial<GamesConfig>): Promise<ApiResponse<GamesConfig>> {
+  return request<GamesConfig>('/games-config', { method: 'PUT', body: JSON.stringify(config) });
+}

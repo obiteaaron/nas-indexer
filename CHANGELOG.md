@@ -14,6 +14,10 @@
 - **游戏配置 API** - 新增 /api/games-config 路由，管理独立游戏配置
   - GET / - 获取游戏配置（games-config.json）
   - PUT / - 保存游戏配置
+- **前端 API 扩展** - frontend/src/api/index.ts 新增 Steam 缓存和游戏配置 API 函数
+  - getSteamCacheStats、getSteamCacheList、getSteamCacheDetail、refreshSteamCache
+  - deleteSteamCache、refreshAllSteamCache
+  - getGamesConfig、saveGamesConfig
 - **Steam 缓存图片管理服务** - 新增 steam-cache-service.ts，支持按 AppID 存储图片缓存
   - 支持下载 header/capsule/background/poster 等多种类型图片
   - 支持截图批量下载和增量补齐
