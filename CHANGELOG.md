@@ -30,6 +30,11 @@
   - Steam API 完整返回存入 raw_data 字段
 
 ### 技术改进
+- **前端目录重构** - 游戏模块文件移至 game/ 子目录
+  - views/game/GameWallView.vue
+  - components/game/GameCard.vue, GameGroupSidebar.vue, GameGroupManager.vue
+  - composables/game/ 目录创建
+  - router/index.ts 和 GameWallView.vue 导入路径更新
 - **游戏配置独立模块** - 游戏配置拆分为 games-config.json，支持从旧 config.json 迁移
 - **配置类型精简** - Config 类型仅保留 gamesEnabled 开关，详细配置移至 GamesConfig 类型
 - **utils.ts 导出清理** - 移除游戏配置相关导出，改用 games-config.ts 的 getGameScanPathsFromConfig
