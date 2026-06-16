@@ -37,6 +37,7 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
+  min-width: 1400px;
 }
 
 .app {
@@ -359,25 +360,6 @@ body {
 .stat-label {
   color: var(--text-muted);
   font-size: 14px;
-}
-
-@media (max-width: 768px) {
-  .header-left {
-    gap: 16px;
-  }
-  
-  .nav {
-    gap: 4px;
-  }
-  
-  .nav-link {
-    padding: 6px 12px;
-    font-size: 14px;
-  }
-  
-  .main {
-    padding: 16px;
-  }
 }
 
 ::-webkit-scrollbar {

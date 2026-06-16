@@ -358,12 +358,4 @@ onBeforeUnmount(() => {
   background: var(--border) !important;
 }
 
-@media (max-width: 768px) {
-  .game-group-sidebar {
-    width: 100%;
-    min-width: unset;
-    max-height: none;
-    position: static;
-  }
-}
 </style>
