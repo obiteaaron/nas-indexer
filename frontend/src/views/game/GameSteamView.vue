@@ -62,12 +62,12 @@
             {{ entry.steam_appid }}
           </a>
         </span>
-        <span class="col-name">
+        <span class="col-name" :title="entry.name">
           <a :href="`https://store.steampowered.com/app/${entry.steam_appid}`" target="_blank" class="steam-link">
             {{ entry.name }}
           </a>
         </span>
-        <span class="col-name-en">
+        <span class="col-name-en" :title="entry.name_en || ''">
           <a v-if="entry.name_en" :href="`https://store.steampowered.com/app/${entry.steam_appid}`" target="_blank" class="steam-link">
             {{ entry.name_en }}
           </a>
@@ -75,7 +75,7 @@
         </span>
         <span class="col-aliases">
           <span class="alias-tag" v-for="(alias, i) in ((entry.aliases || []) as string[]).slice(0, 3)" :key="i">{{ alias }}</span>
-          <span class="alias-more" v-if="(entry.aliases || []).length > 3">+{{ (entry.aliases || []).length - 3 }}</span>
+          <span class="alias-more" v-if="(entry.aliases || []).length > 3" :title="(entry.aliases || []).slice(3).join('\n')">+{{ (entry.aliases || []).length - 3 }}</span>
         </span>
         <span class="col-status">
           <span v-if="entry.cacheStatus === 'complete'" class="status-complete">✅完整</span>
@@ -554,15 +554,15 @@ onMounted(() => {
   font-weight: 600;
 }
 .col-appid { width: 100px; }
-.col-name { flex: 1; }
-.col-name-en { width: 150px; }
-.col-aliases { width: 150px; }
+.col-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-name-en { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-aliases { flex: 1; overflow: hidden; }
 .col-status { width: 80px; }
 .col-actions {
-  width: 240px;
+  width: 260px;
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;  /* 允许换行但不影响布局 */
+  justify-content: flex-end;
 }
 .action-bar {
   display: flex;
