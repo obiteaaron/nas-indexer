@@ -34,12 +34,8 @@
       <button class="btn btn-primary btn-small" @click="openAddModal">添加记录</button>
       <button class="btn btn-secondary btn-small" @click="showImportModal = true">导入 JSON</button>
       <button class="btn btn-secondary btn-small" @click="handleExport" :disabled="steamDbTotal === 0">导出 JSON</button>
-      <button class="btn btn-secondary btn-small" @click="refreshAll" :disabled="refreshing">
-        {{ refreshing ? `刷新中 ${refreshProgress.current}/${refreshProgress.total}...` : '刷新所有缓存' }}
-      </button>
-      <button class="btn btn-secondary btn-small" @click="refreshMissing" :disabled="refreshing">
-        {{ refreshing ? `刷新中 ${refreshProgress.current}/${refreshProgress.total}...` : '刷新缺失元数据' }}
-      </button>
+      <button class="btn btn-secondary btn-small" @click="refreshAll" :disabled="refreshing">刷新所有缓存</button>
+      <button class="btn btn-secondary btn-small" @click="refreshMissing" :disabled="refreshing">刷新缺失元数据</button>
     </div>
 
     <!-- 搜索栏 -->
@@ -407,31 +403,31 @@ async function refreshFromDetail(appid: string): Promise<void> {
 }
 
 // 刷新所有缓存
-const refreshProgress = ref({ current: 0, total: 0, appid: '' });
-
 async function refreshAll(): Promise<void> {
-  refreshing.value = true;
-  refreshProgress.value = { current: 0, total: 0, appid: '' };
-  await refreshAllSteamCache((current, total, appid, success) => {
-    refreshProgress.value = { current, total, appid };
-  });
-  refreshing.value = false;
-  showNotification('全部缓存刷新完成');
-  loadSteamDbList();
-  loadStats();
+  try {
+    const res = await refreshAllSteamCache()
+    if (res.success) {
+      showNotification('刷新任务已启动，请查看任务状态')
+    } else {
+      showNotification(res.error || '启动失败')
+    }
+  } catch (err) {
+    showNotification('启动刷新任务失败')
+  }
 }
 
 // 刷新缺失元数据
 async function refreshMissing(): Promise<void> {
-  refreshing.value = true;
-  refreshProgress.value = { current: 0, total: 0, appid: '' };
-  await refreshMissingSteamCache((current, total, appid, success) => {
-    refreshProgress.value = { current, total, appid };
-  });
-  refreshing.value = false;
-  showNotification('缺失元数据刷新完成');
-  loadSteamDbList();
-  loadStats();
+  try {
+    const res = await refreshMissingSteamCache()
+    if (res.success) {
+      showNotification('刷新任务已启动，请查看任务状态')
+    } else {
+      showNotification(res.error || '启动失败')
+    }
+  } catch (err) {
+    showNotification('启动刷新任务失败')
+  }
 }
 
 // 导出 JSON（下载文件）

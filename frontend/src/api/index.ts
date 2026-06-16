@@ -681,44 +681,14 @@ export function deleteSteamCache(appid: string): Promise<ApiResponse<void>> {
   return request(`/steam-cache/${appid}`, { method: 'DELETE' });
 }
 
-export function refreshAllSteamCache(onProgress?: (current: number, total: number, appid: string, success: boolean) => void): Promise<void> {
-  // SSE 流式响应（EventSource 只支持 GET）
-  return new Promise((resolve) => {
-    const eventSource = new EventSource('/api/steam-cache/refresh-all');
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.done) {
-        eventSource.close();
-        resolve();
-      } else if (onProgress) {
-        onProgress(data.current, data.total, data.appid, data.success);
-      }
-    };
-    eventSource.onerror = () => {
-      eventSource.close();
-      resolve();
-    };
-  });
+export function refreshAllSteamCache(): Promise<ApiResponse<{ taskId: string | null }>> {
+  clearCache('/steam-cache')
+  return request<{ taskId: string | null }>('/steam-cache/refresh-all', { method: 'POST' })
 }
 
-export function refreshMissingSteamCache(onProgress?: (current: number, total: number, appid: string, success: boolean) => void): Promise<void> {
-  // SSE 流式响应（EventSource 只支持 GET）
-  return new Promise((resolve) => {
-    const eventSource = new EventSource('/api/steam-cache/refresh-missing');
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.done) {
-        eventSource.close();
-        resolve();
-      } else if (onProgress) {
-        onProgress(data.current, data.total, data.appid, data.success);
-      }
-    };
-    eventSource.onerror = () => {
-      eventSource.close();
-      resolve();
-    };
-  });
+export function refreshMissingSteamCache(): Promise<ApiResponse<{ taskId: string | null }>> {
+  clearCache('/steam-cache')
+  return request<{ taskId: string | null }>('/steam-cache/refresh-missing', { method: 'POST' })
 }
 
 // === 游戏配置 API ===

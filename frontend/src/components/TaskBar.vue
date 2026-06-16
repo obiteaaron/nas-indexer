@@ -59,7 +59,9 @@ const statusText: Record<Task['status'], string> = {
 const taskTypeLabels: Record<string, string> = {
   scan: '扫描全部',
   'single-scan': '单路径扫描',
-  'game-scrape': '批量刮削'
+  'game-scrape': '批量刮削',
+  'steam-refresh': '刷新所有缓存',
+  'steam-refresh-missing': '刷新缺失元数据'
 }
 
 function getTaskTypeLabel(type: string): string {
@@ -67,8 +69,8 @@ function getTaskTypeLabel(type: string): string {
 }
 
 function getTaskResult(task: Task): string {
-  if (task.type === 'game-scrape') {
-    return task.message || '刮削完成'
+  if (task.type === 'game-scrape' || task.type === 'steam-refresh' || task.type === 'steam-refresh-missing') {
+    return task.message || '刷新完成'
   }
   const totalFiles = task.result?.totalFiles || 0
   const totalSize = task.result?.totalSize || ''

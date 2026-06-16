@@ -10,6 +10,7 @@ import { SteamCacheService, getSteamCacheDir } from '../games/steam-cache-servic
 import { refreshSteamCache } from '../games/scraper';
 import { loadConfig, getStoragePath, initDatabase } from '../utils';
 import { logger } from '../logger';
+import { taskManager } from '../task-manager';
 import type { SteamDbEntry } from '../types';
 
 const router: Router = Router();
@@ -144,123 +145,112 @@ router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
- * 批量刷新所有缓存（必须在 /:appid 之前，使用 GET 因为 EventSource 只支持 GET）
- * 客户端断开后仍继续后台执行
+ * 批量刷新所有缓存（使用任务系统，进度由 TaskBar 显示）
  */
-router.get('/refresh-all', async (req: Request, res: Response): Promise<void> => {
+router.post('/refresh-all', async (_req: Request, res: Response): Promise<void> => {
   await init();
   try {
-    const appids = gameDatabase.getAllSteamDbAppids();
-
-    if (appids.length === 0) {
-      res.json({ success: true, message: '无缓存需要刷新' });
+    // 检查是否有正在运行的刷新任务
+    if (taskManager.hasRunningTask('steam-refresh') || taskManager.hasRunningTask('steam-refresh-missing')) {
+      res.status(409).json({ success: false, error: '已有刷新任务正在执行' });
       return;
     }
 
-    // 监听客户端断开事件
-    let clientDisconnected = false;
-    req.on('close', () => {
-      clientDisconnected = true;
-      logger.info('刷新缓存：客户端断开连接，继续后台执行');
-    });
+    const appids = gameDatabase.getAllSteamDbAppids();
+    if (appids.length === 0) {
+      res.json({ success: true, message: '无缓存需要刷新', data: { taskId: null } });
+      return;
+    }
 
-    // 使用 SSE 返回进度
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders?.();
+    const task = taskManager.createTask('steam-refresh');
+    res.json({ success: true, data: { taskId: task.id } });
 
-    for (let i = 0; i < appids.length; i++) {
-      const appid = appids[i];
-      const success = await refreshSteamCache(appid);
+    // 异步执行刷新
+    (async () => {
+      try {
+        let successCount = 0;
+        let failCount = 0;
+        for (let i = 0; i < appids.length; i++) {
+          const appid = appids[i];
+          const success = await refreshSteamCache(appid);
+          if (success) successCount++;
+          else failCount++;
 
-      // 只有客户端还在时才写 SSE
-      if (!clientDisconnected) {
-        res.write(`data: ${JSON.stringify({
-          current: i + 1,
-          total: appids.length,
-          appid,
-          success
-        })}\n\n`);
+          taskManager.updateTask(task.id, {
+            progress: Math.round(((i + 1) / appids.length) * 100),
+            message: `刷新中: ${appid} (${i + 1}/${appids.length})`
+          });
+
+          // 避免请求过快
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        taskManager.completeTask(task.id, {
+          message: `刷新完成: 成功 ${successCount}, 失败 ${failCount}`
+        });
+      } catch (err) {
+        const error = err as Error;
+        taskManager.failTask(task.id, error.message);
       }
-
-      // 避免请求过快
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // 只有客户端还在时才发送完成消息
-    if (!clientDisconnected) {
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
-    }
-
-    logger.info('刷新缓存完成：共 %d 条，实际刷新 %d 条', appids.length, appids.length);
+    })();
   } catch (err) {
     const error = err as Error;
-    logger.error('刷新缓存失败: %s', error.message);
-    // 只有客户端还在时才返回错误
-    if (!res.writableEnded) {
-      res.status(500).json({ success: false, error: error.message });
-    }
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 /**
- * 刷新缺失元数据的缓存（必须在 /:appid 之前）
- * 只刷新 raw_data 为空的条目
+ * 刷新缺失元数据的缓存（使用任务系统，进度由 TaskBar 显示）
  */
-router.get('/refresh-missing', async (req: Request, res: Response): Promise<void> => {
+router.post('/refresh-missing', async (_req: Request, res: Response): Promise<void> => {
   await init();
   try {
-    const appids = gameDatabase.getMissingSteamDbAppids();
-
-    if (appids.length === 0) {
-      res.json({ success: true, message: '无缺失元数据的记录' });
+    // 检查是否有正在运行的刷新任务
+    if (taskManager.hasRunningTask('steam-refresh') || taskManager.hasRunningTask('steam-refresh-missing')) {
+      res.status(409).json({ success: false, error: '已有刷新任务正在执行' });
       return;
     }
 
-    // 监听客户端断开事件
-    let clientDisconnected = false;
-    req.on('close', () => {
-      clientDisconnected = true;
-      logger.info('刷新缺失元数据：客户端断开连接，继续后台执行');
-    });
+    const appids = gameDatabase.getMissingSteamDbAppids();
+    if (appids.length === 0) {
+      res.json({ success: true, message: '无缺失元数据的记录', data: { taskId: null } });
+      return;
+    }
 
-    // 使用 SSE 返回进度
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders?.();
+    const task = taskManager.createTask('steam-refresh-missing');
+    res.json({ success: true, data: { taskId: task.id } });
 
-    for (let i = 0; i < appids.length; i++) {
-      const appid = appids[i];
-      const success = await refreshSteamCache(appid);
+    // 异步执行刷新
+    (async () => {
+      try {
+        let successCount = 0;
+        let failCount = 0;
+        for (let i = 0; i < appids.length; i++) {
+          const appid = appids[i];
+          const success = await refreshSteamCache(appid);
+          if (success) successCount++;
+          else failCount++;
 
-      // 只有客户端还在时才写 SSE
-      if (!clientDisconnected) {
-        res.write(`data: ${JSON.stringify({
-          current: i + 1,
-          total: appids.length,
-          appid,
-          success
-        })}\n\n`);
+          taskManager.updateTask(task.id, {
+            progress: Math.round(((i + 1) / appids.length) * 100),
+            message: `刷新中: ${appid} (${i + 1}/${appids.length})`
+          });
+
+          // 避免请求过快
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        taskManager.completeTask(task.id, {
+          message: `刷新完成: 成功 ${successCount}, 失败 ${failCount}`
+        });
+      } catch (err) {
+        const error = err as Error;
+        taskManager.failTask(task.id, error.message);
       }
-
-      // 避免请求过快
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // 只有客户端还在时才发送完成消息
-    if (!clientDisconnected) {
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
-    }
-
-    logger.info('刷新缺失元数据完成：共 %d 条', appids.length);
+    })();
   } catch (err) {
     const error = err as Error;
-    logger.error('刷新缺失元数据失败: %s', error.message);
-    if (!res.writableEnded) {
-      res.status(500).json({ success: false, error: error.message });
-    }
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
