@@ -261,6 +261,9 @@ onMounted(() => loadConfig());
 .game-settings {
   padding: 24px;
   width: 100%;  /* 占满宽度 */
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 .section-title {
   font-size: 24px;

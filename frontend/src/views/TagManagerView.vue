@@ -259,7 +259,10 @@ async function deleteTag(tag: Tag): Promise<void> {
 
 <style scoped>
 .tag-manager {
-  padding: 20px;
+  padding: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 .toolbar {

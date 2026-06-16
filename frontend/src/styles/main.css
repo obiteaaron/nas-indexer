@@ -46,14 +46,22 @@ body {
 .header {
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
-  padding: 0 24px;
   height: 60px;
   display: flex;
   align-items: center;
-  justify-content: center;  /* 居中整体内容 */
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;  /* 居中，与 main 区域对齐 */
+  padding: 0 24px;  /* 与 subnav 和 main 的 padding 对齐 */
 }
 
 .header-left {
@@ -61,7 +69,6 @@ body {
   align-items: center;
   gap: 32px;
   flex: 1;
-  justify-content: center;  /* 居中 logo 和 nav */
 }
 
 .logo {
@@ -73,7 +80,6 @@ body {
 .nav {
   display: flex;
   gap: 8px;
-  justify-content: center;  /* 居中 nav 按钮 */
 }
 
 .nav-link {
@@ -98,8 +104,6 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
-  position: absolute;
-  right: 24px;  /* 固定在右边 */
 }
 
 .header-right .status {

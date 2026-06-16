@@ -470,6 +470,9 @@ onMounted(() => {
 <style scoped>
 .steam-management {
   padding: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 .section-title {
   font-size: 24px;
