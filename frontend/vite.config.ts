@@ -20,6 +20,18 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vue 核心
+          'vue-vendor': ['vue', 'vue-router'],
+          // 图表库
+          'chart-vendor': ['chart.js'],
+          // 工具库
+          'utils-vendor': ['marked', 'xlsx', 'pinyin-pro', 'vue-virtual-scroller']
+        }
+      }
+    }
   }
 })

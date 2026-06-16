@@ -1,13 +1,15 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
-import FileListView from '../views/FileListView.vue'
-import SearchView from '../views/SearchView.vue'
-import StatisticsView from '../views/StatisticsView.vue'
-import SettingsView from '../views/SettingsView.vue'
-import TagManagerView from '../views/TagManagerView.vue'
-import GameWallView from '../views/game/GameWallView.vue'
-import GameSteamView from '../views/game/GameSteamView.vue'
-import GameSettingsView from '../views/game/GameSettingsView.vue'
+
+// 路由懒加载 - 按需加载，减少首屏体积
+const HomeView = () => import('../views/HomeView.vue')
+const FileListView = () => import('../views/FileListView.vue')
+const SearchView = () => import('../views/SearchView.vue')
+const StatisticsView = () => import('../views/StatisticsView.vue')
+const SettingsView = () => import('../views/SettingsView.vue')
+const TagManagerView = () => import('../views/TagManagerView.vue')
+const GameWallView = () => import('../views/game/GameWallView.vue')
+const GameSteamView = () => import('../views/game/GameSteamView.vue')
+const GameSettingsView = () => import('../views/game/GameSettingsView.vue')
 
 const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: HomeView },
