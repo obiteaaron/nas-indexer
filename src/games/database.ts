@@ -964,8 +964,8 @@ class GameDatabase {
     let countSql = 'SELECT COUNT(*) as count FROM steam_db';
     const countParams: unknown[] = [];
     if (search) {
-      countSql += ' WHERE (name LIKE ? OR name_en LIKE ? OR aliases LIKE ?)';
-      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      countSql += ' WHERE (steam_appid LIKE ? OR name LIKE ? OR name_en LIKE ? OR aliases LIKE ?)';
+      countParams.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
     const countResult: QueryResult[] = database.db!.exec(countSql, countParams);
     const total = countResult.length > 0 ? (countResult[0].values[0][0] as number) : 0;
@@ -975,8 +975,8 @@ class GameDatabase {
     const params: unknown[] = [];
 
     if (search) {
-      sql += ' WHERE (name LIKE ? OR name_en LIKE ? OR aliases LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      sql += ' WHERE (steam_appid LIKE ? OR name LIKE ? OR name_en LIKE ? OR aliases LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     sql += ` ORDER BY ${orderBy} ${orderDir}`;
@@ -1271,7 +1271,18 @@ class GameDatabase {
    */
   getAllSteamDbAppids(): string[] {
     const result: QueryResult[] = database.db!.exec(
-      "SELECT steam_appid FROM steam_db WHERE raw_data IS NOT NULL AND raw_data != ''"
+      "SELECT steam_appid FROM steam_db"
+    );
+    if (result.length === 0) return [];
+    return result[0].values.map(row => row[0] as string);
+  }
+
+  /**
+   * 获取缺失元数据的 AppID 列表（raw_data 为空）
+   */
+  getMissingSteamDbAppids(): string[] {
+    const result: QueryResult[] = database.db!.exec(
+      "SELECT steam_appid FROM steam_db WHERE raw_data IS NULL OR raw_data = ''"
     );
     if (result.length === 0) return [];
     return result[0].values.map(row => row[0] as string);

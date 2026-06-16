@@ -9,6 +9,8 @@ import { gameDatabase } from '../games/database';
 import { SteamCacheService, getSteamCacheDir } from '../games/steam-cache-service';
 import { refreshSteamCache } from '../games/scraper';
 import { loadConfig, getStoragePath, initDatabase } from '../utils';
+import { logger } from '../logger';
+import type { SteamDbEntry } from '../types';
 
 const router: Router = Router();
 
@@ -97,6 +99,263 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
         totalPages: Math.ceil(result.total / limit)
       }
     });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 导出 Steam DB（必须在 /:appid 之前）
+ */
+router.get('/export', async (_req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const entries = gameDatabase.exportSteamDb();
+    res.json({ success: true, data: entries });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 按名称查找 Steam AppID（必须在 /:appid 之前）
+ */
+router.get('/lookup', async (req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const name = req.query.name as string;
+    if (!name) {
+      res.status(400).json({ success: false, error: '请提供 name 参数' });
+      return;
+    }
+
+    const entry = gameDatabase.lookupSteamDbByName(name);
+    if (entry) {
+      res.json({ success: true, data: { steam_appid: entry.steam_appid, name: entry.name } });
+    } else {
+      res.json({ success: true, data: null });
+    }
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 批量刷新所有缓存（必须在 /:appid 之前，使用 GET 因为 EventSource 只支持 GET）
+ * 客户端断开后仍继续后台执行
+ */
+router.get('/refresh-all', async (req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const appids = gameDatabase.getAllSteamDbAppids();
+
+    if (appids.length === 0) {
+      res.json({ success: true, message: '无缓存需要刷新' });
+      return;
+    }
+
+    // 监听客户端断开事件
+    let clientDisconnected = false;
+    req.on('close', () => {
+      clientDisconnected = true;
+      logger.info('刷新缓存：客户端断开连接，继续后台执行');
+    });
+
+    // 使用 SSE 返回进度
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.flushHeaders?.();
+
+    for (let i = 0; i < appids.length; i++) {
+      const appid = appids[i];
+      const success = await refreshSteamCache(appid);
+
+      // 只有客户端还在时才写 SSE
+      if (!clientDisconnected) {
+        res.write(`data: ${JSON.stringify({
+          current: i + 1,
+          total: appids.length,
+          appid,
+          success
+        })}\n\n`);
+      }
+
+      // 避免请求过快
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // 只有客户端还在时才发送完成消息
+    if (!clientDisconnected) {
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    }
+
+    logger.info('刷新缓存完成：共 %d 条，实际刷新 %d 条', appids.length, appids.length);
+  } catch (err) {
+    const error = err as Error;
+    logger.error('刷新缓存失败: %s', error.message);
+    // 只有客户端还在时才返回错误
+    if (!res.writableEnded) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+});
+
+/**
+ * 刷新缺失元数据的缓存（必须在 /:appid 之前）
+ * 只刷新 raw_data 为空的条目
+ */
+router.get('/refresh-missing', async (req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const appids = gameDatabase.getMissingSteamDbAppids();
+
+    if (appids.length === 0) {
+      res.json({ success: true, message: '无缺失元数据的记录' });
+      return;
+    }
+
+    // 监听客户端断开事件
+    let clientDisconnected = false;
+    req.on('close', () => {
+      clientDisconnected = true;
+      logger.info('刷新缺失元数据：客户端断开连接，继续后台执行');
+    });
+
+    // 使用 SSE 返回进度
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.flushHeaders?.();
+
+    for (let i = 0; i < appids.length; i++) {
+      const appid = appids[i];
+      const success = await refreshSteamCache(appid);
+
+      // 只有客户端还在时才写 SSE
+      if (!clientDisconnected) {
+        res.write(`data: ${JSON.stringify({
+          current: i + 1,
+          total: appids.length,
+          appid,
+          success
+        })}\n\n`);
+      }
+
+      // 避免请求过快
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // 只有客户端还在时才发送完成消息
+    if (!clientDisconnected) {
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    }
+
+    logger.info('刷新缺失元数据完成：共 %d 条', appids.length);
+  } catch (err) {
+    const error = err as Error;
+    logger.error('刷新缺失元数据失败: %s', error.message);
+    if (!res.writableEnded) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+});
+
+/**
+ * 获取缓存图片列表（必须在 /:appid 之前）
+ */
+router.get('/images/:appid', async (req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const appid = req.params.appid as string;
+    const config = loadConfig();
+    const storagePath = getStoragePath(config);
+    const cacheDir = getSteamCacheDir(storagePath, appid);
+
+    if (!fs.existsSync(cacheDir)) {
+      res.json({ success: true, data: { posters: [], screenshots: [] } });
+      return;
+    }
+
+    const posters: string[] = [];
+    const screenshots: string[] = [];
+
+    const files = fs.readdirSync(cacheDir);
+    for (const file of files) {
+      if (file.endsWith('.jpg') && file !== 'screenshots') {
+        posters.push(file.replace('.jpg', ''));
+      }
+    }
+
+    const screenshotsDir = path.join(cacheDir, 'screenshots');
+    if (fs.existsSync(screenshotsDir)) {
+      const ssFiles = fs.readdirSync(screenshotsDir).filter(f => f.endsWith('.jpg'));
+      for (const ss of ssFiles) {
+        screenshots.push(ss.replace('.jpg', ''));
+      }
+    }
+
+    res.json({ success: true, data: { posters, screenshots } });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// === Steam DB CRUD 功能 ===
+
+/**
+ * 创建 Steam DB 条目（必须在 /:appid 之前）
+ */
+router.post('/create', async (req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const data: Partial<SteamDbEntry> = req.body;
+
+    if (!data.steam_appid || !data.name) {
+      res.status(400).json({ success: false, error: 'steam_appid 和 name 为必填项' });
+      return;
+    }
+
+    // 检查是否已存在
+    const existing = gameDatabase.getSteamDbByAppid(data.steam_appid);
+    if (existing) {
+      res.status(400).json({ success: false, error: `AppID ${data.steam_appid} 已存在` });
+      return;
+    }
+
+    const id = gameDatabase.insertSteamDbEntry(data);
+    if (id === 0) {
+      res.status(500).json({ success: false, error: '创建失败' });
+      return;
+    }
+
+    const entry = gameDatabase.getSteamDbById(id);
+    res.json({ success: true, data: entry });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 导入 Steam DB（必须在 /:appid 之前）
+ */
+router.post('/import', async (req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const { entries, mode = 'merge' } = req.body;
+
+    if (!entries || !Array.isArray(entries)) {
+      res.status(400).json({ success: false, error: '请提供 entries 数组' });
+      return;
+    }
+
+    const result = gameDatabase.importSteamDb(entries as SteamDbEntry[], mode);
+    res.json({ success: true, data: result });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });
@@ -201,81 +460,34 @@ router.delete('/:appid', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
- * 批量刷新所有缓存
+ * 更新 Steam DB 条目（按 appid）
  */
-router.post('/refresh-all', async (_req: Request, res: Response): Promise<void> => {
-  await init();
-  try {
-    const appids = gameDatabase.getAllSteamDbAppids();
-
-    if (appids.length === 0) {
-      res.json({ success: true, message: '无缓存需要刷新' });
-      return;
-    }
-
-    // 使用 SSE 返回进度
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders?.();
-
-    for (let i = 0; i < appids.length; i++) {
-      const appid = appids[i];
-      const success = await refreshSteamCache(appid);
-
-      res.write(`data: ${JSON.stringify({
-        current: i + 1,
-        total: appids.length,
-        appid,
-        success
-      })}\n\n`);
-
-      // 避免请求过快
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
-  } catch (err) {
-    const error = err as Error;
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * 获取缓存图片列表
- */
-router.get('/images/:appid', async (req: Request, res: Response): Promise<void> => {
+router.post('/update/:appid', async (req: Request, res: Response): Promise<void> => {
   await init();
   try {
     const appid = req.params.appid as string;
-    const config = loadConfig();
-    const storagePath = getStoragePath(config);
-    const cacheDir = getSteamCacheDir(storagePath, appid);
-
-    if (!fs.existsSync(cacheDir)) {
-      res.json({ success: true, data: { posters: [], screenshots: [] } });
+    const entry = gameDatabase.getSteamDbByAppid(appid);
+    if (!entry) {
+      res.status(404).json({ success: false, error: '条目不存在' });
       return;
     }
 
-    const posters: string[] = [];
-    const screenshots: string[] = [];
+    const data: Partial<SteamDbEntry> = req.body;
 
-    const files = fs.readdirSync(cacheDir);
-    for (const file of files) {
-      if (file.endsWith('.jpg') && file !== 'screenshots') {
-        posters.push(file.replace('.jpg', ''));
-      }
+    // 更新 SteamDB
+    gameDatabase.updateSteamDbEntry(entry.id!, data);
+    const updated = gameDatabase.getSteamDbById(entry.id!);
+
+    // 同步到关联游戏（仅在更新 name 或 name_en 时）
+    if (updated && (data.name !== undefined || data.name_en !== undefined)) {
+      const syncCount = gameDatabase.syncSteamDbToGames(
+        updated.steam_appid,
+        { name: data.name, name_en: data.name_en }
+      );
+      logger.info('SteamDB 同步完成: appid=%s, 更新了%d个游戏', updated.steam_appid, syncCount);
     }
 
-    const screenshotsDir = path.join(cacheDir, 'screenshots');
-    if (fs.existsSync(screenshotsDir)) {
-      const ssFiles = fs.readdirSync(screenshotsDir).filter(f => f.endsWith('.jpg'));
-      for (const ss of ssFiles) {
-        screenshots.push(ss.replace('.jpg', ''));
-      }
-    }
-
-    res.json({ success: true, data: { posters, screenshots } });
+    res.json({ success: true, data: updated });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

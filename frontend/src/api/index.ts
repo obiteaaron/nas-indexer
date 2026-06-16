@@ -583,39 +583,30 @@ export function getSteamDbEntries(params: { search?: string; orderBy?: string; o
       .filter(([_, v]) => v !== undefined)
       .map(([k, v]) => [k, String(v)])
   ).toString()
-  return request<SteamDbListResponse>('/games/steam-db/list?' + query)
-}
-
-export function getSteamDbEntry(id: number): Promise<ApiResponse<SteamDbEntry>> {
-  return request<SteamDbEntry>('/games/steam-db/get/' + id)
+  return request<SteamDbListResponse>('/steam-cache/list?' + query)
 }
 
 export function createSteamDbEntry(data: Partial<SteamDbEntry>): Promise<ApiResponse<SteamDbEntry>> {
-  clearCache('/games/steam-db')
-  return request<SteamDbEntry>('/games/steam-db/create', { method: 'POST', body: JSON.stringify(data) })
+  clearCache('/steam-cache')
+  return request<SteamDbEntry>('/steam-cache/create', { method: 'POST', body: JSON.stringify(data) })
 }
 
-export function updateSteamDbEntry(id: number, data: Partial<SteamDbEntry>): Promise<ApiResponse<SteamDbEntry>> {
-  clearCache('/games/steam-db')
-  return request<SteamDbEntry>('/games/steam-db/update/' + id, { method: 'POST', body: JSON.stringify(data) })
-}
-
-export function deleteSteamDbEntry(id: number): Promise<ApiResponse<void>> {
-  clearCache('/games/steam-db')
-  return request<void>('/games/steam-db/delete/' + id, { method: 'POST' })
+export function updateSteamDbEntry(appid: string, data: Partial<SteamDbEntry>): Promise<ApiResponse<SteamDbEntry>> {
+  clearCache('/steam-cache')
+  return request<SteamDbEntry>('/steam-cache/update/' + appid, { method: 'POST', body: JSON.stringify(data) })
 }
 
 export function exportSteamDb(): Promise<ApiResponse<SteamDbEntry[]>> {
-  return request<SteamDbEntry[]>('/games/steam-db/export')
+  return request<SteamDbEntry[]>('/steam-cache/export')
 }
 
 export function importSteamDb(entries: SteamDbEntry[], mode: 'merge' | 'overwrite' = 'merge'): Promise<ApiResponse<SteamDbImportResult>> {
-  clearCache('/games/steam-db')
-  return request<SteamDbImportResult>('/games/steam-db/import', { method: 'POST', body: JSON.stringify({ entries, mode }) })
+  clearCache('/steam-cache')
+  return request<SteamDbImportResult>('/steam-cache/import', { method: 'POST', body: JSON.stringify({ entries, mode }) })
 }
 
 export function lookupSteamDbByName(name: string): Promise<ApiResponse<{ steam_appid: string; name: string } | null>> {
-  return request<{ steam_appid: string; name: string } | null>('/games/steam-db/lookup?name=' + encodeURIComponent(name))
+  return request<{ steam_appid: string; name: string } | null>('/steam-cache/lookup?name=' + encodeURIComponent(name))
 }
 
 // === Steam 缓存 API ===
@@ -690,8 +681,8 @@ export function deleteSteamCache(appid: string): Promise<ApiResponse<void>> {
   return request(`/steam-cache/${appid}`, { method: 'DELETE' });
 }
 
-export function refreshAllSteamCache(): Promise<void> {
-  // SSE 流式响应
+export function refreshAllSteamCache(onProgress?: (current: number, total: number, appid: string, success: boolean) => void): Promise<void> {
+  // SSE 流式响应（EventSource 只支持 GET）
   return new Promise((resolve) => {
     const eventSource = new EventSource('/api/steam-cache/refresh-all');
     eventSource.onmessage = (event) => {
@@ -699,6 +690,28 @@ export function refreshAllSteamCache(): Promise<void> {
       if (data.done) {
         eventSource.close();
         resolve();
+      } else if (onProgress) {
+        onProgress(data.current, data.total, data.appid, data.success);
+      }
+    };
+    eventSource.onerror = () => {
+      eventSource.close();
+      resolve();
+    };
+  });
+}
+
+export function refreshMissingSteamCache(onProgress?: (current: number, total: number, appid: string, success: boolean) => void): Promise<void> {
+  // SSE 流式响应（EventSource 只支持 GET）
+  return new Promise((resolve) => {
+    const eventSource = new EventSource('/api/steam-cache/refresh-missing');
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.done) {
+        eventSource.close();
+        resolve();
+      } else if (onProgress) {
+        onProgress(data.current, data.total, data.appid, data.success);
       }
     };
     eventSource.onerror = () => {

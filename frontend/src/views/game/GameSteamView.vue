@@ -35,7 +35,10 @@
       <button class="btn btn-secondary btn-small" @click="showImportModal = true">导入 JSON</button>
       <button class="btn btn-secondary btn-small" @click="handleExport" :disabled="steamDbTotal === 0">导出 JSON</button>
       <button class="btn btn-secondary btn-small" @click="refreshAll" :disabled="refreshing">
-        {{ refreshing ? '刷新中...' : '刷新所有缓存' }}
+        {{ refreshing ? `刷新中 ${refreshProgress.current}/${refreshProgress.total}...` : '刷新所有缓存' }}
+      </button>
+      <button class="btn btn-secondary btn-small" @click="refreshMissing" :disabled="refreshing">
+        {{ refreshing ? `刷新中 ${refreshProgress.current}/${refreshProgress.total}...` : '刷新缺失元数据' }}
       </button>
     </div>
 
@@ -187,11 +190,11 @@ import {
   refreshSteamCache,
   deleteSteamCache,
   refreshAllSteamCache,
+  refreshMissingSteamCache,
   getSteamDbEntries,
   getSteamCacheDetail,
   createSteamDbEntry,
   updateSteamDbEntry,
-  deleteSteamDbEntry as deleteSteamDbEntryApi,
   exportSteamDb,
   importSteamDb,
   type SteamCacheStats,
@@ -327,7 +330,7 @@ async function saveEntry(): Promise<void> {
   };
   try {
     if (editingEntry.value) {
-      const res = await updateSteamDbEntry(editingEntry.value.id!, data);
+      const res = await updateSteamDbEntry(editingEntry.value.steam_appid, data);
       if (res.success) {
         showNotification('记录已更新');
         loadSteamDbList();
@@ -350,7 +353,7 @@ async function saveEntry(): Promise<void> {
 // 删除确认
 async function deleteConfirm(entry: SteamCacheEntry): Promise<void> {
   if (!confirm(`确定要删除 AppID ${entry.steam_appid} 吗？`)) return;
-  const res = await deleteSteamDbEntryApi(entry.id!);
+  const res = await deleteSteamCache(entry.steam_appid);
   if (res.success) {
     showNotification('记录已删除');
     loadSteamDbList();
@@ -404,11 +407,29 @@ async function refreshFromDetail(appid: string): Promise<void> {
 }
 
 // 刷新所有缓存
+const refreshProgress = ref({ current: 0, total: 0, appid: '' });
+
 async function refreshAll(): Promise<void> {
   refreshing.value = true;
-  await refreshAllSteamCache();
+  refreshProgress.value = { current: 0, total: 0, appid: '' };
+  await refreshAllSteamCache((current, total, appid, success) => {
+    refreshProgress.value = { current, total, appid };
+  });
   refreshing.value = false;
   showNotification('全部缓存刷新完成');
+  loadSteamDbList();
+  loadStats();
+}
+
+// 刷新缺失元数据
+async function refreshMissing(): Promise<void> {
+  refreshing.value = true;
+  refreshProgress.value = { current: 0, total: 0, appid: '' };
+  await refreshMissingSteamCache((current, total, appid, success) => {
+    refreshProgress.value = { current, total, appid };
+  });
+  refreshing.value = false;
+  showNotification('缺失元数据刷新完成');
   loadSteamDbList();
   loadStats();
 }
