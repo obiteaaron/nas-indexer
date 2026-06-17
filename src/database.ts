@@ -148,15 +148,6 @@ class Database {
     `);
 
     this.db!.run(`
-      CREATE TABLE IF NOT EXISTS scan_paths (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        path TEXT NOT NULL,
-        enabled INTEGER DEFAULT 1,
-        last_scan DATETIME
-      )
-    `);
-
-    this.db!.run(`
       CREATE TABLE IF NOT EXISTS ai_search_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         query TEXT NOT NULL,
@@ -510,6 +501,19 @@ class Database {
   removeFavorite(id: number): void {
     this.db!.run('UPDATE files SET is_favorite = 0 WHERE id = ?', [id]);
     this.save();
+  }
+
+  updateFileMetadata(id: number, metadata: { duration?: number; width?: number; height?: number }): boolean {
+    const fields: string[] = [];
+    const params: unknown[] = [];
+    if (metadata.duration !== undefined) { fields.push('duration = ?'); params.push(metadata.duration); }
+    if (metadata.width !== undefined) { fields.push('width = ?'); params.push(metadata.width); }
+    if (metadata.height !== undefined) { fields.push('height = ?'); params.push(metadata.height); }
+    if (fields.length === 0) return false;
+    params.push(id);
+    this.db!.run(`UPDATE files SET ${fields.join(', ')} WHERE id = ?`, params);
+    this.save();
+    return true;
   }
 
   getFavorites(): File[] {

@@ -13,6 +13,14 @@ export interface File {
   scanned_at: string | null;
   is_favorite: number;
   scan_path: string | null;
+  // 视频元数据（数据库已有字段）
+  thumbnail_path?: string | null;
+  duration?: number | null;      // 视频时长（秒）
+  width?: number | null;         // 视频宽度
+  height?: number | null;        // 视频高度
+  codec?: string | null;
+  bitrate?: number | null;
+  fps?: number | null;
 }
 
 export interface FileQueryOptions {

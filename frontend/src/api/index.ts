@@ -144,6 +144,10 @@ export function deleteFile(id: number, permanent: boolean = false): Promise<ApiR
   return request<void>('/files/delete/' + id, { method: 'POST', body: JSON.stringify({ permanent }) })
 }
 
+export function updateFileMetadata(fileId: number, metadata: { duration: number; width: number; height: number }): Promise<ApiResponse<void>> {
+  return request<void>('/files/' + fileId + '/metadata', { method: 'POST', body: JSON.stringify(metadata) })
+}
+
 export function createFolder(parentPath: string, folderName: string): Promise<ApiResponse<void>> {
   return request<void>('/folder', {
     method: 'POST',

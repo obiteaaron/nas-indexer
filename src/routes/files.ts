@@ -410,4 +410,27 @@ router.post('/:id/tags/remove/:tagId', async (req: Request, res: Response): Prom
   }
 });
 
+// 上报视频元数据
+router.post('/:id/metadata', async (req: Request, res: Response): Promise<void> => {
+  await initDatabase();
+  try {
+    const fileId: number = parseInt(req.params.id as string);
+    const file = database.getFileById(fileId);
+    if (!file) {
+      res.status(404).json({ success: false, error: '文件不存在' });
+      return;
+    }
+    const { duration, width, height } = req.body;
+    if (duration === undefined && width === undefined && height === undefined) {
+      res.status(400).json({ success: false, error: '请提供元数据' });
+      return;
+    }
+    database.updateFileMetadata(fileId, { duration, width, height });
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

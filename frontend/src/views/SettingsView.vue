@@ -162,13 +162,32 @@
 
           <div class="card">
             <h3 class="section-title">显示设置</h3>
+
+            <!-- 图片预览开关 -->
             <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="config.thumbnailPreviewEnabled">
+                启用图片缩略图预览
+              </label>
+            </div>
+
+            <!-- 图片预览大小限制（仅在启用时显示） -->
+            <div class="form-group" v-if="config.thumbnailPreviewEnabled">
               <label>缩略图加载大小限制</label>
               <div class="size-limit-input">
                 <input class="input" type="number" v-model.number="config.thumbnailSizeLimit" min="0" step="1">
                 <span class="size-unit">MB</span>
               </div>
-              <span class="hint">文件大小超过此限制时不自动加载缩略图，设为 0 表示不限制。默认 5MB</span>
+              <span class="hint">文件大小超过此限制时不自动加载缩略图。0 表示不限制。默认 5MB</span>
+            </div>
+
+            <!-- 视频预览开关 -->
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="config.videoPreviewEnabled">
+                显示视频元数据（时长、分辨率）
+              </label>
+              <span class="hint">关闭后将跳过视频时长和分辨率的获取，减少磁盘读取压力</span>
             </div>
 
             <div class="form-actions">
@@ -247,7 +266,9 @@ const config = ref<Config>({
   categoryRules: {},
   categoryPathRules: [],
   trackingConfig: { trackingEnabled: true, trackingLevel: 'full' },
+  thumbnailPreviewEnabled: true,
   thumbnailSizeLimit: 5,
+  videoPreviewEnabled: true,
   gamesEnabled: false
 })
 const status = ref<StatusResponse | null>(null)
@@ -322,7 +343,9 @@ async function loadConfig(): Promise<void> {
         categoryRules: res.data.categoryRules || {},
         categoryPathRules: res.data.categoryPathRules || [],
         trackingConfig: res.data.trackingConfig || { trackingEnabled: true, trackingLevel: 'full' },
+        thumbnailPreviewEnabled: res.data.thumbnailPreviewEnabled ?? true,
         thumbnailSizeLimit: res.data.thumbnailSizeLimit ?? 5,
+        videoPreviewEnabled: res.data.videoPreviewEnabled ?? true,
         gamesEnabled: res.data.gamesEnabled ?? false
       }
 

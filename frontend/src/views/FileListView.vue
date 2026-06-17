@@ -84,8 +84,8 @@
               </div>
               <div class="file-col file-col-name">
                 <span class="file-name" :title="file.name" @click="showPreview(file)">{{ file.name }}</span>
-                <span v-if="isVideoFile(file.ext) && videoMetadata[file.id]" class="video-meta">
-                  {{ videoMetadata[file.id].duration }} · {{ videoMetadata[file.id].width }}×{{ videoMetadata[file.id].height }}
+                <span class="file-meta">
+                  ID: {{ file.id }}<span v-if="isVideoFile(file.ext) && videoMetadata[file.id]"> · Meta: {{ videoMetadata[file.id].duration }} · {{ videoMetadata[file.id].width }}×{{ videoMetadata[file.id].height }}</span>
                 </span>
               </div>
               <div class="file-col file-col-size">{{ file.sizeFormatted }}</div>
@@ -183,7 +183,7 @@ import {
   getFiles, getCategories, openFile, renameFile as apiRename, deleteFile,
   addFavorite, removeFavorite,
   getFileTags, getFileTagsBatch, addFileTag, removeFileTag, batchFileTags,
-  getFilesByTags, getTags, getStreamUrl, getConfig
+  getFilesByTags, getTags, getStreamUrl, getConfig, updateFileMetadata
 } from '../api'
 import type { FileWithTags, Tag, TagWithGroup, Config } from '../types'
 
@@ -218,7 +218,9 @@ const previewFile = ref<FileWithTags | null>(null)
 const renameFile = ref<FileWithTags | null>(null)
 const newName = ref('')
 const videoMetadata = ref<Record<number, VideoMeta>>({})
+const thumbnailPreviewEnabled = ref(true)
 const thumbnailSizeLimit = ref(5)
+const videoPreviewEnabled = ref(true)
 const hoverPreview = ref<HoverPreview>({ visible: false, url: '', x: 0, y: 0 })
 
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
@@ -256,8 +258,10 @@ onMounted(async () => {
 async function loadConfig(): Promise<void> {
   try {
     const res = await getConfig()
-    if (res.success && res.data && res.data.thumbnailSizeLimit !== undefined) {
-      thumbnailSizeLimit.value = res.data.thumbnailSizeLimit
+    if (res.success && res.data) {
+      thumbnailPreviewEnabled.value = res.data.thumbnailPreviewEnabled ?? true
+      thumbnailSizeLimit.value = res.data.thumbnailSizeLimit ?? 5
+      videoPreviewEnabled.value = res.data.videoPreviewEnabled ?? true
     }
   } catch (err) {
     console.error('获取配置失败:', err)
@@ -548,16 +552,41 @@ function formatDuration(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function loadVideoMetadata(file: FileWithTags): void {
+async function loadVideoMetadata(file: FileWithTags): Promise<void> {
+  // 1. 检查内存缓存（当前 session）
   if (videoMetadata.value[file.id]) return
+
+  // 2. 检查数据库数据（跨 session）- 只要 duration 存在就认为已获取过
+  if (file.duration != null) {
+    videoMetadata.value[file.id] = {
+      duration: formatDuration(file.duration),
+      width: file.width || 0,
+      height: file.height || 0
+    }
+    return // 数据库有数据，填充内存缓存后返回
+  }
+
+  // 3. 都无数据，通过 video 元素获取
   const video = document.createElement('video')
   video.preload = 'metadata'
   video.src = getStreamUrl(file.id)
-  video.onloadedmetadata = () => {
+  video.onloadedmetadata = async () => {
+    const duration = Math.floor(video.duration)
+    const width = video.videoWidth
+    const height = video.videoHeight
+
+    // 填充内存缓存
     videoMetadata.value[file.id] = {
-      duration: formatDuration(video.duration),
-      width: video.videoWidth,
-      height: video.videoHeight
+      duration: formatDuration(duration),
+      width,
+      height
+    }
+
+    // 上报到数据库
+    try {
+      await updateFileMetadata(file.id, { duration, width, height })
+    } catch (err) {
+      console.error('上报视频元数据失败:', err)
     }
     video.src = ''
   }
@@ -567,6 +596,8 @@ function loadVideoMetadata(file: FileWithTags): void {
 }
 
 function loadVideoMetadataBatch(filesList: FileWithTags[]): void {
+  // 视频预览开关关闭时，跳过
+  if (!videoPreviewEnabled.value) return
   for (const file of filesList) {
     if (isVideoFile(file.ext)) {
       loadVideoMetadata(file)
@@ -576,6 +607,9 @@ function loadVideoMetadataBatch(filesList: FileWithTags[]): void {
 
 function shouldLoadThumbnail(file: FileWithTags): boolean {
   if (!isImageFile(file.ext)) return false
+  // 图片预览开关关闭时，不加载
+  if (!thumbnailPreviewEnabled.value) return false
+  // 0 表示不限制
   if (thumbnailSizeLimit.value === 0) return true
   const sizeInMB = (file.size || 0) / (1024 * 1024)
   return sizeInMB <= thumbnailSizeLimit.value
@@ -877,7 +911,7 @@ function formatDate(date: string | null): string {
   content: '📷';
 }
 
-.video-meta {
+.file-meta {
   display: block;
   font-size: 11px;
   color: var(--text-muted);

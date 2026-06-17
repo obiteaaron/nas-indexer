@@ -36,6 +36,11 @@ export interface Config {
   // 仅保留游戏模块开关（详细配置已移至 games-config.json）
   gamesEnabled?: boolean;
 
+  // 预览开关配置
+  thumbnailPreviewEnabled?: boolean;  // 是否启用图片缩略图预览
+  thumbnailSizeLimit?: number;        // 图片预览大小限制（MB），0 表示不限制
+  videoPreviewEnabled?: boolean;      // 是否启用视频元数据显示（时长、分辨率）
+
   // 以下字段已废弃，保留类型定义以支持迁移读取
   gameScanPathsEnabled?: boolean;
   gameScanPaths?: string[];

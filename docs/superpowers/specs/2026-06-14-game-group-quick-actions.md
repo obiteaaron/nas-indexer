@@ -29,7 +29,7 @@
 
 ### 改进点 1：游戏卡片快捷菜单
 
-**位置：** `GameCard.vue` - 游戏海报卡片组件
+**位置：** `frontend/src/components/game/GameCard.vue` - 游戏海报卡片组件
 
 **设计：**
 
@@ -76,7 +76,7 @@
 
 ### 改进点 2：游戏详情模态框 - 分组区域
 
-**位置：** `GameWallView.vue` - 游戏详情模态框
+**位置：** `frontend/src/views/game/GameWallView.vue` - 游戏详情模态框和海报墙主页面
 
 **设计：**
 
@@ -118,7 +118,7 @@
 
 ### 改进点 3：游戏海报墙批量操作
 
-**位置：** `GameWallView.vue` - 游戏海报墙主页面
+**位置：** `frontend/src/views/game/GameWallView.vue` - 游戏海报墙主页面
 
 **设计：**
 
@@ -179,53 +179,82 @@
 **GroupSelectorPopup.vue** - 分组选择器弹出组件
 
 - Props：
-  - `gameId?: number` - 单个游戏 ID（可选）
-  - `gameIds?: number[]` - 多个游戏 ID（批量操作）
-  - `selectedGroups?: number[]` - 已加入的分组 ID（默认勾选）
+  - `gameId?: number` - 单个游戏 ID（单个游戏操作时使用）
+  - `gameIds?: number[]` - 多个游戏 ID（批量操作时使用）
+  - `selectedGroupIds?: number[]` - 已加入的分组 ID（默认勾选）
 
 - Events：
   - `close` - 关闭选择器
-  - `confirm` - 确认选择，返回选中的分组 ID 数组
+  - `confirm` - 确认选择，返回 `{ groupIds: number[] }`
 
 - 功能：
-  - 搜索分组
-  - 多选分组
-  - 显示分组图标（📌/📁）
+  - 搜索框：快速筛选分组
+  - 分组列表：多选分组（checkbox）
+  - 显示分组图标（📌置顶 / 📁普通）
   - 显示分组游戏数量
+  - 默认勾选已加入的分组
+
+- 样式：
+  - 固定宽度，居中显示
+  - 最大高度，超出滚动
+  - 绿色主色调，与其他分组操作保持一致
 
 ### 2. 现有组件修改
 
 **GameCard.vue**
 
 - 新增：
-  - 悬停时显示操作按钮
-  - 分组按钮（📁）
-  - 分组标签显示区域
+  - 分组按钮（📁）在悬停时显示
+  - 卡片底部显示分组标签
   - `@group` 事件
 
 **GameWallView.vue**
 
 - 新增：
-  - 批量管理模式状态
+  - 批量管理模式状态（`batchMode`, `selectedGameIds`）
+  - 头部"批量管理"按钮
   - 批量操作栏
-  - "批量管理"按钮
   - 分组选择器集成
 
 - 游戏详情模态框：
   - 分组管理区域
-  - 分组标签显示
+  - 分组标签显示（带删除按钮）
   - 加入/移出分组功能
+
+**GameGroupManager.vue**
+
+- 无需修改（保持现有功能）
 
 ### 3. API 调用
 
-现有 API 已支持：
+**现有 API（已支持）：**
 - `getGameGroups()` - 获取所有分组
 - `addGamesToGroup(groupId, gameIds)` - 添加游戏到分组
 - `removeGameFromGroup(groupId, gameId)` - 移出分组
 
-可能需要新增：
-- `getGameGroups(gameId)` - 获取单个游戏所属的分组列表
-- 批量移出分组的 API（可选）
+**需要新增的 API：**
+
+#### 前端 API 函数（`frontend/src/api/index.ts`）
+```typescript
+// 获取单个游戏所属的分组列表
+export function getGameGroupsForGame(gameId: number): Promise<ApiResponse<GameGroup[]>>
+
+// 批量设置游戏分组（添加到多个分组，可选：移出其他分组）
+export function setGameGroups(gameId: number, groupIds: number[]): Promise<ApiResponse<void>>
+```
+
+#### 后端路由（`src/routes/games.ts`）
+```typescript
+// 获取单个游戏所属的分组列表
+router.get('/:id/groups', async (req: Request, res: Response): Promise<void> => {
+  // 返回游戏所属的所有分组
+});
+
+// 设置游戏分组（覆盖式：设置为指定分组）
+router.post('/:id/groups', async (req: Request, res: Response): Promise<void> => {
+  // 移出所有分组，然后添加到指定分组
+});
+```
 
 ### 4. 状态管理
 
@@ -291,22 +320,50 @@
 
 ### 新增文件
 
-- `frontend/src/components/GroupSelectorPopup.vue` - 分组选择器组件
+**前端组件：**
+- `frontend/src/components/game/GroupSelectorPopup.vue` - 分组选择器弹出组件
 
 ### 修改文件
 
-- `frontend/src/components/GameCard.vue`
-  - 添加悬停操作按钮
-  - 添加分组标签显示
+**前端组件：**
+- `frontend/src/components/game/GameCard.vue`
+  - 添加分组按钮（📁）在悬停操作按钮组中
+  - 卡片底部显示分组标签区域
   - 添加 `@group` 事件
 
-- `frontend/src/views/GameWallView.vue`
-  - 添加批量管理模式
-  - 添加批量操作栏
+- `frontend/src/views/game/GameWallView.vue`
+  - 添加批量管理模式状态（`batchMode`, `selectedGameIds`）
+  - 头部工具栏添加"批量管理"按钮
+  - 添加批量操作栏（全选、批量加入分组、批量收藏、批量删除、取消）
   - 游戏详情模态框添加分组管理区域
+  - 集成 GroupSelectorPopup 组件
 
-- `frontend/src/api.ts`
-  - 可能需要添加获取单个游戏分组的 API
+**前端 API：**
+- `frontend/src/api/index.ts`
+  - 新增 `getGameGroupsForGame(gameId)` 函数
+  - 新增 `setGameGroups(gameId, groupIds)` 函数
+
+**后端路由：**
+- `src/routes/games.ts`
+  - 新增 `GET /games/:id/groups` 路由
+  - 新增 `POST /games/:id/groups` 路由
+
+**后端数据库（可选）：**
+- `src/games/database.ts`
+  - 新增 `getGroupsForGame(gameId)` 方法
+  - 新增 `setGameGroups(gameId, groupIds)` 方法
+
+### 新增类型定义（如需要）
+
+如果 `Game` 类型中需要添加分组相关字段，在 `src/types/game.ts` 中补充：
+```typescript
+interface Game {
+  // ... 现有字段
+
+  // 可选：添加分组缓存字段（避免每次查询数据库）
+  groups?: GameGroup[];  // 所属分组列表
+}
+```
 
 ## 下一步
 
@@ -315,3 +372,118 @@
 1. 创建详细的实现计划
 2. 分解任务、确定依赖关系
 3. 开始实现
+
+---
+
+## 实现注意事项
+
+### 数据结构考虑
+
+**Game 类型是否需要缓存分组信息？**
+
+**方案 A：每次查询数据库（推荐）**
+- 优点：数据始终最新，无缓存一致性问题
+- 缺点：频繁查询数据库
+- 适用：分组操作不频繁的场景
+
+**方案 B：在 Game 类型中缓存分组**
+- 优点：减少数据库查询
+- 缺点：需要保证缓存一致性
+- 适用：分组操作频繁，且可以接受轻微延迟
+
+**建议：先实现方案 A，性能有问题再考虑优化**
+
+### 后端 API 实现
+
+**GET /games/:id/groups**
+```typescript
+router.get('/:id/groups', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const gameId = parseInt(req.params.id);
+    const groups = gameDatabase.getGroupsForGame(gameId);
+    res.json({ success: true, data: groups });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+```
+
+**POST /games/:id/groups**
+```typescript
+router.post('/:id/groups', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const gameId = parseInt(req.params.id);
+    const { group_ids } = req.body;
+    if (!Array.isArray(group_ids)) {
+      res.status(400).json({ success: false, error: 'group_ids 必须为数组' });
+      return;
+    }
+    gameDatabase.setGameGroups(gameId, group_ids);
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+```
+
+### 前端 API 实现
+
+```typescript
+// 获取单个游戏所属的分组列表
+export async function getGameGroupsForGame(gameId: number): Promise<ApiResponse<GameGroup[]>> {
+  return request<GameGroup[]>(`/games/${gameId}/groups`);
+}
+
+// 设置游戏分组（覆盖式）
+export async function setGameGroups(gameId: number, groupIds: number[]): Promise<ApiResponse<void>> {
+  clearCache('/games');
+  return request<void>(`/games/${gameId}/groups`, {
+    method: 'POST',
+    body: JSON.stringify({ group_ids: groupIds })
+  });
+}
+```
+
+### 组件交互设计
+
+**GameCard.vue 悬停按钮位置**
+- 现有按钮在 `poster-overlay` 中，位于海报底部
+- 保持现有布局，在现有按钮组中添加分组按钮
+
+**GameCard.vue 分组标签显示**
+- 在 `game-info` 区域添加 `game-groups` div
+- 显示已加入的分组标签（最多显示 3 个，超出显示 "+N"）
+
+**批量模式下的卡片样式**
+- 批量模式时，卡片左上角添加 checkbox
+- 已选卡片边框变为绿色（`border: 2px solid #28a745`）
+- 未选卡片保持原有样式
+
+### 错误处理
+
+**API 调用失败**
+- 显示 toast 通知
+- 批量操作失败时，不中断其他操作，记录失败的游戏
+
+**数据一致性**
+- 添加/移出分组后，重新加载分组列表
+- 游戏详情中移出分组后，实时更新显示
+- 卡片标签在操作后立即更新（乐观更新）
+
+### 性能优化
+
+**分组选择器**
+- 如果分组数量超过 50 个，考虑虚拟滚动
+- 使用防抖处理搜索输入
+
+**批量操作**
+- 限制单次批量操作的游戏数量（建议最多 100 个）
+- 使用 Promise.all 并发调用 API
+
+**缓存策略**
+- 游戏列表中不加载分组信息，避免过度查询
+- 详情模态框中按需加载分组信息

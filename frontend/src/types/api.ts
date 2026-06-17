@@ -21,6 +21,10 @@ export interface File {
   scanned_at: string | null;
   is_favorite: number;
   scan_path: string | null;
+  // 视频元数据
+  duration?: number | null;      // 视频时长（秒）
+  width?: number | null;         // 视频宽度
+  height?: number | null;        // 视频高度
 }
 
 export interface Tag {
@@ -91,8 +95,10 @@ export interface Config {
   gamesRules?: GameRules;
   gamesScrape?: GameScrapeConfig;
   proxyUrl?: string;  // HTTP 代理地址，用于 Steam API 刮削
-  // 前端扩展属性
-  thumbnailSizeLimit?: number;
+  // 预览开关配置
+  thumbnailPreviewEnabled?: boolean;  // 是否启用图片缩略图预览
+  thumbnailSizeLimit?: number;        // 图片预览大小限制（MB），0 表示不限制
+  videoPreviewEnabled?: boolean;      // 是否启用视频元数据显示（时长、分辨率）
 }
 
 // 统计类型
