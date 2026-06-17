@@ -33,6 +33,7 @@
       <router-link to="/game/wall" class="subnav-link">游戏墙</router-link>
       <router-link to="/game/steam" class="subnav-link">Steam 管理</router-link>
       <router-link to="/game/settings" class="subnav-link">游戏设置</router-link>
+      <router-link to="/game/backup" class="subnav-link">备份管理</router-link>
     </div>
     <main class="main">
       <router-view />

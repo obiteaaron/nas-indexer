@@ -23,7 +23,8 @@ import type {
   GameGroup,
   PosterBackup,
   SteamDbEntry,
-  SteamDbImportResult
+  SteamDbImportResult,
+  ProfileBackupInfo
 } from '../types'
 
 const API_BASE = '/api'
@@ -708,4 +709,22 @@ export function getGamesConfig(): Promise<ApiResponse<GamesConfig>> {
 
 export function saveGamesConfig(config: Partial<GamesConfig>): Promise<ApiResponse<GamesConfig>> {
   return request<GamesConfig>('/games-config', { method: 'PUT', body: JSON.stringify(config) });
+}
+
+// === Profile Backup API ===
+
+export function createProfileBackup(): Promise<ApiResponse<ProfileBackupInfo>> {
+  return request<ProfileBackupInfo>('/profile-backup/create', { method: 'POST' });
+}
+
+export function getProfileBackupList(): Promise<ApiResponse<ProfileBackupInfo[]>> {
+  return request<ProfileBackupInfo[]>('/profile-backup/list');
+}
+
+export function getProfileBackupDownloadUrl(filename: string): string {
+  return API_BASE + '/profile-backup/download/' + filename;
+}
+
+export function deleteProfileBackup(filename: string): Promise<ApiResponse<void>> {
+  return request<void>('/profile-backup/delete/' + filename, { method: 'POST' });
 }

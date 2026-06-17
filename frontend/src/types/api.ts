@@ -415,3 +415,10 @@ export interface SteamDbImportResult {
   updated: number;
   skipped: number;
 }
+
+// Profile Backup
+export interface ProfileBackupInfo {
+  filename: string;
+  size: number;
+  createdAt: string;
+}

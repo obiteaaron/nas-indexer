@@ -26,6 +26,7 @@ import gamesRouter from './routes/games';
 import { router as statsRouter, setScanJob } from './routes/stats';
 import steamCacheRouter from './routes/steam-cache';
 import gamesConfigRouter from './routes/games-config';
+import profileBackupRouter from './routes/profile-backup';
 
 const app = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
@@ -140,6 +141,7 @@ app.use('/api/tracking', trackingRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/steam-cache', steamCacheRouter);
 app.use('/api/games-config', gamesConfigRouter);
+app.use('/api/profile-backup', profileBackupRouter);
 
 // Static files - serve Vue frontend
 const frontendPath: string = path.join(PROJECT_ROOT, 'frontend', 'dist');

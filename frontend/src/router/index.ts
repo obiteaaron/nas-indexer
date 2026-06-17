@@ -10,6 +10,7 @@ const TagManagerView = () => import('../views/TagManagerView.vue')
 const GameWallView = () => import('../views/game/GameWallView.vue')
 const GameSteamView = () => import('../views/game/GameSteamView.vue')
 const GameSettingsView = () => import('../views/game/GameSettingsView.vue')
+const ProfileBackupView = () => import('../views/game/ProfileBackupView.vue')
 
 const routes: RouteRecordRaw[] = [
   { path: '/', name: 'home', component: HomeView },
@@ -24,7 +25,8 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: 'wall', name: 'game-wall', component: GameWallView },
       { path: 'steam', name: 'game-steam', component: GameSteamView },
-      { path: 'settings', name: 'game-settings', component: GameSettingsView }
+      { path: 'settings', name: 'game-settings', component: GameSettingsView },
+      { path: 'backup', name: 'game-backup', component: ProfileBackupView }
     ]
   },
   { path: '/games', redirect: '/game/wall' },

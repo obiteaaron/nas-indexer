@@ -168,5 +168,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 前端类型 | `frontend/src/types/*.ts` | 前端类型定义 |
 | 游戏海报墙 | `frontend/src/views/GameWallView.vue` | 游戏展示视图 |
 | 游戏卡片 | `frontend/src/components/GameCard.vue` | 游戏卡片组件 |
+| 备份管理 | `frontend/src/views/game/ProfileBackupView.vue` | Profiles 备份页面 |
+| 备份路由 | `src/routes/profile-backup.ts` | Profiles 备份 API |
 | AI 设计文档 | `docs/ai-llm-integration-plan.md` | AI 集成方案参考 |
 | 游戏模块设计 | `docs/games-module-design.md` | 游戏模块技术方案 |
