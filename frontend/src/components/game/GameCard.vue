@@ -101,21 +101,56 @@ const genres = computed(() => {
 })
 
 const statusClass = computed(() => {
-  // 已刮削：有 scraped_at 时间戳（Steam或其他来源刮削完成）
+  // 已刮削：有 scraped_at 时间戳（Steam API 刮削成功）
   if (props.game.scraped_at) return 'status-scraped'
 
-  // 已配置：手动添加（metadata_source = 'manual'）
+  // 已完善：信息完整（有海报 + 有评分 + 有类型 + 有开发商）
+  const hasPoster = posterUrl.value !== null
+  const hasRating = props.game.rating && props.game.rating > 0
+  const hasGenres = genres.value.length > 0
+  const hasDeveloper = props.game.developer && props.game.developer.trim()
+  if (hasPoster && hasRating && hasGenres && hasDeveloper) return 'status-complete'
+
+  // 已配置：手动填写了基础信息
+  const basicFields = [
+    props.game.developer,
+    props.game.publisher,
+    props.game.release_date,
+    props.game.short_description,
+    props.game.notes
+  ].filter(v => v && v.trim && v.trim())
+
+  // metadata_source = 'manual' 或标记无 Steam + 有基础字段 或 ≥3 个基础字段
   if (props.game.metadata_source === 'manual') return 'status-manual'
+  if (props.game.is_no_steam && basicFields.length >= 1) return 'status-manual'
+  if (basicFields.length >= 3) return 'status-manual'
 
   return 'status-unscraped'
 })
 
 const statusText = computed(() => {
-  // 已刮削：有 scraped_at 时间戳
+  // 已刮削
   if (props.game.scraped_at) return '已刮削'
 
-  // 已配置：手动添加
+  // 已完善
+  const hasPoster = posterUrl.value !== null
+  const hasRating = props.game.rating && props.game.rating > 0
+  const hasGenres = genres.value.length > 0
+  const hasDeveloper = props.game.developer && props.game.developer.trim()
+  if (hasPoster && hasRating && hasGenres && hasDeveloper) return '已完善'
+
+  // 已配置
+  const basicFields = [
+    props.game.developer,
+    props.game.publisher,
+    props.game.release_date,
+    props.game.short_description,
+    props.game.notes
+  ].filter(v => v && v.trim && v.trim())
+
   if (props.game.metadata_source === 'manual') return '已配置'
+  if (props.game.is_no_steam && basicFields.length >= 1) return '已配置'
+  if (basicFields.length >= 3) return '已配置'
 
   return '待刮削'
 })
@@ -310,6 +345,11 @@ function formatYear(dateStr: string): string {
 
 .status-manual {
   background: #3b82f6;
+  color: white;
+}
+
+.status-complete {
+  background: #8b5cf6;
   color: white;
 }
 

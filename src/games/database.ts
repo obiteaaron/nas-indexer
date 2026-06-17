@@ -835,12 +835,11 @@ class GameDatabase {
     const totalResult: QueryResult[] = database.db!.exec('SELECT COUNT(*) as count FROM games');
     const totalGames: number = totalResult.length > 0 ? (totalResult[0].values[0][0] as number) : 0;
 
+    // 已刮削：有 scraped_at 时间戳（Steam API 刮削成功）
     const scrapedResult: QueryResult[] = database.db!.exec(
-      'SELECT COUNT(*) as count FROM games WHERE scraped_at IS NOT NULL OR metadata_source = \'manual\''
+      'SELECT COUNT(*) as count FROM games WHERE scraped_at IS NOT NULL'
     );
     const scrapedGames: number = scrapedResult.length > 0 ? (scrapedResult[0].values[0][0] as number) : 0;
-
-    const unscrapedGames: number = totalGames - scrapedGames;
 
     const favoriteResult: QueryResult[] = database.db!.exec(
       'SELECT COUNT(*) as count FROM games WHERE is_favorite = 1'
@@ -851,6 +850,37 @@ class GameDatabase {
       'SELECT COUNT(*) as count FROM games WHERE is_no_steam = 1'
     );
     const noSteamGames: number = noSteamResult.length > 0 ? (noSteamResult[0].values[0][0] as number) : 0;
+
+    // 已配置：手动添加或填写了足够基础信息（排除已刮削的）
+    // 查询条件：metadata_source = 'manual' 或 (is_no_steam = 1 且有基础字段) 或 有 ≥3 个基础字段
+    const configuredResult: QueryResult[] = database.db!.exec(`
+      SELECT COUNT(*) as count FROM games
+      WHERE scraped_at IS NULL
+      AND (
+        metadata_source = 'manual'
+        OR (
+          is_no_steam = 1
+          AND (
+            developer IS NOT NULL AND developer != ''
+            OR publisher IS NOT NULL AND publisher != ''
+            OR release_date IS NOT NULL AND release_date != ''
+            OR short_description IS NOT NULL AND short_description != ''
+            OR notes IS NOT NULL AND notes != ''
+          )
+        )
+        OR (
+          (CASE WHEN developer IS NOT NULL AND developer != '' THEN 1 ELSE 0 END
+          + CASE WHEN publisher IS NOT NULL AND publisher != '' THEN 1 ELSE 0 END
+          + CASE WHEN release_date IS NOT NULL AND release_date != '' THEN 1 ELSE 0 END
+          + CASE WHEN short_description IS NOT NULL AND short_description != '' THEN 1 ELSE 0 END
+          + CASE WHEN notes IS NOT NULL AND notes != '' THEN 1 ELSE 0 END) >= 3
+        )
+      )
+    `);
+    const configuredGames: number = configuredResult.length > 0 ? (configuredResult[0].values[0][0] as number) : 0;
+
+    // 待刮削：未刮削且未配置
+    const unscrapedGames: number = totalGames - scrapedGames - configuredGames;
 
     const yearResult: QueryResult[] = database.db!.exec(`
       SELECT substr(release_date, 1, 4) as year, COUNT(*) as count
@@ -884,7 +914,7 @@ class GameDatabase {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
-    return { totalGames, scrapedGames, unscrapedGames, favoriteGames, noSteamGames, byYear, byGenre };
+    return { totalGames, scrapedGames, unscrapedGames, favoriteGames, noSteamGames, configuredGames, byYear, byGenre };
   }
 
   getGenres(): string[] {

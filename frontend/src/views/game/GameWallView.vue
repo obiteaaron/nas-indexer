@@ -100,6 +100,7 @@
     <div class="stats-summary" v-if="stats">
       <span class="stat-item">总计 {{ stats.totalGames }} 个游戏</span>
       <span class="stat-item">已刮削 {{ stats.scrapedGames }} 个</span>
+      <span class="stat-item" v-if="stats.configuredGames > 0">已配置 {{ stats.configuredGames }} 个</span>
       <span class="stat-item">待刮削 {{ stats.unscrapedGames }} 个</span>
       <span class="stat-item" v-if="stats.favoriteGames > 0">收藏 {{ stats.favoriteGames }} 个</span>
       <span class="stat-item" v-if="stats.noSteamGames > 0">无 Steam {{ stats.noSteamGames }} 个</span>

@@ -122,6 +122,7 @@ export interface GameStatistics {
   unscrapedGames: number;
   favoriteGames: number;
   noSteamGames: number;
+  configuredGames: number;
   byYear: { year: string; count: number }[];
   byGenre: { genre: string; count: number }[];
 }
