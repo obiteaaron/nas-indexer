@@ -279,6 +279,7 @@ export interface Game {
   is_manually_edited: number;
   is_favorite?: number;
   is_root_manually_marked?: number;
+  is_no_steam?: number;  // 无Steam标记（不可Steam刮削）
   created_at?: string;
   updated_at?: string;
   posterLocal?: string;
@@ -291,6 +292,7 @@ export interface GameQueryOptions {
   search?: string;
   scraped?: 'true' | 'false';
   favorite?: 'true' | 'false';
+  noSteam?: 'true' | 'false';
   orderBy?: 'title' | 'rating' | 'release_date' | 'scraped_at';
   orderDir?: 'ASC' | 'DESC';
   page?: number;
@@ -310,6 +312,7 @@ export interface GameStatistics {
   scrapedGames: number;
   unscrapedGames: number;
   favoriteGames: number;
+  noSteamGames: number;
   byYear: { year: string; count: number }[];
   byGenre: { genre: string; count: number }[];
 }

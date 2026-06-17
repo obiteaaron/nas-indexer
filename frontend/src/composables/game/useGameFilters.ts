@@ -6,6 +6,7 @@ export function useGameFilters(onChange: () => void) {
   const filterGenre = ref('');
   const filterYear = ref('');
   const filterScraped = ref('');
+  const filterNoSteam = ref('');
   const orderBy = ref('title');
 
   let searchTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -19,7 +20,7 @@ export function useGameFilters(onChange: () => void) {
     }, 300);
   }
 
-  watch([filterGenre, filterYear, filterScraped, orderBy], () => {
+  watch([filterGenre, filterYear, filterScraped, filterNoSteam, orderBy], () => {
     onChange();
   });
 
@@ -28,6 +29,7 @@ export function useGameFilters(onChange: () => void) {
     filterGenre,
     filterYear,
     filterScraped,
+    filterNoSteam,
     orderBy,
     debouncedSearch
   };

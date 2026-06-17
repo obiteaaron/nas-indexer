@@ -18,6 +18,9 @@
         <div class="game-rating" v-if="game.rating">
           <span class="rating-badge">{{ game.rating }}</span>
         </div>
+        <div class="steam-badge" v-if="game.steam_appid || game.is_no_steam" :class="{ disabled: game.is_no_steam }" :title="game.is_no_steam ? '无 Steam 信息' : 'Steam AppID: ' + game.steam_appid">
+          <img src="/icons/steam-favicon.ico" alt="Steam" class="steam-icon" />
+        </div>
         <div class="game-actions">
           <button class="action-btn" @click.stop="$emit('open', game)" title="打开目录">
             📂
@@ -322,5 +325,28 @@ function formatYear(dateStr: string): string {
 .action-btn-danger:hover {
   background: #ef4444;
   color: white;
+}
+
+.steam-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px;
+  background: rgba(27, 40, 56, 0.8);
+  border-radius: 4px;
+}
+
+.steam-badge .steam-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.steam-badge.disabled {
+  background: rgba(107, 114, 128, 0.6);
+}
+
+.steam-badge.disabled .steam-icon {
+  opacity: 0.4;
+  filter: grayscale(0.5);
 }
 </style>

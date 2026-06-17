@@ -93,6 +93,18 @@ class GameDatabase {
       logger.info('游戏数据库: 新增 is_root_manually_marked 列（P0手动优先级标记）');
     }
 
+    // 兼容已存在表：检查 is_no_steam 列是否存在
+    const noSteamCheck: QueryResult[] = database.db!.exec(
+      "SELECT COUNT(*) as cnt FROM pragma_table_info('games') WHERE name='is_no_steam'"
+    );
+    const hasNoSteamCol = noSteamCheck.length > 0 && (noSteamCheck[0].values[0][0] as number) > 0;
+    if (!hasNoSteamCol) {
+      database.db!.run('ALTER TABLE games ADD COLUMN is_no_steam INTEGER DEFAULT 0');
+      logger.info('游戏数据库: 新增 is_no_steam 列（无Steam标记）');
+    }
+    // 列确认存在后再创建索引
+    database.db!.run('CREATE INDEX IF NOT EXISTS idx_games_no_steam ON games(is_no_steam)');
+
     // Steam 数据库表：Steam AppID 与游戏名称映射
     database.db!.run(`
       CREATE TABLE IF NOT EXISTS game_groups (
@@ -290,7 +302,7 @@ class GameDatabase {
   }
 
   getGames(options: GameQueryOptions = {}): Game[] {
-    const { genre, year, search, scraped, favorite, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
+    const { genre, year, search, scraped, favorite, noSteam, orderBy = 'title', orderDir = 'ASC', limit = 100, offset = 0 } = options;
 
     let sql: string = 'SELECT * FROM games';
     const params: unknown[] = [];
@@ -323,6 +335,12 @@ class GameDatabase {
       conditions.push('is_favorite = 0');
     }
 
+    if (noSteam === 'true') {
+      conditions.push('is_no_steam = 1');
+    } else if (noSteam === 'false') {
+      conditions.push('is_no_steam = 0');
+    }
+
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
@@ -344,7 +362,7 @@ class GameDatabase {
   }
 
   getGameCount(options: GameQueryOptions = {}): number {
-    const { genre, year, search, scraped, favorite } = options;
+    const { genre, year, search, scraped, favorite, noSteam } = options;
 
     let sql: string = 'SELECT COUNT(*) as count FROM games';
     const params: unknown[] = [];
@@ -377,6 +395,12 @@ class GameDatabase {
       conditions.push('is_favorite = 0');
     }
 
+    if (noSteam === 'true') {
+      conditions.push('is_no_steam = 1');
+    } else if (noSteam === 'false') {
+      conditions.push('is_no_steam = 0');
+    }
+
     if (conditions.length > 0) {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
@@ -397,7 +421,7 @@ class GameDatabase {
       'description', 'short_description', 'languages', 'tags', 'notes',
       'screenshots',
       'metadata_source', 'scraped_at',  // ✓ 允许更新元数据来源和刮削时间
-      'is_manually_edited', 'is_root_manually_marked'
+      'is_manually_edited', 'is_root_manually_marked', 'is_no_steam'
     ];
 
     for (const field of allowedFields) {
@@ -823,6 +847,11 @@ class GameDatabase {
     );
     const favoriteGames: number = favoriteResult.length > 0 ? (favoriteResult[0].values[0][0] as number) : 0;
 
+    const noSteamResult: QueryResult[] = database.db!.exec(
+      'SELECT COUNT(*) as count FROM games WHERE is_no_steam = 1'
+    );
+    const noSteamGames: number = noSteamResult.length > 0 ? (noSteamResult[0].values[0][0] as number) : 0;
+
     const yearResult: QueryResult[] = database.db!.exec(`
       SELECT substr(release_date, 1, 4) as year, COUNT(*) as count
       FROM games
@@ -855,7 +884,7 @@ class GameDatabase {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
-    return { totalGames, scrapedGames, unscrapedGames, favoriteGames, byYear, byGenre };
+    return { totalGames, scrapedGames, unscrapedGames, favoriteGames, noSteamGames, byYear, byGenre };
   }
 
   getGenres(): string[] {

@@ -53,7 +53,7 @@ function openDirectory(dirPath: string): void {
 router.get('/', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
-    const { genre, year, search, scraped, favorite, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
+    const { genre, year, search, scraped, favorite, noSteam, orderBy = 'title', orderDir = 'ASC', page = '1', pageSize = '50' } = req.query;
     const offset: number = (parseInt(page as string) - 1) * parseInt(pageSize as string);
     const limit: number = parseInt(pageSize as string);
 
@@ -63,6 +63,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       search: search as string,
       scraped: scraped as 'true' | 'false' | undefined,
       favorite: favorite as 'true' | 'false' | undefined,
+      noSteam: noSteam as 'true' | 'false' | undefined,
       orderBy: (orderBy as 'title' | 'release_date' | 'rating' | 'scraped_at') || undefined,
       orderDir: (orderDir as 'ASC' | 'DESC') || undefined,
       limit,

@@ -82,6 +82,13 @@
         </select>
       </div>
       <div class="filter-group">
+        <select v-model="filterNoSteam" class="filter-select" @change="loadGames">
+          <option value="">全部游戏</option>
+          <option value="true">无 Steam</option>
+          <option value="false">有 Steam</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <select v-model="orderBy" class="filter-select" @change="loadGames">
           <option value="title">按名称</option>
           <option value="rating">按评分</option>
@@ -95,6 +102,7 @@
       <span class="stat-item">已刮削 {{ stats.scrapedGames }} 个</span>
       <span class="stat-item">待刮削 {{ stats.unscrapedGames }} 个</span>
       <span class="stat-item" v-if="stats.favoriteGames > 0">收藏 {{ stats.favoriteGames }} 个</span>
+      <span class="stat-item" v-if="stats.noSteamGames > 0">无 Steam {{ stats.noSteamGames }} 个</span>
     </div>
 
     <div class="poster-grid" v-if="games.length">
@@ -284,6 +292,12 @@
             <label class="form-label">评分</label>
             <input v-model.number="editForm.rating" class="input" type="number" step="0.1" min="0" max="10" placeholder="9.5" />
             <span class="hint">0-10 分</span>
+          </div>
+          <div class="form-row">
+            <label class="checkbox-label">
+              <input v-model="editForm.is_no_steam" type="checkbox" />
+              标记为无 Steam 游戏（不可 Steam 刮削）
+            </label>
           </div>
           <div class="form-row">
             <a class="toggle-more" @click="showEditMoreFields = !showEditMoreFields">
@@ -631,7 +645,8 @@ const editForm = ref({
   rating: null as number | null,
   short_description: '',
   description: '',
-  notes: ''
+  notes: '',
+  is_no_steam: false
 })
 
 const showPosterUploadModal = ref(false)
@@ -669,6 +684,7 @@ const searchQuery = ref('')
 const filterGenre = ref('')
 const filterYear = ref('')
 const filterScraped = ref('')
+const filterNoSteam = ref('')
 const orderBy = ref('title')
 
 let searchTimeout: ReturnType<typeof setTimeout> | null = null
@@ -729,6 +745,7 @@ async function loadGames(): Promise<void> {
         year: filterYear.value,
         scraped: isFavorite ? undefined : filterScraped.value,
         favorite: isFavorite ? 'true' : undefined,
+        noSteam: filterNoSteam.value,
         orderBy: orderBy.value,
         orderDir: 'ASC',
         page: page.value,
@@ -1207,7 +1224,8 @@ function startEditGame(game: Game): void {
     rating: game.rating || null,
     short_description: game.short_description || '',
     description: game.description || '',
-    notes: game.notes || ''
+    notes: game.notes || '',
+    is_no_steam: game.is_no_steam === 1
   }
   showEditMoreFields.value = false
   showEditGameModal.value = true
@@ -1243,7 +1261,8 @@ async function submitEditGame(): Promise<void> {
       rating: editForm.value.rating || undefined,
       short_description: editForm.value.short_description.trim() || undefined,
       description: editForm.value.description.trim() || undefined,
-      notes: editForm.value.notes.trim() || undefined
+      notes: editForm.value.notes.trim() || undefined,
+      is_no_steam: editForm.value.is_no_steam ? 1 : 0
     }
 
     const res = await updateGameApi(selectedGame.value.id, updateData)
@@ -1923,5 +1942,20 @@ function handleEsc(e: KeyboardEvent): void {
 
 .toggle-more:hover {
   text-decoration: underline;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 </style>
