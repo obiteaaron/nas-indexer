@@ -676,6 +676,55 @@ class GameDatabase {
 
   // === 分组游戏管理 ===
 
+  /**
+   * 获取单个游戏所属的分组列表
+   */
+  getGroupsForGame(gameId: number): GameGroup[] {
+    const result: QueryResult[] = database.db!.exec(`
+      SELECT g.*
+      FROM game_groups g
+      INNER JOIN game_group_items gi ON g.id = gi.group_id
+      WHERE gi.game_id = ?
+      ORDER BY g.pinned DESC, g.sort_order ASC
+    `, [gameId]);
+
+    if (result.length === 0) return [];
+
+    return result[0].values.map(row => {
+      const cols = result[0].columns;
+      const obj: Record<string, unknown> = {};
+      cols.forEach((col, i) => { obj[col] = row[i]; });
+      return obj as unknown as GameGroup;
+    });
+  }
+
+  /**
+   * 设置游戏分组（覆盖式：移出所有分组，添加到指定分组）
+   */
+  setGameGroups(gameId: number, groupIds: number[]): void {
+    // 先删除所有现有分组
+    database.db!.run('DELETE FROM game_group_items WHERE game_id = ?', [gameId]);
+
+    // 添加新分组
+    for (const groupId of groupIds) {
+      // 获取当前分组最大 sort_order
+      const maxResult: QueryResult[] = database.db!.exec(
+        'SELECT MAX(sort_order) as max_order FROM game_group_items WHERE group_id = ?',
+        [groupId]
+      );
+      const maxOrder: number = maxResult.length > 0 && maxResult[0].values[0][0]
+        ? (maxResult[0].values[0][0] as number)
+        : 0;
+
+      database.db!.run(
+        'INSERT INTO game_group_items (group_id, game_id, sort_order) VALUES (?, ?, ?)',
+        [groupId, gameId, maxOrder + 1]
+      );
+    }
+
+    database.save();
+  }
+
   addGroupGame(groupId: number, gameId: number, sortOrder?: number): boolean {
     try {
       const maxResult: QueryResult[] = database.db!.exec('SELECT MAX(sort_order) as max_order FROM game_group_items WHERE group_id = ?', [groupId]);
@@ -1197,25 +1246,59 @@ class GameDatabase {
   }
 
   /**
-   * 导出 Steam DB（返回纯数据数组，不含 id/created_at/updated_at）
+   * 导出 Steam DB（返回完整数据，不含 id/raw_data/created_at/updated_at）
+   * 包含：steam_appid, name, name_en, aliases, notes, source,
+   *       release_date, genres, rating, languages, tags, scraped_at
    */
   exportSteamDb(): SteamDbEntry[] {
     const result: QueryResult[] = database.db!.exec(
-      'SELECT steam_appid, name, name_en, aliases, notes, source FROM steam_db ORDER BY name ASC'
+      `SELECT steam_appid, name, name_en, aliases, notes, source,
+              release_date, genres, rating, languages, tags, scraped_at
+       FROM steam_db ORDER BY name ASC`
     );
     if (result.length === 0) return [];
-    return result[0].values.map(row => ({
-      steam_appid: row[0] as string,
-      name: row[1] as string,
-      name_en: row[2] as string || undefined,
-      aliases: JSON.parse(row[3] as string || '[]'),
-      notes: row[4] as string || undefined,
-      source: row[5] as 'manual' | 'imported' | 'auto' | 'scraper'
-    }));
+    return result[0].values.map(row => {
+      // 解析 JSON 字段
+      let genres: string | undefined;
+      try {
+        genres = row[7] ? JSON.parse(row[7] as string) : undefined;
+      } catch {
+        genres = row[7] as string || undefined;
+      }
+
+      let languages: string | undefined;
+      try {
+        languages = row[9] ? JSON.parse(row[9] as string) : undefined;
+      } catch {
+        languages = row[9] as string || undefined;
+      }
+
+      let tags: string | undefined;
+      try {
+        tags = row[10] ? JSON.parse(row[10] as string) : undefined;
+      } catch {
+        tags = row[10] as string || undefined;
+      }
+
+      return {
+        steam_appid: row[0] as string,
+        name: row[1] as string,
+        name_en: row[2] as string || undefined,
+        aliases: JSON.parse(row[3] as string || '[]'),
+        notes: row[4] as string || undefined,
+        source: row[5] as 'manual' | 'imported' | 'auto' | 'scraper',
+        release_date: row[6] as string || undefined,
+        genres,
+        rating: row[8] as number || undefined,
+        languages,
+        tags,
+        scraped_at: row[11] as string || undefined
+      };
+    });
   }
 
   /**
-   * 导入 Steam DB
+   * 导入 Steam DB（支持完整字段导入）
    */
   importSteamDb(entries: SteamDbEntry[], mode: 'merge' | 'overwrite' = 'merge'): SteamDbImportResult {
     const result: SteamDbImportResult = { added: 0, updated: 0, skipped: 0 };
@@ -1231,13 +1314,30 @@ class GameDatabase {
         [entry.steam_appid]
       );
 
+      // 处理 JSON 字段
+      const genresStr = entry.genres
+        ? (typeof entry.genres === 'string' ? entry.genres : JSON.stringify(entry.genres))
+        : null;
+      const languagesStr = entry.languages
+        ? (typeof entry.languages === 'string' ? entry.languages : JSON.stringify(entry.languages))
+        : null;
+      const tagsStr = entry.tags
+        ? (typeof entry.tags === 'string' ? entry.tags : JSON.stringify(entry.tags))
+        : null;
+
       if (existing.length > 0 && existing[0].values.length > 0) {
         if (mode === 'overwrite') {
-          // 覆盖模式：更新现有条目
+          // 覆盖模式：更新现有条目（包含完整字段）
           const id = existing[0].values[0][0] as number;
           database.db!.run(
-            'UPDATE steam_db SET name = ?, name_en = ?, aliases = ?, notes = ?, source = ?, updated_at = datetime("now", "localtime") WHERE id = ?',
-            [entry.name, entry.name_en || null, JSON.stringify(entry.aliases || []), entry.notes || null, 'imported', id]
+            `UPDATE steam_db SET
+              name = ?, name_en = ?, aliases = ?, notes = ?, source = ?,
+              release_date = ?, genres = ?, rating = ?, languages = ?, tags = ?, scraped_at = ?,
+              updated_at = datetime("now", "localtime")
+            WHERE id = ?`,
+            [entry.name, entry.name_en || null, JSON.stringify(entry.aliases || []), entry.notes || null, 'imported',
+             entry.release_date || null, genresStr, entry.rating || null, languagesStr, tagsStr, entry.scraped_at || null,
+             id]
           );
           result.updated++;
         } else {
@@ -1245,10 +1345,14 @@ class GameDatabase {
           result.skipped++;
         }
       } else {
-        // 新条目：插入
+        // 新条目：插入（包含完整字段）
         database.db!.run(
-          'INSERT INTO steam_db (steam_appid, name, name_en, aliases, notes, source) VALUES (?, ?, ?, ?, ?, ?)',
-          [entry.steam_appid, entry.name, entry.name_en || null, JSON.stringify(entry.aliases || []), entry.notes || null, 'imported']
+          `INSERT INTO steam_db
+           (steam_appid, name, name_en, aliases, notes, source,
+            release_date, genres, rating, languages, tags, scraped_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [entry.steam_appid, entry.name, entry.name_en || null, JSON.stringify(entry.aliases || []), entry.notes || null, 'imported',
+           entry.release_date || null, genresStr, entry.rating || null, languagesStr, tagsStr, entry.scraped_at || null]
         );
         result.added++;
       }

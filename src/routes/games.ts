@@ -360,6 +360,80 @@ router.get('/groups/:id/games/candidates', async (req: Request, res: Response): 
 // === 下面是游戏路由（必须在分组路由之后） ===
 
 /**
+ * 获取单个游戏所属的分组列表
+ */
+router.get('/:id/groups', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const gameId = parseInt(req.params.id as string);
+    if (isNaN(gameId)) {
+      res.status(400).json({ success: false, error: '无效的游戏 ID' });
+      return;
+    }
+
+    // 验证游戏是否存在
+    const game: Game | null = gameDatabase.getGameById(gameId);
+    if (!game) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+
+    const groups: GameGroup[] = gameDatabase.getGroupsForGame(gameId);
+    res.json({ success: true, data: groups });
+  } catch (err) {
+    const error = err as Error;
+    logger.error('获取游戏分组失败: %s', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 设置游戏分组（覆盖式：移出所有分组，添加到指定分组）
+ */
+router.post('/:id/groups', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const gameId = parseInt(req.params.id as string);
+    if (isNaN(gameId)) {
+      res.status(400).json({ success: false, error: '无效的游戏 ID' });
+      return;
+    }
+
+    // 验证游戏是否存在
+    const game: Game | null = gameDatabase.getGameById(gameId);
+    if (!game) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+
+    const { group_ids } = req.body;
+    if (!Array.isArray(group_ids)) {
+      res.status(400).json({ success: false, error: 'group_ids 必须为数组' });
+      return;
+    }
+
+    // 验证所有分组 ID 都存在
+    const validGroupIds: number[] = [];
+    for (const id of group_ids) {
+      const numId = Number(id);
+      if (!isNaN(numId)) {
+        const group = gameDatabase.getGroupById(numId);
+        if (group) {
+          validGroupIds.push(numId);
+        }
+      }
+    }
+
+    gameDatabase.setGameGroups(gameId, validGroupIds);
+    res.json({ success: true });
+  } catch (err) {
+    const error = err as Error;
+    logger.error('设置游戏分组失败: %s', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 获取游戏详情
  */
 router.get('/:id', async (req: Request, res: Response): Promise<void> => {

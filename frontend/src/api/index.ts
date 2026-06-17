@@ -542,6 +542,24 @@ export function getGamesNotInGroup(groupId: number): Promise<ApiResponse<Game[]>
   return request<Game[]>('/games/groups/' + groupId + '/games/candidates')
 }
 
+/**
+ * 获取单个游戏所属的分组列表
+ */
+export function getGameGroupsForGame(gameId: number): Promise<ApiResponse<GameGroup[]>> {
+  return request<GameGroup[]>('/games/' + gameId + '/groups')
+}
+
+/**
+ * 设置游戏分组（覆盖式：移出所有分组，添加到指定分组）
+ */
+export function setGameGroups(gameId: number, groupIds: number[]): Promise<ApiResponse<void>> {
+  clearCache('/games')
+  return request<void>('/games/' + gameId + '/groups', {
+    method: 'POST',
+    body: JSON.stringify({ group_ids: groupIds })
+  })
+}
+
 // === Backup API ===
 
 export interface BackupInfo {

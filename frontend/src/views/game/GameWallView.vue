@@ -36,6 +36,9 @@
         <button class="btn btn-secondary" @click="showBatchScrapeModal = true" :disabled="scraping">
           {{ scraping ? '刮削中...' : '批量刮削' }}
         </button>
+        <button class="btn" :class="batchMode ? 'btn-primary' : 'btn-secondary'" @click="toggleBatchMode">
+          {{ batchMode ? '退出批量' : '批量管理' }}
+        </button>
         <div class="dropdown-wrapper">
           <button class="btn btn-secondary dropdown-toggle" @click="showMoreDropdown = !showMoreDropdown">
             更多...
@@ -106,18 +109,54 @@
       <span class="stat-item" v-if="stats.noSteamGames > 0">无 Steam {{ stats.noSteamGames }} 个</span>
     </div>
 
+    <!-- Batch actions bar -->
+    <div class="batch-actions-bar" v-if="batchMode">
+      <div class="batch-selection">
+        <input type="checkbox" :checked="selectedGameIds.size === games.length && games.length > 0" @change="handleSelectAll" />
+        <span class="batch-count">已选中 {{ selectedGameIds.size }} 个游戏</span>
+      </div>
+      <div class="batch-actions">
+        <button class="btn btn-primary btn-small" @click="openBatchGroupSelector" :disabled="selectedGameIds.size === 0">
+          📁 批量加入分组
+        </button>
+        <button class="btn btn-warning btn-small" @click="batchToggleFavorite" :disabled="selectedGameIds.size === 0">
+          ⭐ 批量收藏
+        </button>
+        <button class="btn btn-danger btn-small" @click="batchDeleteGames" :disabled="selectedGameIds.size === 0">
+          🗑️ 批量删除
+        </button>
+        <button class="btn btn-secondary btn-small" @click="exitBatchMode">
+          取消
+        </button>
+      </div>
+    </div>
+
     <div class="poster-grid" v-if="games.length">
-      <GameCard
+      <div
         v-for="game in games"
         :key="game.id"
-        :game="game"
-        @click="showGameDetail(game)"
-        @open="openGameDir"
-        @detail="showGameDetail"
-        @exclude="toggleExclude"
-        @delete="deleteSingleGame"
-        @favorite="toggleFavorite"
-      />
+        class="game-card-wrapper"
+        :class="{ 'batch-selected': batchMode && selectedGameIds.has(game.id) }"
+      >
+        <input
+          v-if="batchMode"
+          type="checkbox"
+          :checked="selectedGameIds.has(game.id)"
+          @change="toggleGameSelection(game.id)"
+          @click.stop
+          class="batch-checkbox"
+        />
+        <GameCard
+          :game="game"
+          @click="batchMode ? toggleGameSelection(game.id) : showGameDetail(game)"
+          @open="openGameDir"
+          @detail="showGameDetail"
+          @exclude="toggleExclude"
+          @delete="deleteSingleGame"
+          @favorite="toggleFavorite"
+          @group="openGroupSelector"
+        />
+      </div>
     </div>
 
     <div class="empty-state" v-else-if="!loading">
@@ -226,6 +265,27 @@
             <div class="info-row" v-if="selectedGame.source_path">
               <span class="info-label">路径</span>
               <span class="info-value path">{{ selectedGame.source_path }}</span>
+            </div>
+
+            <!-- Groups Section -->
+            <div class="groups-section" v-if="selectedGame">
+              <div class="groups-header">
+                <span class="groups-title">📁 所属分组</span>
+                <button class="btn btn-small btn-primary" @click="openGroupSelector(selectedGame)">
+                  + 加入分组
+                </button>
+              </div>
+              <div class="groups-list">
+                <span v-for="group in selectedGameGroups" :key="group.id" class="group-badge">
+                  {{ group.name }}
+                  <button class="group-badge-remove" @click="removeFromGroup(group.id)" title="移出分组">
+                    ×
+                  </button>
+                </span>
+                <span v-if="selectedGameGroups.length === 0" class="no-groups">
+                  暂无分组
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -549,6 +609,23 @@
       @refresh="loadGroups"
     />
 
+    <!-- Group Selector Popup (single game) -->
+    <GroupSelectorPopup
+      v-if="showGroupSelector && selectedGameForGroup"
+      :gameId="selectedGameForGroup.id"
+      :selectedGroupIds="selectedGameGroups.map(g => g.id)"
+      @close="showGroupSelector = false"
+      @confirm="handleGroupSelection"
+    />
+
+    <!-- Group Selector Popup (batch) -->
+    <GroupSelectorPopup
+      v-if="showBatchGroupSelector"
+      :gameIds="Array.from(selectedGameIds)"
+      @close="showBatchGroupSelector = false"
+      @confirm="handleBatchGroupSelection"
+    />
+
     <!-- Active filter indicator in header -->
     <div class="active-group-bar" v-if="(selectedGroupId !== null && selectedGroupName) || isFavoriteFilter">
       <span class="active-group-label" v-if="isFavoriteFilter">⭐ 收藏</span>
@@ -588,11 +665,14 @@ import {
   redownloadGamePoster,
   getGamePosterBackups,
   restoreGamePosterBackup,
-  deleteGamePosterBackup
+  deleteGamePosterBackup,
+  getGameGroupsForGame,
+  setGameGroups
 } from '../../api'
 import GameCard from '../../components/game/GameCard.vue'
 import GameGroupSidebar from '../../components/game/GameGroupSidebar.vue'
 import GameGroupManager from '../../components/game/GameGroupManager.vue'
+import GroupSelectorPopup from '../../components/game/GroupSelectorPopup.vue'
 import Pagination from '../../components/Pagination.vue'
 import type { Game, GameStatistics, GameGroup, SteamSearchItem, PosterBackup } from '../../types'
 
@@ -675,6 +755,16 @@ const selectedGroupName = ref('')
 const showGroupManager = ref(false)
 const config = ref({ groupsEnabled: true })
 const isFavoriteFilter = ref(false)
+
+// Group selector state
+const showGroupSelector = ref(false)
+const selectedGameForGroup = ref<Game | null>(null)
+const selectedGameGroups = ref<GameGroup[]>([])
+const showBatchGroupSelector = ref(false)
+
+// Batch mode state
+const batchMode = ref(false)
+const selectedGameIds = ref<Set<number>>(new Set())
 
 const page = ref(1)
 const pageSize = ref(100)
@@ -1026,7 +1116,176 @@ async function bindSteamAppid(): Promise<void> {
 function showGameDetail(game: Game): void {
   selectedGame.value = game
   posterBackups.value = []
+  selectedGameGroups.value = []
   loadPosterBackups()
+  loadGameGroups(game.id)
+}
+
+async function loadGameGroups(gameId: number): Promise<void> {
+  try {
+    const res = await getGameGroupsForGame(gameId)
+    if (res.success && res.data) {
+      selectedGameGroups.value = res.data
+    } else {
+      selectedGameGroups.value = []
+    }
+  } catch (err) {
+    console.error('加载游戏分组失败:', err)
+    selectedGameGroups.value = []
+  }
+}
+
+async function removeFromGroup(groupId: number): Promise<void> {
+  if (!selectedGame.value) return
+
+  // 移除该分组
+  const newGroupIds = selectedGameGroups.value
+    .filter(g => g.id !== groupId)
+    .map(g => g.id)
+
+  try {
+    const res = await setGameGroups(selectedGame.value.id, newGroupIds)
+    if (res.success) {
+      await loadGameGroups(selectedGame.value.id)
+      showNotification('已移出分组')
+    } else {
+      showNotification('移出分组失败')
+    }
+  } catch (err) {
+    console.error('移出分组失败:', err)
+    showNotification('移出分组失败')
+  }
+}
+
+function openGroupSelector(game: Game): void {
+  selectedGameForGroup.value = game
+  showGroupSelector.value = true
+}
+
+async function handleGroupSelection({ groupIds }: { groupIds: number[] }): Promise<void> {
+  if (!selectedGameForGroup.value) return
+
+  try {
+    const res = await setGameGroups(selectedGameForGroup.value.id, groupIds)
+    if (res.success) {
+      // 如果是当前详情中的游戏，更新显示
+      if (selectedGame.value && selectedGame.value.id === selectedGameForGroup.value.id) {
+        await loadGameGroups(selectedGame.value.id)
+      }
+      showNotification('分组已更新')
+    } else {
+      showNotification('更新分组失败')
+    }
+  } catch (err) {
+    console.error('更新分组失败:', err)
+    showNotification('更新分组失败')
+  }
+
+  showGroupSelector.value = false
+}
+
+// === Batch mode functions ===
+
+function toggleBatchMode(): void {
+  batchMode.value = !batchMode.value
+  if (!batchMode.value) {
+    selectedGameIds.value.clear()
+  }
+}
+
+function exitBatchMode(): void {
+  batchMode.value = false
+  selectedGameIds.value.clear()
+}
+
+function toggleGameSelection(gameId: number): void {
+  if (selectedGameIds.value.has(gameId)) {
+    selectedGameIds.value.delete(gameId)
+  } else {
+    selectedGameIds.value.add(gameId)
+  }
+}
+
+function handleSelectAll(): void {
+  if (selectedGameIds.value.size === games.value.length) {
+    selectedGameIds.value.clear()
+  } else {
+    games.value.forEach(game => selectedGameIds.value.add(game.id))
+  }
+}
+
+function openBatchGroupSelector(): void {
+  showBatchGroupSelector.value = true
+}
+
+async function handleBatchGroupSelection({ groupIds }: { groupIds: number[] }): Promise<void> {
+  if (selectedGameIds.value.size === 0 || groupIds.length === 0) return
+
+  try {
+    let successCount = 0
+    for (const gameId of selectedGameIds.value) {
+      // 获取现有分组
+      const res = await getGameGroupsForGame(gameId)
+      const existingGroupIds = res.success && res.data ? res.data.map(g => g.id) : []
+
+      // 合并新旧分组（去重）
+      const mergedGroupIds = [...new Set([...existingGroupIds, ...groupIds])]
+
+      // 设置合并后的分组
+      const setRes = await setGameGroups(gameId, mergedGroupIds)
+      if (setRes.success) successCount++
+    }
+
+    showNotification(`已将 ${successCount} 个游戏添加到分组`)
+    exitBatchMode()
+  } catch (err) {
+    console.error('批量添加到分组失败:', err)
+    showNotification('批量添加到分组失败')
+  }
+
+  showBatchGroupSelector.value = false
+}
+
+async function batchToggleFavorite(): Promise<void> {
+  if (selectedGameIds.value.size === 0) return
+
+  try {
+    let successCount = 0
+    for (const gameId of selectedGameIds.value) {
+      const game = games.value.find(g => g.id === gameId)
+      if (game) {
+        await toggleFavorite(game)
+        successCount++
+      }
+    }
+    showNotification(`已处理 ${successCount} 个游戏`)
+    exitBatchMode()
+  } catch (err) {
+    console.error('批量收藏失败:', err)
+    showNotification('批量收藏失败')
+  }
+}
+
+async function batchDeleteGames(): Promise<void> {
+  if (selectedGameIds.value.size === 0) return
+
+  if (!confirm(`确定要删除选中的 ${selectedGameIds.value.size} 个游戏吗？此操作不可撤销。`)) {
+    return
+  }
+
+  try {
+    let successCount = 0
+    for (const gameId of selectedGameIds.value) {
+      const res = await deleteGame(gameId)
+      if (res.success) successCount++
+    }
+    await refreshGames()
+    showNotification(`已删除 ${successCount} 个游戏`)
+    exitBatchMode()
+  } catch (err) {
+    console.error('批量删除失败:', err)
+    showNotification('批量删除失败')
+  }
 }
 
 async function toggleExclude(game: Game): Promise<void> {
@@ -1958,5 +2217,127 @@ function handleEsc(e: KeyboardEvent): void {
   width: 16px;
   height: 16px;
   cursor: pointer;
+}
+
+/* Batch mode styles */
+.batch-actions-bar {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.batch-selection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.batch-count {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.btn-warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.btn-small {
+  padding: 4px 12px;
+  font-size: 13px;
+}
+
+.game-card-wrapper {
+  position: relative;
+}
+
+.game-card-wrapper.batch-selected {
+  border-radius: 12px;
+  border: 2px solid #28a745;
+}
+
+.batch-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  z-index: 10;
+}
+
+/* Groups section styles */
+.groups-section {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #28a745;
+  border-radius: 8px;
+  background: #f0f7f0;
+}
+
+.groups-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.groups-title {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.groups-list {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.group-badge {
+  background: var(--primary);
+  color: white !important;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.group-badge-remove {
+  background: none;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.group-badge-remove:hover {
+  opacity: 0.8;
+}
+
+.no-groups {
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 </style>

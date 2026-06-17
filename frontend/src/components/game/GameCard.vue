@@ -28,6 +28,9 @@
           <button class="action-btn" @click.stop="$emit('detail', game)" title="查看详情">
             📋
           </button>
+          <button class="action-btn" @click.stop="$emit('group', game)" title="加入分组">
+            📁
+          </button>
           <button class="action-btn" @click.stop="$emit('exclude', game)" title="排除">
             🚫
           </button>
@@ -77,6 +80,7 @@ defineEmits<{
   exclude: [game: Game]
   favorite: [game: Game]
   delete: [game: Game]
+  group: [game: Game]
 }>()
 
 // 海报始终从本地 API 加载（集中存储在 profiles/games/posters/{gameId}/）
