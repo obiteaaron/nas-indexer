@@ -330,6 +330,9 @@ async function scrapeFromRemote(game: Game, appid: number, downloadPosters: bool
     genres: data.genres ? JSON.stringify(data.genres.map(g => g.description)) : undefined,
     rating: data.metacritic?.score,
     languages: data.supported_languages,
+    developer: data.developers?.[0] || undefined,
+    publisher: data.publishers?.[0] || undefined,
+    short_description: data.short_description || undefined,
     raw_data: JSON.stringify(data),  // 存储完整原始数据
     source: 'scraper',
     scraped_at: new Date().toISOString()
@@ -433,6 +436,9 @@ export async function refreshSteamCache(appid: string): Promise<boolean> {
     genres: data.genres ? JSON.stringify(data.genres.map(g => g.description)) : undefined,
     rating: data.metacritic?.score,
     languages: data.supported_languages,
+    developer: data.developers?.[0] || undefined,
+    publisher: data.publishers?.[0] || undefined,
+    short_description: data.short_description || undefined,
     raw_data: JSON.stringify(data),
     source: 'scraper',
     scraped_at: new Date().toISOString()

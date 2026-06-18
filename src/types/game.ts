@@ -199,14 +199,17 @@ export interface SteamDbEntry {
   aliases: string[];          // 别名数组（JSON）
   notes?: string;             // 备注
 
-  // 查询字段
+  // 元数据字段（导出完整信息）
   release_date?: string;      // 发行日期 YYYY-MM-DD
   genres?: string;            // 类型 JSON 数组
   rating?: number;            // Metacritic 评分
-  languages?: string;         // 语言 JSON 数组
+  languages?: string;         // 语言 JSON 数组（或字符串）
   tags?: string;              // 标签 JSON 数组
+  developer?: string;         // 开发商
+  publisher?: string;         // 发行商
+  short_description?: string; // 游戏简介
 
-  // 原始数据
+  // 原始数据（不导出，太大）
   raw_data?: string;          // Steam API 完整返回 JSON
 
   source: 'manual' | 'imported' | 'auto' | 'scraper';  // 来源

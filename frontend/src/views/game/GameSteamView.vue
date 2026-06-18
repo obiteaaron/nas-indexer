@@ -149,9 +149,10 @@
         <div class="modal-body">
           <div class="form-row">
             <label class="form-label">JSON 内容</label>
-            <textarea class="textarea" v-model="importJsonStr" placeholder="粘贴 JSON 数组，格式：
+            <textarea class="textarea" v-model="importJsonStr" placeholder="粘贴 JSON 数组，完整字段：
 [{steam_appid, name, name_en, aliases, notes, source,
-  release_date, genres, rating, languages, tags, scraped_at}]"></textarea>
+  release_date, genres, rating, languages, tags, scraped_at,
+  developer, publisher, short_description}]"></textarea>
           </div>
           <div class="form-row">
             <label class="form-label">导入模式</label>

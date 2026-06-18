@@ -161,7 +161,8 @@ class GameDatabase {
     `);
 
     // 兼容已存在表：检查新列是否存在（迁移逻辑必须在创建索引之前）
-    const steamDbColumns = ['release_date', 'genres', 'languages', 'tags', 'raw_data', 'scraped_at', 'updated_at'];
+    const steamDbColumns = ['release_date', 'genres', 'languages', 'tags', 'raw_data', 'scraped_at', 'updated_at',
+                            'developer', 'publisher', 'short_description'];
     for (const col of steamDbColumns) {
       const colCheck: QueryResult[] = database.db!.exec(
         `SELECT COUNT(*) as cnt FROM pragma_table_info('steam_db') WHERE name='${col}'`
@@ -1222,12 +1223,14 @@ class GameDatabase {
   /**
    * 导出 Steam DB（返回完整数据，不含 id/raw_data/created_at/updated_at）
    * 包含：steam_appid, name, name_en, aliases, notes, source,
-   *       release_date, genres, rating, languages, tags, scraped_at
+   *       release_date, genres, rating, languages, tags, scraped_at,
+   *       developer, publisher, short_description
    */
   exportSteamDb(): SteamDbEntry[] {
     const result: QueryResult[] = database.db!.exec(
       `SELECT steam_appid, name, name_en, aliases, notes, source,
-              release_date, genres, rating, languages, tags, scraped_at
+              release_date, genres, rating, languages, tags, scraped_at,
+              developer, publisher, short_description
        FROM steam_db ORDER BY name ASC`
     );
     if (result.length === 0) return [];
@@ -1266,7 +1269,10 @@ class GameDatabase {
         rating: row[8] as number || undefined,
         languages,
         tags,
-        scraped_at: row[11] as string || undefined
+        scraped_at: row[11] as string || undefined,
+        developer: row[12] as string || undefined,
+        publisher: row[13] as string || undefined,
+        short_description: row[14] as string || undefined
       };
     });
   }
@@ -1307,10 +1313,12 @@ class GameDatabase {
             `UPDATE steam_db SET
               name = ?, name_en = ?, aliases = ?, notes = ?, source = ?,
               release_date = ?, genres = ?, rating = ?, languages = ?, tags = ?, scraped_at = ?,
+              developer = ?, publisher = ?, short_description = ?,
               updated_at = datetime("now", "localtime")
             WHERE id = ?`,
             [entry.name, entry.name_en || null, JSON.stringify(entry.aliases || []), entry.notes || null, 'imported',
              entry.release_date || null, genresStr, entry.rating || null, languagesStr, tagsStr, entry.scraped_at || null,
+             entry.developer || null, entry.publisher || null, entry.short_description || null,
              id]
           );
           result.updated++;
@@ -1323,10 +1331,12 @@ class GameDatabase {
         database.db!.run(
           `INSERT INTO steam_db
            (steam_appid, name, name_en, aliases, notes, source,
-            release_date, genres, rating, languages, tags, scraped_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            release_date, genres, rating, languages, tags, scraped_at,
+            developer, publisher, short_description)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [entry.steam_appid, entry.name, entry.name_en || null, JSON.stringify(entry.aliases || []), entry.notes || null, 'imported',
-           entry.release_date || null, genresStr, entry.rating || null, languagesStr, tagsStr, entry.scraped_at || null]
+           entry.release_date || null, genresStr, entry.rating || null, languagesStr, tagsStr, entry.scraped_at || null,
+           entry.developer || null, entry.publisher || null, entry.short_description || null]
         );
         result.added++;
       }
@@ -1433,7 +1443,8 @@ class GameDatabase {
     const params: unknown[] = [];
 
     const allowedFields = ['name', 'name_en', 'aliases', 'release_date', 'genres', 'rating',
-                           'languages', 'tags', 'raw_data', 'notes', 'source'];
+                           'languages', 'tags', 'raw_data', 'notes', 'source',
+                           'developer', 'publisher', 'short_description'];
     for (const field of allowedFields) {
       if (data[field as keyof SteamDbEntry] !== undefined) {
         if (field === 'aliases' || field === 'genres' || field === 'languages' || field === 'tags') {
