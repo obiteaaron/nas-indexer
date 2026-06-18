@@ -46,7 +46,7 @@
           class="btn btn-primary"
           @click="handleConfirm"
         >
-          确定 ({{ selectedGroupIds.length })
+          确定 ({{ selectedGroupIds.length }})
         </button>
       </div>
     </div>
