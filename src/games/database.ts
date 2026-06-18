@@ -853,6 +853,66 @@ class GameDatabase {
     return result.length > 0 && result[0].values.length > 0;
   }
 
+  // === 分组辅助方法 ===
+
+  /**
+   * 获取所有游戏的路径（用于分组分析）
+   */
+  getAllGamePaths(): { id: number; source_path: string }[] {
+    const result: QueryResult[] = database.db!.exec('SELECT id, source_path FROM games');
+    if (result.length === 0) return [];
+    return result[0].values.map(row => ({
+      id: row[0] as number,
+      source_path: row[1] as string
+    }));
+  }
+
+  /**
+   * 根据名称查找分组
+   */
+  getGroupByName(name: string): GameGroup | null {
+    const result: QueryResult[] = database.db!.exec('SELECT * FROM game_groups WHERE name = ?', [name]);
+    if (result.length === 0 || result[0].values.length === 0) return null;
+    const cols = result[0].columns;
+    const row = result[0].values[0];
+    const group: Record<string, unknown> = {};
+    cols.forEach((col, i) => { group[col] = row[i]; });
+    return group as unknown as GameGroup;
+  }
+
+  /**
+   * 批量添加游戏到分组（忽略已存在的，返回实际添加数量）
+   */
+  addGamesToGroup(groupId: number, gameIds: number[]): number {
+    let addedCount = 0;
+    for (const gameId of gameIds) {
+      // 检查是否已存在
+      const existing: QueryResult[] = database.db!.exec(
+        'SELECT 1 FROM game_group_items WHERE group_id = ? AND game_id = ?',
+        [groupId, gameId]
+      );
+      if (existing.length === 0 || existing[0].values.length === 0) {
+        // 不存在则添加
+        const maxResult: QueryResult[] = database.db!.exec(
+          'SELECT MAX(sort_order) as max_order FROM game_group_items WHERE group_id = ?',
+          [groupId]
+        );
+        const maxOrder: number = maxResult.length > 0 && maxResult[0].values[0][0]
+          ? (maxResult[0].values[0][0] as number)
+          : 0;
+        database.db!.run(
+          'INSERT INTO game_group_items (group_id, game_id, sort_order) VALUES (?, ?, ?)',
+          [groupId, gameId, maxOrder + 1]
+        );
+        addedCount++;
+      }
+    }
+    if (addedCount > 0) {
+      database.save();
+    }
+    return addedCount;
+  }
+
   // === 统计方法 ===
 
   getStatistics(): GameStatistics {
