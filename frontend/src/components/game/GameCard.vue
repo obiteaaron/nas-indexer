@@ -31,7 +31,7 @@
             📋
           </button>
           <button class="action-btn" @click.stop="$emit('group', game)" title="加入分组">
-            📁
+            🏷️
           </button>
           <button class="action-btn" @click.stop="$emit('exclude', game)" title="排除">
             🚫
