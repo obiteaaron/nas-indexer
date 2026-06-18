@@ -11,6 +11,7 @@ import { database } from '../database';
 import { gameDatabase } from '../games/database';
 import { scrapeGame, scrapeUnscrapedGames, searchSteamCandidates } from '../games/scraper';
 import { runIdentification } from '../games/identifier';
+import { extractNamesFromPath } from '../games/name-resolver';
 import { PosterService } from '../games/poster-service';
 import { initDatabase, loadConfig, getStoragePath } from '../utils';
 import { loadGamesConfig, saveGamesConfig, getGameScanPathsFromConfig } from '../games-config';
@@ -685,6 +686,144 @@ router.post('/scrape/batch', async (req: Request, res: Response): Promise<void> 
         taskManager.failTask(task.id, error.message);
       }
     })();
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 批量从路径提取中英文名称（回填 title_en）
+ * 只处理 title_en 为空且路径可解析的游戏
+ */
+router.post('/extract-names/batch', async (_req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    // 检查是否有正在运行的提取任务
+    if (taskManager.hasRunningTask('extract-names')) {
+      res.status(409).json({ success: false, error: '已有名称提取任务正在执行' });
+      return;
+    }
+
+    const gameRoots = getGameScanPathsFromConfig();
+    const task = taskManager.createTask('extract-names');
+    res.json({ success: true, data: { taskId: task.id } });
+
+    // 异步执行批量提取
+    (async () => {
+      try {
+        // 获取所有 title_en 为空的游戏
+        const games = gameDatabase.getGames({ limit: 10000 });
+        const candidates = games.filter(g => !g.title_en && g.source_path);
+
+        const updated: Array<{ id: number; title: string; titleEn: string }> = [];
+        const skipped: Array<{ id: number; reason: string }> = [];
+
+        for (let i = 0; i < candidates.length; i++) {
+          const game = candidates[i];
+
+          // 找到游戏所属的扫描根目录
+          const scanRoot = gameRoots.find(root => game.source_path!.startsWith(path.resolve(root))) || gameRoots[0];
+
+          if (!scanRoot) {
+            skipped.push({ id: game.id, reason: '无法确定扫描根目录' });
+            continue;
+          }
+
+          const extracted = extractNamesFromPath(game.source_path!, scanRoot);
+
+          // 只有成功提取到英文名才更新
+          if (extracted.titleEn && extracted.titleEn !== game.title) {
+            gameDatabase.updateGame(game.id, {
+              title: extracted.title,
+              title_en: extracted.titleEn
+            });
+            updated.push({ id: game.id, title: extracted.title, titleEn: extracted.titleEn });
+            logger.info('[批量名称提取] 更新游戏: %s → title="%s", titleEn="%s"',
+              game.original_name || game.title, extracted.title, extracted.titleEn);
+          } else {
+            skipped.push({ id: game.id, reason: '无法从路径提取英文名' });
+          }
+
+          // 更新进度
+          taskManager.updateTask(task.id, {
+            progress: Math.round(((i + 1) / candidates.length) * 100),
+            message: `正在处理: ${game.title} (${i + 1}/${candidates.length})`
+          });
+        }
+
+        taskManager.completeTask(task.id, {
+          message: `批量名称提取完成：更新 ${updated.length} 个，跳过 ${skipped.length} 个`,
+          data: { updated, skipped }
+        });
+      } catch (err) {
+        const error = err as Error;
+        taskManager.failTask(task.id, error.message);
+      }
+    })();
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * 单个游戏从路径提取名称
+ */
+router.post('/:id/extract-names', async (req: Request, res: Response): Promise<void> => {
+  await initGameDatabase();
+  try {
+    const game: Game | null = gameDatabase.getGameById(parseInt(req.params.id as string));
+    if (!game) {
+      res.status(404).json({ success: false, error: '游戏不存在' });
+      return;
+    }
+
+    if (!game.source_path) {
+      res.status(400).json({ success: false, error: '游戏缺少路径信息' });
+      return;
+    }
+
+    const gameRoots = getGameScanPathsFromConfig();
+    const scanRoot = gameRoots.find(root => game.source_path!.startsWith(path.resolve(root))) || gameRoots[0];
+
+    if (!scanRoot) {
+      res.status(400).json({ success: false, error: '无法确定扫描根目录' });
+      return;
+    }
+
+    const extracted = extractNamesFromPath(game.source_path, scanRoot);
+
+    if (!extracted.titleEn) {
+      res.json({
+        success: true,
+        data: {
+          extracted,
+          message: '无法从路径提取英文名',
+          updated: false
+        }
+      });
+      return;
+    }
+
+    // 更新游戏
+    gameDatabase.updateGame(game.id, {
+      title: extracted.title,
+      title_en: extracted.titleEn
+    });
+
+    const updatedGame = gameDatabase.getGameById(game.id);
+    logger.info('[名称提取] 更新游戏: %s → title="%s", titleEn="%s"',
+      game.original_name || game.title, extracted.title, extracted.titleEn);
+
+    res.json({
+      success: true,
+      data: {
+        game: updatedGame,
+        extracted,
+        updated: true
+      }
+    });
   } catch (err) {
     const error = err as Error;
     res.status(500).json({ success: false, error: error.message });

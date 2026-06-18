@@ -1,5 +1,22 @@
 # 更新日志
 
+## [v1.5.8] - 2026-06-19
+
+### 新增功能
+- **路径名称提取** - 从游戏路径自动提取中英文名称
+  - 中文目录名作为游戏标题（title）
+  - 英文子目录/安装包文件名作为英文标题（title_en）
+  - 新增批量名称提取 API `/api/games/extract-names/batch`
+  - 新增单个游戏名称提取 API `/api/games/:id/extract-names`
+  - 游戏识别时自动提取中英文名称
+
+### 技术改进
+- **name-resolver 模块扩展** - 新增路径解析函数
+  - extractNamesFromPath：从路径提取中英文名称
+  - findEnglishNameInChildren：从子目录/文件提取英文候选名
+  - 智能跳过无关文件（setup.exe、readme 等）
+  - 选择最长候选名作为英文名
+
 ## [v1.5.8] - 2026-06-18
 
 ### 新增功能

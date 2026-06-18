@@ -12,7 +12,7 @@ import path from 'path';
 import { logger } from '../logger';
 import { gameDatabase } from './database';
 // metadata-manager no longer used - game.json removed from design
-import { cleanGameName } from './name-cleaner';
+import { extractNamesFromPath } from './name-resolver';
 import type { Game, GameRules, GameScrapeConfig, GameRecognitionRule, HeuristicRulesConfig } from '../types';
 
 /**
@@ -204,15 +204,25 @@ function matchRecognitionRule(
 
 /**
  * 创建游戏记录
+ * 使用路径提取中英文名称
  */
-function createGameRecord(gamePath: string): Partial<Game> {
-  const cleanTitle = cleanGameName(path.basename(gamePath));
+function createGameRecord(gamePath: string, scanRoot: string): Partial<Game> {
+  // 使用路径提取中英文名称
+  const extracted = extractNamesFromPath(gamePath, scanRoot);
   const appid = readSteamAppidFile(gamePath);
+
+  // 记录提取结果日志
+  if (extracted.titleEn) {
+    logger.info('[路径名称提取] 成功: "%s" → 中文="%s", 英文="%s" (%s)',
+      extracted.originalName, extracted.title, extracted.titleEn,
+      extracted.source.detail || '无详情');
+  }
 
   return {
     source_path: gamePath,
-    title: cleanTitle,
-    original_name: path.basename(gamePath),
+    title: extracted.title,
+    title_en: extracted.titleEn || undefined,
+    original_name: extracted.originalName,
     steam_appid: appid || undefined,
     metadata_source: 'unknown',  // 元数据来源未知，待刮削
     is_manually_edited: 0
@@ -292,7 +302,7 @@ function scanEntry(
     }
 
     // 新游戏，创建记录并打印日志
-    games.push(createGameRecord(gamePath));
+    games.push(createGameRecord(gamePath, scanRoot));
     processedPaths.add(gamePathNormalized);
     processedPaths.add(normalizedPath);
 
