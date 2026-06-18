@@ -350,6 +350,9 @@ class GameDatabase {
       sql += ' ORDER BY CASE WHEN release_date IS NULL OR release_date = \'\' THEN 1 ELSE 0 END ASC, release_date DESC LIMIT ? OFFSET ?';
     } else if (orderBy === 'rating') {
       sql += ' ORDER BY CASE WHEN rating IS NULL THEN 1 ELSE 0 END ASC, rating DESC LIMIT ? OFFSET ?';
+    } else if (orderBy === 'created_at') {
+      // 按入库时间排序：新到旧
+      sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     } else {
       sql += ` ORDER BY ${orderBy} ${orderDir} LIMIT ? OFFSET ?`;
     }
@@ -465,38 +468,6 @@ class GameDatabase {
     );
     database.save();
     return this.getGameById(id);
-  }
-
-  promoteGame(id: number): { success: boolean; error?: string; game?: Game } {
-    const game: Game | null = this.getGameById(id);
-    if (!game) return { success: false, error: '游戏不存在' };
-    const oldPath = game.source_path;
-    const newPath = path.dirname(oldPath);
-    if (newPath === oldPath || newPath === path.parse(oldPath).root) {
-      return { success: false, error: '无法再向上提升' };
-    }
-
-    const existing: Game | null = this.getGameByPath(newPath);
-    if (existing) {
-      return { success: false, error: `父目录已有游戏记录：${existing.title}（id=${existing.id}）` };
-    }
-
-    const newDirName = path.basename(newPath);
-    try {
-      // 提升目录并标记为用户已确认（P0优先级）
-      database.db!.run(
-        'UPDATE games SET source_path = ?, original_name = ?, is_root_manually_marked = 1, updated_at = datetime("now", "localtime") WHERE id = ?',
-        [newPath, newDirName, id]
-      );
-      database.save();
-      const updatedGame = this.getGameById(id);
-      logger.info('[提升目录-P0] 完成: %s -> %s (已标记为用户确认), id=%d', path.basename(oldPath), newDirName, id);
-      return { success: true, game: updatedGame ?? undefined };
-    } catch (dbErr) {
-      const error = dbErr instanceof Error ? dbErr : new Error(String(dbErr));
-      logger.error('[提升目录] 数据库更新失败: %s', error.message);
-      return { success: false, error: '数据库更新失败: ' + error.message };
-    }
   }
 
   createManualGame(data: {
@@ -793,6 +764,9 @@ class GameDatabase {
       sql += ' ORDER BY CASE WHEN g.release_date IS NULL OR g.release_date = \'\' THEN 1 ELSE 0 END ASC, g.release_date DESC LIMIT ? OFFSET ?';
     } else if (orderBy === 'rating') {
       sql += ' ORDER BY CASE WHEN g.rating IS NULL THEN 1 ELSE 0 END ASC, g.rating DESC LIMIT ? OFFSET ?';
+    } else if (orderBy === 'created_at') {
+      // 按入库时间排序：新到旧
+      sql += ' ORDER BY g.created_at DESC LIMIT ? OFFSET ?';
     } else {
       sql += ` ORDER BY gi.sort_order ASC, g.${orderBy} ${orderDir} LIMIT ? OFFSET ?`;
     }

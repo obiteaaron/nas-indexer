@@ -37,15 +37,15 @@ function findSteamAppidUpward(startDir: string, stopAtRoot: string): string | nu
 }
 
 /**
- * P0辅助：检查父目录是否已被用户确认
- * 用于跳过已确认游戏的子目录
+ * 检查父目录是否已是游戏目录
+ * 用于跳过已存在游戏的子目录
  */
-function checkParentConfirmed(dirPath: string, stopAt: string): boolean {
+function checkParentIsGame(dirPath: string, stopAt: string): boolean {
   let current = path.dirname(dirPath);
   while (current !== stopAt && current !== path.dirname(current)) {
     const game = gameDatabase.getGameByPath(current);
-    if (game && game.is_root_manually_marked === 1) {
-      logger.debug('[P0检查] 父目录已确认: %s', current);
+    if (game) {
+      logger.debug('[跳过检查] 父目录已是游戏: %s', current);
       return true;
     }
     current = path.dirname(current);
@@ -54,16 +54,15 @@ function checkParentConfirmed(dirPath: string, stopAt: string): boolean {
 }
 
 /**
- * P0辅助：检查子目录是否已被用户确认
- * 用于跳过已确认游戏的父目录（避免重复识别）
+ * 检查子目录是否已是游戏目录
+ * 用于跳过已存在游戏的父目录（避免重复识别）
  */
-function checkChildConfirmed(parentPath: string): boolean {
+function checkChildIsGame(parentPath: string): boolean {
   const results = gameDatabase.getGamesByPathPrefix(parentPath);
-  const hasConfirmed = results.some(g => g.is_root_manually_marked === 1);
-  if (hasConfirmed) {
-    logger.debug('[P0检查] 子目录已确认: %s', parentPath);
+  if (results.length > 0) {
+    logger.debug('[跳过检查] 子目录已是游戏: %s (共 %d 个)', parentPath, results.length);
   }
-  return hasConfirmed;
+  return results.length > 0;
 }
 
 // P2 启发式规则已删除（v1.5.5）
@@ -247,26 +246,26 @@ function scanEntry(
   const normalizedPath = path.resolve(entryPath);
   if (processedPaths.has(normalizedPath)) return games;
 
-  // === P0: 用户确认优先级检查（最高优先级） ===
+  // === 跳过已存在游戏目录检查 ===
 
-  // 1. 此目录本身已被用户确认 → 跳过
+  // 1. 此目录本身已是游戏目录 → 跳过
   const existing = gameDatabase.getGameByPath(normalizedPath);
-  if (existing && existing.is_root_manually_marked === 1) {
-    logger.debug('[P0] 路径已确认，跳过: %s', normalizedPath);
+  if (existing) {
+    logger.debug('[跳过] 路径已是游戏目录: %s', normalizedPath);
     processedPaths.add(normalizedPath);
     return games;
   }
 
-  // 2. 父目录已被用户确认 → 跳过子目录
-  if (!isFile && checkParentConfirmed(normalizedPath, scanRoot)) {
-    logger.debug('[P0] 父目录已确认，跳过子目录: %s', normalizedPath);
+  // 2. 父目录已是游戏目录 → 跳过子目录
+  if (!isFile && checkParentIsGame(normalizedPath, scanRoot)) {
+    logger.debug('[跳过] 父目录已是游戏，跳过子目录: %s', normalizedPath);
     processedPaths.add(normalizedPath);
     return games;
   }
 
-  // 3. 子目录已被用户确认 → 跳过父目录（避免重复识别）
-  if (!isFile && checkChildConfirmed(normalizedPath)) {
-    logger.debug('[P0] 子目录已确认，跳过父目录: %s', normalizedPath);
+  // 3. 子目录已是游戏目录 → 跳过父目录（避免重复识别）
+  if (!isFile && checkChildIsGame(normalizedPath)) {
+    logger.debug('[跳过] 子目录已是游戏，跳过父目录: %s', normalizedPath);
     processedPaths.add(normalizedPath);
     return games;
   }

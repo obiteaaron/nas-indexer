@@ -60,28 +60,6 @@ describe('P0 Database Methods', () => {
     expect(game[markedIndex]).toBe(1);
   });
 
-  test('提升目录时is_root_manually_marked应为1', () => {
-    // 先创建一个游戏
-    db.run(`
-      INSERT INTO games (source_path, title, metadata_source)
-      VALUES (?, ?, 'regex')
-    `, ['E:/Games/TestGame2/TestGame2', 'Test Game 2']);
-
-    // 提升到父目录
-    db.run(`
-      UPDATE games SET source_path = ?, is_root_manually_marked = 1
-      WHERE source_path = ?
-    `, ['E:/Games/TestGame2', 'E:/Games/TestGame2/TestGame2']);
-
-    // 查询验证
-    const result = db.exec('SELECT * FROM games WHERE source_path = ?', ['E:/Games/TestGame2']);
-    expect(result.length).toBe(1);
-    const game = result[0].values[0];
-    const columns = result[0].columns;
-    const markedIndex = columns.indexOf('is_root_manually_marked');
-    expect(game[markedIndex]).toBe(1);
-  });
-
   test('getGamesByPathPrefix应查询子目录游戏', () => {
     // 创建子目录游戏
     db.run(`

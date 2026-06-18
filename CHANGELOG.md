@@ -9,8 +9,19 @@
   - 新增批量名称提取 API `/api/games/extract-names/batch`
   - 新增单个游戏名称提取 API `/api/games/:id/extract-names`
   - 游戏识别时自动提取中英文名称
+- **新游戏标记** - 快速识别刚入库的游戏
+  - 海报卡片右上角显示 "New" 角标（24小时内入库的游戏）
+  - 排序选项新增"按扫描时间（新→旧）"
 
 ### 技术改进
+- **游戏扫描跳过逻辑优化** - 防止规则改变后重复识别游戏
+  - 移除 `is_root_manually_marked === 1` 的限制，只要目录是游戏就跳过
+  - 父目录已是游戏 → 跳过子目录扫描
+  - 子目录已是游戏 → 跳过父目录扫描（避免重复识别）
+- **移除废弃功能** - 清理 `promoteGame` 提升目录功能
+  - 移除 `/:id/promote` 路由接口
+  - 移除 `promoteGame` 数据库方法
+  - 移除相关测试用例
 - **name-resolver 模块扩展** - 新增路径解析函数
   - extractNamesFromPath：从路径提取中英文名称
   - findEnglishNameInChildren：从子目录/文件提取英文候选名
