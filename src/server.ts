@@ -8,6 +8,7 @@ import { database } from './database';
 import { gameDatabase } from './games/database';
 import { runIdentification } from './games/identifier';
 import { scrapeUnscrapedGames, initProxy } from './games/scraper';
+import { groupService } from './games/group-service';
 import { logger } from './logger';
 import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureStorageDir, getStoragePath } from './utils';
 import { DEFAULT_GAMES_CONFIG } from './types/games-config';
@@ -96,6 +97,26 @@ async function runScan(config: Config, onProgress: ((event: ScanProgressEvent) =
 
           const scrapedIds = await scrapeUnscrapedGames(scrapeConfig.downloadPosters);
           logger.info('自动刮削完成: %d 个游戏', scrapedIds.length);
+        }
+
+        // 自动分组（在刮削之后）
+        if (scrapeConfig.autoGroupOnScan && ids.length > 0) {
+          if (onProgress) {
+            onProgress({
+              phase: 'grouping',
+              pathIndex: 0,
+              totalPaths: 1,
+              progress: 99,
+              path: '',
+              message: '正在自动分组...'
+            });
+          }
+
+          const groupResult = groupService.autoGroupByParentDirectory(config.scanPaths);
+          logger.info('自动分组完成: 创建 %d 个分组, 更新 %d 个分组',
+            groupResult.createdGroups.length,
+            groupResult.updatedGroups.length
+          );
         }
       } catch (gameErr) {
         const gameError = gameErr as Error;
