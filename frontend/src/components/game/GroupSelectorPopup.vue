@@ -55,8 +55,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import type { GameGroup } from '../types'
-import { getGameGroups } from '../api'
+import type { GameGroup } from '../../types'
+import { getGameGroups } from '../../api'
 
 interface Props {
   gameId?: number
@@ -78,7 +78,7 @@ const searchQuery = ref('')
 const filteredGroups = computed(() => {
   if (!searchQuery.value) return groups.value
   const q = searchQuery.value.toLowerCase()
-  return groups.value.filter(g => g.name.toLowerCase().includes(q))
+  return groups.value.filter((g: GameGroup) => g.name.toLowerCase().includes(q))
 })
 
 async function loadGroups(): Promise<void> {
