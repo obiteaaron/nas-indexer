@@ -129,7 +129,7 @@ router.get('/years', async (_req: Request, res: Response): Promise<void> => {
 });
 
 // === 下面是游戏路由 ===
- */
+
 router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   await initGameDatabase();
   try {
