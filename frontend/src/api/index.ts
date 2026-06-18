@@ -484,6 +484,15 @@ export function bindSteamGame(id: number, appid: number): Promise<ApiResponse<Ga
   return request<Game>('/games/' + id + '/bind-steam', { method: 'POST', body: JSON.stringify({ appid }) })
 }
 
+export function batchExtractNames(): Promise<ApiResponse<{ taskId: string }>> {
+  return request<{ taskId: string }>('/games/extract-names/batch', { method: 'POST' })
+}
+
+export function extractGameNames(id: number): Promise<ApiResponse<{ game: Game; extracted: { title: string; titleEn: string | null }; updated: boolean }>> {
+  clearCache('/games')
+  return request<{ game: Game; extracted: { title: string; titleEn: string | null }; updated: boolean }>('/games/' + id + '/extract-names', { method: 'POST' })
+}
+
 // === 游戏分组 API ===
 
 export function getGameGroups(): Promise<ApiResponse<GameGroup[]>> {

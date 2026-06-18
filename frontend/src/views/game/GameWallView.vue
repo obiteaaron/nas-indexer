@@ -50,6 +50,9 @@
             <button class="dropdown-item" @click="showMoreDropdown = false; handleCleanupStaleGames()">
               清理已移除路径记录
             </button>
+            <button class="dropdown-item" @click="showMoreDropdown = false; handleBatchExtractNames()">
+              批量提取中英文名称
+            </button>
           </div>
         </div>
       </div>
@@ -660,6 +663,7 @@ import {
   updateGame as updateGameApi,
   removeNonexistentGames,
   cleanupStaleGames,
+  batchExtractNames,
   getGroupGames,
   uploadGamePoster,
   redownloadGamePoster,
@@ -1569,6 +1573,27 @@ async function handleCleanupStaleGames(): Promise<void> {
   } catch (err) {
     console.error('清理失败:', err)
     showNotification('清理失败')
+  }
+}
+
+async function handleBatchExtractNames(): Promise<void> {
+  try {
+    showNotification('开始批量提取中英文名称...')
+    const res = await batchExtractNames()
+    if (res.success && res.data?.taskId) {
+      // 任务已启动，等待完成通知
+      showNotification('名称提取任务已启动，请稍候刷新查看结果')
+      // 5秒后自动刷新
+      setTimeout(async () => {
+        await refreshGames()
+        showNotification('已刷新游戏列表')
+      }, 5000)
+    } else {
+      showNotification('启动提取任务失败')
+    }
+  } catch (err) {
+    console.error('批量提取失败:', err)
+    showNotification('批量提取失败')
   }
 }
 
