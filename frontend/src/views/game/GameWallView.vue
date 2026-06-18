@@ -295,6 +295,9 @@
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="openGameDir(selectedGame)">打开目录</button>
           <button class="btn btn-secondary" @click="openSteamSearch">搜索 Steam</button>
+          <button class="btn btn-secondary" @click="extractNamesForGame(selectedGame)" :disabled="extractingNames">
+            {{ extractingNames ? '提取中...' : '提取名称' }}
+          </button>
           <button class="btn btn-secondary" @click="startEditGame(selectedGame)">编辑信息</button>
           <button class="btn btn-secondary" @click="scrapeGame(selectedGame)" :disabled="scraping">
             {{ scraping ? '刮削中...' : '重新刮削' }}
@@ -664,6 +667,7 @@ import {
   removeNonexistentGames,
   cleanupStaleGames,
   batchExtractNames,
+  extractGameNames,
   getGroupGames,
   uploadGamePoster,
   redownloadGamePoster,
@@ -686,6 +690,7 @@ const genres = ref<string[]>([])
 const years = ref<string[]>([])
 const loading = ref(false)
 const scraping = ref(false)
+const extractingNames = ref(false)
 const identifying = ref(false)
 const selectedGame = ref<Game | null>(null)
 const showIdentifyModal = ref(false)
@@ -904,6 +909,31 @@ async function openGameDir(game: Game): Promise<void> {
   } catch (err) {
     console.error('打开目录失败:', err)
   }
+}
+
+async function extractNamesForGame(game: Game): Promise<void> {
+  extractingNames.value = true
+  try {
+    const res = await extractGameNames(game.id)
+    if (res.success && res.data) {
+      const idx = games.value.findIndex(g => g.id === game.id)
+      if (idx >= 0) {
+        games.value[idx] = res.data.game
+      }
+      if (selectedGame.value?.id === game.id) {
+        selectedGame.value = res.data.game
+      }
+      if (res.data.updated) {
+        showNotification(`提取成功：${res.data.extracted.title} / ${res.data.extracted.titleEn}`)
+      } else {
+        showNotification('无法从路径提取英文名')
+      }
+    }
+  } catch (err) {
+    console.error('提取名称失败:', err)
+    showNotification('提取名称失败')
+  }
+  extractingNames.value = false
 }
 
 async function scrapeGame(game: Game): Promise<void> {
