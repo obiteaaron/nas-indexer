@@ -326,6 +326,11 @@ function scanEntry(
       }
     }
     logParts.push(`depth=${depth}`);
+    // 显示原始扫描路径（当与游戏根目录不同时）
+    const entryPathNormalized = path.resolve(entryPath);
+    if (entryPathNormalized !== gamePathNormalized) {
+      logParts.push(`原始=${path.basename(entryPath)}`);
+    }
 
     logger.info('识别游戏: %s', logParts.join(', '));
     return games;
