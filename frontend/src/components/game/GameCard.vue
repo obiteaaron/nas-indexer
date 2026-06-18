@@ -14,6 +14,8 @@
         @load="($event.target as HTMLImageElement).previousElementSibling?.classList.add('hidden')"
         @error="($event.target as HTMLImageElement).style.display = 'none'"
       />
+      <!-- New 角标：24小时内入库的游戏 -->
+      <div class="new-badge" v-if="isNewGame">New</div>
       <div class="poster-overlay">
         <div class="game-rating" v-if="game.rating">
           <span class="rating-badge">{{ game.rating }}</span>
@@ -102,6 +104,15 @@ const genres = computed(() => {
     }
   }
   return []
+})
+
+// 判断是否为新游戏（24小时内入库）
+const isNewGame = computed(() => {
+  if (!props.game.created_at) return false
+  const createdAt = new Date(props.game.created_at)
+  const now = new Date()
+  const hoursDiff = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60)
+  return hoursDiff < 24
 })
 
 const statusClass = computed(() => {
@@ -392,5 +403,18 @@ function formatYear(dateStr: string): string {
 .steam-badge.disabled .steam-icon {
   opacity: 0.4;
   filter: grayscale(0.5);
+}
+
+.new-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #10b981;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  z-index: 10;
 }
 </style>

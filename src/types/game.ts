@@ -110,7 +110,7 @@ export interface GameQueryOptions {
   scraped?: string;
   favorite?: 'true' | 'false' | undefined;
   noSteam?: 'true' | 'false' | undefined;
-  orderBy?: 'title' | 'rating' | 'release_date' | 'scraped_at';
+  orderBy?: 'title' | 'rating' | 'release_date' | 'scraped_at' | 'created_at';
   orderDir?: 'ASC' | 'DESC';
   limit?: number;
   offset?: number;
