@@ -569,36 +569,6 @@ export function setGameGroups(gameId: number, groupIds: number[]): Promise<ApiRe
   })
 }
 
-// === Backup API ===
-
-export interface BackupInfo {
-  filename: string;
-  createdAt: string;
-  fileSize: number;
-}
-
-export function listBackups(): Promise<ApiResponse<BackupInfo[]>> {
-  return request<BackupInfo[]>('/games/backup/list')
-}
-
-export function createBackup(name?: string): Promise<ApiResponse<{ filename: string }>> {
-  return request<{ filename: string }>('/games/backup/create', {
-    method: 'POST',
-    body: JSON.stringify({ name })
-  })
-}
-
-export function restoreBackup(filename: string, mode: 'merge' | 'overwrite' = 'merge'): Promise<ApiResponse<{ filename: string; mode: string }>> {
-  return request<{ filename: string; mode: string }>('/games/backup/' + filename + '/restore', {
-    method: 'POST',
-    body: JSON.stringify({ mode })
-  })
-}
-
-export function deleteBackup(filename: string): Promise<ApiResponse<void>> {
-  return request<void>('/games/backup/' + filename, { method: 'DELETE' })
-}
-
 // === Steam DB API ===
 
 export interface SteamDbListResponse {

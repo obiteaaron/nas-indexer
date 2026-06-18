@@ -18,13 +18,9 @@ import { loadGamesConfig, saveGamesConfig, getGameScanPathsFromConfig } from '..
 import { logger } from '../logger';
 import { taskManager } from '../task-manager';
 import type { Game, GameRules, GameScrapeConfig, GameQueryOptions, GameGroup } from '../types';
-import backupRouter from './backup';
 
 const router: Router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
-
-// Mount backup router at /backup
-router.use('/backup', backupRouter);
 
 /**
  * 初始化游戏数据库（确保表已创建）

@@ -2,6 +2,15 @@
 
 ## [v1.5.8] - 2026-06-19
 
+### 移除
+- **冗余备份功能** - 移除 `games/backups` 目录备份功能
+  - profiles 备份已覆盖完整游戏库数据，功能重复
+  - 移除 `src/games/backup-service.ts` 备份服务
+  - 移除 `src/routes/backup.ts` 路由文件
+  - 移除 `src/games/storage.ts` 中的 `BACKUPS_DIR` 常量和 `getBackupDir` 函数
+  - 移除前端 API 中的 `listBackups`, `createBackup`, `restoreBackup`, `deleteBackup` 函数
+  - 移除相关测试文件
+
 ### 新增功能
 - **路径名称提取** - 从游戏路径自动提取中英文名称
   - 中文目录名作为游戏标题（title）
@@ -27,6 +36,13 @@
   - findEnglishNameInChildren：从子目录/文件提取英文候选名
   - 智能跳过无关文件（setup.exe、readme 等）
   - 选择最长候选名作为英文名
+- **Steam DB 导出字段扩展** - 导出更完整的游戏信息
+  - 新增导出字段：release_date（发行日期）、genres（类型）、rating（评分）、languages（语言）、tags（标签）、scraped_at（刮削时间）
+  - 新增导出字段：developer（开发商）、publisher（发行商）、short_description（游戏简介）
+  - 数据库 steam_db 表新增 developer、publisher、short_description 列
+  - 刮削时自动写入完整元数据到 steam_db 表
+  - 导入功能同步支持完整字段导入/覆盖
+  - 前端导入提示更新为新格式示例
 
 ## [v1.5.8] - 2026-06-18
 

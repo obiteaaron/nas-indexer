@@ -5,7 +5,6 @@ import {
   ensureGamesDirs,
   getPosterDir,
   getPosterPath,
-  getBackupDir,
   ensurePosterDir,
   hasPoster,
   listGamePosters
@@ -31,7 +30,6 @@ describe('Storage Utilities', () => {
     ensureGamesDirs(testBase);
 
     expect(fs.existsSync(path.join(testBase, 'games', 'posters'))).toBe(true);
-    expect(fs.existsSync(path.join(testBase, 'games', 'backups'))).toBe(true);
   });
 
   test('getPosterDir returns correct path', () => {
@@ -42,11 +40,6 @@ describe('Storage Utilities', () => {
   test('getPosterPath returns correct file path', () => {
     const posterPath = getPosterPath(testBase, 123, 'horizontal');
     expect(posterPath).toBe(path.join(testBase, 'games', 'posters', '123', 'horizontal.jpg'));
-  });
-
-  test('getBackupDir returns correct path', () => {
-    const backupDir = getBackupDir(testBase);
-    expect(backupDir).toBe(path.join(testBase, 'games', 'backups'));
   });
 
   test('ensurePosterDir creates directory if not exists', () => {

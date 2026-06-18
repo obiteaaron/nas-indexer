@@ -4,7 +4,6 @@ import { logger } from '../logger';
 
 const GAMES_DIR = 'games';
 const POSTERS_DIR = 'posters';
-const BACKUPS_DIR = 'backups';
 
 const POSTER_TYPES = ['horizontal', 'vertical', 'banner', 'background', 'custom'] as const;
 type PosterType = typeof POSTER_TYPES[number];
@@ -15,7 +14,6 @@ type PosterType = typeof POSTER_TYPES[number];
 export function ensureGamesDirs(basePath: string): void {
   const dirs = [
     path.join(basePath, GAMES_DIR, POSTERS_DIR),
-    path.join(basePath, GAMES_DIR, BACKUPS_DIR),
   ];
 
   for (const dir of dirs) {
@@ -39,13 +37,6 @@ export function getPosterDir(basePath: string, gameId: number): string {
 export function getPosterPath(basePath: string, gameId: number, type: PosterType): string {
   const filename = type + '.jpg';
   return path.join(getPosterDir(basePath, gameId), filename);
-}
-
-/**
- * Get backup directory
- */
-export function getBackupDir(basePath: string): string {
-  return path.join(basePath, GAMES_DIR, BACKUPS_DIR);
 }
 
 /**
