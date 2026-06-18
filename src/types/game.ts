@@ -253,3 +253,12 @@ export interface SteamCacheStatus {
   screenshotCount: number;
   scraped_at?: string;
 }
+
+/**
+ * 自动分组结果
+ */
+export interface AutoGroupResult {
+  createdGroups: { name: string; gameCount: number }[];
+  updatedGroups: { name: string; addedGames: number }[];
+  totalGamesGrouped: number;
+}
