@@ -3,7 +3,7 @@
     <div class="sidebar-header">
       <span class="sidebar-title">游戏分组</span>
       <div class="header-actions">
-        <button class="btn-auto-group" @click="$emit('autoGroup')" title="自动按目录分组">📂</button>
+        <button class="btn-auto-group" @click="$emit('autoGroup')" title="自动按目录分组">🏷️</button>
         <button class="btn-add-group" @click="$emit('create')" title="新建分组">+</button>
       </div>
     </div>
