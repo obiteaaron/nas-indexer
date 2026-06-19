@@ -2,7 +2,10 @@
   <div class="game-group-sidebar">
     <div class="sidebar-header">
       <span class="sidebar-title">游戏分组</span>
-      <button class="btn-add-group" @click="$emit('create')" title="新建分组">+</button>
+      <div class="header-actions">
+        <button class="btn-auto-group" @click="$emit('autoGroup')" title="自动按目录分组">📂</button>
+        <button class="btn-add-group" @click="$emit('create')" title="新建分组">+</button>
+      </div>
     </div>
     <div class="sidebar-list">
       <!-- 快捷入口 -->
@@ -77,6 +80,7 @@ const emit = defineEmits<{
   select: [groupId: number | null]
   favorite: []
   create: []
+  autoGroup: []
   manage: [group: GameGroup]
   delete: [group: GameGroup]
   reorder: [items: Array<{ id: number; sort_order: number }>]
@@ -154,6 +158,31 @@ onBeforeUnmount(() => {
 .sidebar-title {
   font-weight: 600;
   font-size: 14px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-auto-group {
+  background: var(--bg);
+  color: var(--text) !important;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-auto-group:hover {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .btn-add-group {
