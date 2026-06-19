@@ -188,20 +188,57 @@ app.get('*', (req: Request, res: Response, next: NextFunction) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
-app.listen(PORT, async () => {
-  await initDatabase();
+let server: ReturnType<typeof app.listen> | null = null;
 
-  // 初始化代理（用于 Steam API 刮削）
-  initProxy();
+export async function startServer(customPort?: number): Promise<number> {
+  const port = customPort || PORT;
 
-  logger.info('\n🚀 NAS Indexer v1.3.2 服务已启动');
-  logger.info('📍 访问地址: http://localhost:%d', PORT);
-  logger.info('📁 默认存储目录: %s\n', DEFAULT_STORAGE_PATH);
+  return new Promise((resolve, reject) => {
+    server = app.listen(port, async () => {
+      try {
+        await initDatabase();
 
-  const config: Config = loadConfig();
-  const storagePath: string = getStoragePath(config);
-  ensureGamesDirs(storagePath);
-  logger.info('📂 当前存储目录: %s', storagePath);
+        // 初始化代理（用于 Steam API 刮削）
+        initProxy();
 
-  scheduleScan(config);
-});
+        logger.info('\n🚀 NAS Indexer v1.6.0 服务已启动');
+        logger.info('📍 访问地址: http://localhost:%d', port);
+        logger.info('📁 默认存储目录: %s\n', DEFAULT_STORAGE_PATH);
+
+        const config: Config = loadConfig();
+        const storagePath: string = getStoragePath(config);
+        ensureGamesDirs(storagePath);
+        logger.info('📂 当前存储目录: %s', storagePath);
+
+        scheduleScan(config);
+
+        resolve(port);
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    server.on('error', (err) => {
+      reject(err);
+    });
+  });
+}
+
+export function stopServer(): void {
+  if (server) {
+    server.close();
+    server = null;
+  }
+}
+
+export function getPort(): number {
+  return PORT;
+}
+
+// 独立运行时（非 Electron 模式）自动启动
+if (require.main === module) {
+  startServer().catch((err) => {
+    logger.error('服务启动失败: %s', (err as Error).message);
+    process.exit(1);
+  });
+}
