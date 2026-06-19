@@ -84,6 +84,10 @@ out
 .nuxt
 dist
 dist-release
+dist-electron/
+release/
+
+# Electron builder output
 
 # Gatsby files
 .cache/
