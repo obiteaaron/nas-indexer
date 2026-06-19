@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
+import { fork, ChildProcess } from 'child_process';
 import { TrayManager } from './tray';
 import { isQuitting, setQuitting } from './types';
 
@@ -23,6 +24,7 @@ app.on('second-instance', () => {
 });
 
 let serverPort: number = 3000;
+let serverProcess: ChildProcess | null = null;
 
 // IPC 处理
 ipcMain.handle('get-app-version', () => {
@@ -33,24 +35,49 @@ ipcMain.on('show-notification', (_event, data: { title: string; body: string }) 
   TrayManager.showNotification(data.title, data.body);
 });
 
-// Electron 开发模式下，需要加载编译后的 server
-// 动态导入 dist/server.js
+// 使用 fork 启动 Express server
 async function startExpressServer(): Promise<number> {
-  // 设置 PROJECT_ROOT 环境变量
-  const projectRoot = path.dirname(path.dirname(__dirname));
-  process.env.PROJECT_ROOT = projectRoot;
+  const projectRoot = path.dirname(__dirname);
+  const serverPath = path.join(projectRoot, 'dist', 'server.js');
 
-  // 动态导入编译后的 server
-  const { startServer } = await import(path.join(projectRoot, 'dist', 'server.js'));
+  console.log('启动 server:', serverPath);
 
-  try {
-    const port = await startServer();
-    return port;
-  } catch (err) {
-    const error = err as Error;
-    console.error('Express server 启动失败:', error.message);
-    throw err;
-  }
+  // 使用 fork 启动 server
+  serverProcess = fork(serverPath, [], {
+    cwd: projectRoot,
+    env: { ...process.env, PROJECT_ROOT: projectRoot },
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  });
+
+  // 监听 server 进程输出
+  serverProcess.stdout?.on('data', (data) => {
+    console.log(`[Server] ${data.toString()}`);
+  });
+
+  serverProcess.stderr?.on('data', (data) => {
+    console.error(`[Server Error] ${data.toString()}`);
+  });
+
+  // 等待 server 就绪
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      console.log('Server timeout, assuming started');
+      resolve(serverPort);
+    }, 5000);
+
+    serverProcess?.on('error', (err) => {
+      clearTimeout(timeout);
+      console.error('Server process error:', err);
+      reject(err);
+    });
+
+    serverProcess?.on('exit', (code) => {
+      clearTimeout(timeout);
+      if (code !== 0 && code !== null) {
+        reject(new Error(`Server process exited with code ${code}`));
+      }
+    });
+  });
 }
 
 async function createMainWindow(): Promise<BrowserWindow> {

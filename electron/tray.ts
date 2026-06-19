@@ -110,7 +110,8 @@ export class TrayManager {
 
   private static openConfigDirectory(): void {
     // 打开配置目录（profiles）
-    const projectRoot = path.dirname(path.dirname(__dirname));
+    // dist-electron/ -> 项目根目录 -> profiles
+    const projectRoot = path.dirname(__dirname);
     const profilesPath = path.join(projectRoot, 'profiles');
 
     shell.openPath(profilesPath);
