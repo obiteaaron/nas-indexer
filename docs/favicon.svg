@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Folder body -->
+  <path fill="#f97316" d="M4 10h24a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V12a2 2 0 0 1 2-2z"/>
+  <!-- Folder tab -->
+  <path fill="#f97316" d="M4 6h8l2 4H4V6z"/>
+  <!-- Search circle -->
+  <circle cx="20" cy="18" r="5" fill="none" stroke="#fff" stroke-width="2"/>
+  <!-- Search handle -->
+  <line x1="24" y1="22" x2="28" y2="26" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+</svg>
