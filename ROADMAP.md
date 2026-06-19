@@ -1,6 +1,6 @@
 # NAS Indexer Roadmap
 
-> 最后更新：2026-06-19
+> 最后更新：2026-06-20
 > 当前版本：v1.5.8
 
 ---
@@ -94,6 +94,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | v1.4.1 | Steam 刮削优化（主要是按名称刮削，可以先获取到ID再刮削，或者整理热门游戏的id库，有id了才好刮削） + 批量刮削 | ✅ |
 | v1.4.2 | 多刮削源支持（SteamGridDB、IGDB） | 待开始 |
 | v1.5.8 | 游戏分组快捷操作（卡片分组按钮、详情分组管理、批量操作） | ✅ |
+| v1.5.9 | 游戏名称同步机制修复（见 docs/name-sync-analysis.md） | 待开始 |
 
 ---
 
@@ -171,6 +172,8 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 游戏海报墙 | `frontend/src/views/GameWallView.vue` | 游戏展示视图 |
 | 游戏卡片 | `frontend/src/components/GameCard.vue` | 游戏卡片组件 |
 | 备份管理 | `frontend/src/views/game/ProfileBackupView.vue` | Profiles 备份页面 |
+| 设计文档 | `docs/games-module-design.md` | 游戏模块设计文档 |
+| 技术分析 | `docs/name-sync-analysis.md` | 游戏名称同步机制分析（2026-06-20） |
 | 备份路由 | `src/routes/profile-backup.ts` | Profiles 备份 API |
 | AI 设计文档 | `docs/ai-llm-integration-plan.md` | AI 集成方案参考 |
 | 游戏模块设计 | `docs/games-module-design.md` | 游戏模块技术方案 |
