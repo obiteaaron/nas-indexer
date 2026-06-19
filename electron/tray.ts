@@ -1,5 +1,6 @@
-import { app, BrowserWindow, Tray, Menu, MenuItemConstructorOptions, nativeImage, Notification, shell } from 'electron';
+import { app, BrowserWindow, Tray, Menu, MenuItemConstructorOptions, nativeImage, Notification, shell, NativeImage } from 'electron';
 import * as path from 'path';
+import { setQuitting } from './types';
 
 export class TrayManager {
   private static tray: Tray | null = null;
@@ -18,7 +19,7 @@ export class TrayManager {
     this.iconPath = path.join(__dirname, 'icons', 'icon.png');
 
     // 创建托盘图标
-    let icon: nativeImage;
+    let icon: NativeImage;
 
     if (process.platform === 'win32') {
       // Windows 使用 .ico 文件（如果存在）
@@ -77,7 +78,7 @@ export class TrayManager {
       {
         label: '退出应用',
         click: () => {
-          app.isQuitting = true;
+          setQuitting(true);
           app.quit();
         },
       },
@@ -131,12 +132,5 @@ export class TrayManager {
       this.tray.destroy();
       this.tray = null;
     }
-  }
-}
-
-// 扩展 App 类型，添加 isQuitting 属性
-declare module 'electron' {
-  interface App {
-    isQuitting?: boolean;
   }
 }

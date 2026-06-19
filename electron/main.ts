@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import { TrayManager } from './tray';
+import { isQuitting, setQuitting } from './types';
 
 // 单实例锁
 const gotTheLock = app.requestSingleInstanceLock();
@@ -79,7 +80,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
 
   // 关闭窗口时最小化到托盘，而非退出
   mainWindow.on('close', (event) => {
-    if (!app.isQuitting) {
+    if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
     }
@@ -140,6 +141,6 @@ app.on('activate', () => {
 
 // 应用退出前清理
 app.on('before-quit', () => {
-  app.isQuitting = true;
+  setQuitting(true);
   TrayManager.destroy();
 });
