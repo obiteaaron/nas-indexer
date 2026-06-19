@@ -95,6 +95,7 @@ export interface GameScrapeConfig {
   autoScrape: boolean;
   downloadPosters: boolean;
   scrapeOnIdentify: boolean;
+  autoGroupOnScan: boolean;  // 扫描时自动按目录分组
 }
 
 export interface GameConfig {
@@ -178,7 +179,8 @@ export const DEFAULT_GAME_RULES: GameRules = {
 export const DEFAULT_GAME_SCRAPE: GameScrapeConfig = {
   autoScrape: true,
   downloadPosters: true,
-  scrapeOnIdentify: true
+  scrapeOnIdentify: true,
+  autoGroupOnScan: true  // 默认启用
 };
 
 export const DEFAULT_GAME_CONFIG: GameConfig = {
@@ -252,4 +254,13 @@ export interface SteamCacheStatus {
   hasBackground: boolean;
   screenshotCount: number;
   scraped_at?: string;
+}
+
+/**
+ * 自动分组结果
+ */
+export interface AutoGroupResult {
+  createdGroups: { name: string; gameCount: number }[];
+  updatedGroups: { name: string; addedGames: number }[];
+  totalGamesGrouped: number;
 }

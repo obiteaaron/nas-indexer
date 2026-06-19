@@ -41,7 +41,8 @@ export const DEFAULT_GAMES_CONFIG: GamesConfig = {
   gamesScrape: {
     autoScrape: true,
     downloadPosters: true,
-    scrapeOnIdentify: true
+    scrapeOnIdentify: true,
+    autoGroupOnScan: true
   },
   maxPosterBackups: 5,
   proxyUrl: ''

@@ -16,6 +16,7 @@
         @select="selectGroup"
         @favorite="toggleFavoriteFilter"
         @create="showGroupManager = true"
+        @autoGroup="handleAutoGroup"
         @manage="openGroupManager"
         @delete="confirmDeleteGroup"
         @reorder="handleReorderGroups"
@@ -676,7 +677,8 @@ import {
   restoreGamePosterBackup,
   deleteGamePosterBackup,
   getGameGroupsForGame,
-  setGameGroups
+  setGameGroups,
+  autoGroupGames
 } from '../../api'
 import GameCard from '../../components/game/GameCard.vue'
 import GameGroupSidebar from '../../components/game/GameGroupSidebar.vue'
@@ -1437,6 +1439,29 @@ async function handleReorderGroups(items: Array<{ id: number; sort_order: number
     }
   } catch (err) {
     console.error('分组排序失败:', err)
+  }
+}
+
+async function handleAutoGroup(): Promise<void> {
+  try {
+    const res = await autoGroupGames()
+    if (res.success && res.data) {
+      const { createdGroups, updatedGroups, totalGamesGrouped } = res.data
+      let message = `自动分组完成！`
+      if (createdGroups.length > 0) {
+        message += ` 创建 ${createdGroups.length} 个分组`
+      }
+      if (updatedGroups.length > 0) {
+        message += ` 更新 ${updatedGroups.length} 个分组`
+      }
+      message += `，共 ${totalGamesGrouped} 个游戏`
+      showNotification(message)
+      // 刷新分组列表
+      loadGroups()
+    }
+  } catch (err) {
+    console.error('自动分组失败:', err)
+    showNotification('自动分组失败')
   }
 }
 

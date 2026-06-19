@@ -384,6 +384,7 @@ export interface GameScrapeConfig {
   autoScrape: boolean;
   downloadPosters: boolean;
   scrapeOnIdentify: boolean;
+  autoGroupOnScan: boolean;
 }
 
 export interface GameConfig {
