@@ -71,6 +71,8 @@ docker run -d -p 3000:3000 -v nas-indexer-data:/app/profiles nas-indexer
 docker compose up -d
 ```
 
+> **注意**：Docker 镜像使用 Node.js 22，因为 `undici@8.x` 需要 Node ≥ 22。
+
 挂载 NAS 目录（只读）：
 
 ```yaml

@@ -1,3 +1,4 @@
+version: "3.3"
 services:
   nas-indexer:
     build:
@@ -21,8 +22,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
 
 volumes:
   nas-indexer-data:
-    name: nas-indexer-data

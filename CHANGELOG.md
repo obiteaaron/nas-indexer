@@ -2,6 +2,13 @@
 
 ## [v1.5.8] - 2026-06-19
 
+### Bug 修复
+- **Docker 部署兼容性修复** - 解决 Docker 构建和运行问题
+  - Dockerfile 升级 Node 20 → Node 22（undici@8.x 需要 Node ≥ 22）
+  - frontend 添加缺失的 sortablejs 和 @types/sortablejs 依赖
+  - package-lock.json 替换阿里内部 registry 为公共 npm 镜像
+  - README 添加 Docker Node 版本要求说明
+
 ### 配置
 - **游戏配置独立** - 游戏模块配置分离管理
   - 新增 `games-config.default.json` 独立默认配置文件
