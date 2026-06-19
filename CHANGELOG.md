@@ -1,5 +1,19 @@
 # 更新日志
 
+## [v1.6.0] - 2026-06-20
+
+### 新增功能
+- **Electron 桌面应用** - 支持 Windows/macOS/Linux 全平台
+  - 系统托盘集成，最小化到托盘运行
+  - 单实例运行，防止多窗口冲突
+  - 托盘菜单快捷操作（显示窗口、重启服务、打开配置目录、退出）
+  - 托盘通知（扫描完成等事件提醒）
+- **一键打包脚本** - scripts/pack-electron.js 支持全平台打包
+
+### 技术改进
+- **server.ts 重构** - 导出 startServer/stopServer/getPort 函数
+- **依赖兼容性调整** - 降级 undici/archiver 以兼容 Electron v33
+
 ## [v1.5.8] - 2026-06-19
 
 ### 文档

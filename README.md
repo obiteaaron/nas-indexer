@@ -2,7 +2,7 @@
 
 离线文件索引服务，快速查找和管理你的 NAS 文件库。
 
-**版本: v1.5.8**
+**版本: v1.6.0**
 
 ## 功能
 
@@ -42,6 +42,12 @@
 - 游戏状态体系：已刮削/已完善/已配置/待刮削（四级状态，颜色区分）
 - 路径名称提取：从中文目录名和英文子目录/文件名自动提取中英文名称
 
+### 桌面应用 (v1.6.0)
+- Electron 桌面应用支持（Windows/macOS/Linux）
+- 系统托盘集成
+- 单实例运行
+- 托盘通知
+
 ### 其他
 - 暗色主题
 - 导出 Excel
@@ -58,6 +64,19 @@ npm start
 
 访问 http://localhost:3000
 
+## 桌面应用
+
+```bash
+# 开发模式启动 Electron
+npm run electron:dev
+
+# 打包桌面应用
+npm run pack:win    # Windows
+npm run pack:mac    # macOS
+npm run pack:linux  # Linux
+npm run pack:all    # 全平台
+```
+
 ## Docker 部署
 
 ```bash
@@ -72,6 +91,7 @@ docker compose up -d
 ```
 
 > **注意**：Docker 镜像使用 Node.js 22，因为 `undici@8.x` 需要 Node ≥ 22。
+> 桌面应用使用 Node.js 20（Electron v33 内置），依赖版本已调整兼容。
 
 挂载 NAS 目录（只读）：
 
@@ -87,7 +107,7 @@ volumes:
 
 ## 技术栈
 
-Node.js + Express + SQLite + Vue 3
+Node.js + Express + SQLite + Vue 3 + Electron
 
 ## 官网
 
