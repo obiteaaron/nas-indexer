@@ -103,7 +103,13 @@
           下载海报到本地
         </label>
       </div>
-      <p class="hint">刮削将从 Steam Store 获取游戏元数据和海报</p>
+      <div class="setting-row">
+        <label class="toggle-label">
+          <input type="checkbox" v-model="config.gamesScrape.autoGroupOnScan" />
+          扫描时自动按目录分组
+        </label>
+      </div>
+      <p class="hint">刮削将从 Steam Store 获取游戏元数据和海报，自动分组会将同一目录下的游戏归入分组</p>
     </div>
 
     <!-- 代理配置 -->
@@ -171,7 +177,8 @@ const defaultConfig: GamesConfig = {
   gamesScrape: {
     autoScrape: true,
     downloadPosters: true,
-    scrapeOnIdentify: true
+    scrapeOnIdentify: true,
+    autoGroupOnScan: true
   },
   maxPosterBackups: 5,
   proxyUrl: ''
