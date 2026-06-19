@@ -2,6 +2,15 @@
 
 ## [v1.5.8] - 2026-06-19
 
+### 文档
+- **项目官网** - 创建产品落地页
+  - 单 HTML 文件（CSS 内联），GitHub Pages 部署
+  - Dark Gaming 设计风格（纯黑背景 + 橙色强调）
+  - Hero 区域 + 功能展示 + 快速开始 + Footer
+  - 中文为主，关键术语保留英文（NAS、Steam API、Docker 等）
+
+## [v1.5.8] - 2026-06-19
+
 ### Bug 修复
 - **Docker 部署兼容性修复** - 解决 Docker 构建和运行问题
   - Dockerfile 升级 Node 20 → Node 22（undici@8.x 需要 Node ≥ 22）
