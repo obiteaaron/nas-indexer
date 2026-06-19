@@ -174,3 +174,5 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 备份路由 | `src/routes/profile-backup.ts` | Profiles 备份 API |
 | AI 设计文档 | `docs/ai-llm-integration-plan.md` | AI 集成方案参考 |
 | 游戏模块设计 | `docs/games-module-design.md` | 游戏模块技术方案 |
+| 默认配置 | `config.default.json` | 主配置默认值 |
+| 游戏默认配置 | `games-config.default.json` | 游戏模块独立默认配置 |

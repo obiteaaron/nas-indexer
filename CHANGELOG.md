@@ -2,6 +2,13 @@
 
 ## [v1.5.8] - 2026-06-19
 
+### 配置
+- **游戏配置独立** - 游戏模块配置分离管理
+  - 新增 `games-config.default.json` 独立默认配置文件
+  - `config.default.json` 移除游戏相关配置字段（已迁移至独立文件）
+  - 更新游戏识别规则：新增 DODI、3DMGAME、Gamersky 规则
+  - 移除已废弃的 `heuristicRules` 详细配置
+
 ### 移除
 - **冗余备份功能** - 移除 `games/backups` 目录备份功能
   - profiles 备份已覆盖完整游戏库数据，功能重复
