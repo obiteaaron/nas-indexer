@@ -237,7 +237,11 @@ export function getPort(): number {
 }
 
 // 独立运行时（非 Electron 模式）自动启动
-if (require.main === module) {
+// 检测方式：require.main 存在且是当前模块，或者通过环境变量检测
+const isMainModule = require.main === module;
+const isDirectRun = !process.env.PROJECT_ROOT && !process.env.FRONTEND_PATH;
+
+if (isMainModule || isDirectRun) {
   startServer().catch((err) => {
     logger.error('服务启动失败: %s', (err as Error).message);
     process.exit(1);

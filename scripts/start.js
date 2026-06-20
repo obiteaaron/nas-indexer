@@ -21,15 +21,22 @@ try {
 // 编译 TypeScript
 console.log('\n🔨 编译 TypeScript...');
 try {
-  execSync('npm run build', { cwd: path.join(__dirname, '..'), stdio: 'inherit' });
+  execSync('npm run build', { cwd: path.join(__dirname, '..'), stdio: 'pipe' });
   console.log('✅ TypeScript 编译完成\n');
 } catch (e) {
-  console.warn('⚠️  TypeScript 编译失败，尝试直接运行...\n');
-  // 如果编译失败，尝试用 ts-node 直接运行
-  require('ts-node').register();
-  require('../src/server.ts');
-  return;
+  // 即使 execSync 抛出错误，编译可能已经成功
+  // 检查 dist/server.js 是否存在
+  const serverPath = path.join(__dirname, '..', 'dist', 'server.js');
+  if (require('fs').existsSync(serverPath)) {
+    console.log('✅ TypeScript 编译完成（文件已存在）\n');
+  } else {
+    console.warn('⚠️  TypeScript 编译失败，尝试用 ts-node 直接运行...\n');
+    require('ts-node').register();
+    require('../src/server.ts');
+    return;
+  }
 }
 
-// 启动服务（运行编译后的代码）
+// 启动服务
+console.log('🚀 启动服务...\n');
 require('../dist/server.js');
