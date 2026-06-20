@@ -6,7 +6,8 @@ interface LoggerOptions {
   logFilePath?: string;
 }
 
-const PROJECT_ROOT: string = path.join(__dirname, '..');
+// 支持环境变量 PROJECT_ROOT（用于 Electron 打包模式）
+const PROJECT_ROOT: string = process.env.PROJECT_ROOT || path.join(__dirname, '..');
 const DEFAULT_LOG_PATH: string = path.join(PROJECT_ROOT, 'profiles', 'nas-indexer.log');
 
 function createLogger(options: LoggerOptions = {}): Logger {
