@@ -1,13 +1,13 @@
 # NAS Indexer Roadmap
 
-> 最后更新：2026-06-20
-> 当前版本：v1.5.8
+> 最后更新：2026-06-21
+> 当前版本：v1.6.0
 
 ---
 
 ## 项目定位
 
-NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue 3** 技术栈，提供文件扫描、分类、搜索、预览、标签管理和智能推荐功能。
+NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue 3 + Electron** 技术栈，提供文件扫描、分类、搜索、预览、标签管理和智能推荐功能。
 
 ---
 
@@ -98,7 +98,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 
 ---
 
-## 阶段六：架构升级（v1.5.x，待规划）
+## 阶段六：架构升级（v1.5.x ~ v1.6.0）
 
 **目标**：现代化架构，支持更大规模使用
 
@@ -106,6 +106,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 |--------|------|------|------|
 | **P0** | TypeScript 迁移 | ✅ | v1.3.2 已完成 |
 | **P1** | Docker 部署 | ✅ | 提供 Dockerfile 和 docker-compose.yml |
+| **P1** | Electron 桌面应用 | ✅ | 支持 Windows/macOS/Linux 全平台 |
 | **P1** | 用户认证 | 待开始 | JWT 认证、多用户支持（如需要） |
 | **P2** | 游戏状态筛选 | 待设计 | 支持「已配置」「已完善」筛选（需设计海报检查方案） |
 

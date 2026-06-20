@@ -109,7 +109,9 @@ class Database {
   }
 
   async init(dbPath?: string): Promise<this> {
-    this.dbPath = dbPath || path.join(__dirname, '../profiles/nas_index.db');
+    // 支持环境变量 PROJECT_ROOT（用于 Electron 打包模式）
+    const projectRoot = process.env.PROJECT_ROOT || path.dirname(__dirname);
+    this.dbPath = dbPath || path.join(projectRoot, 'profiles', 'nas_index.db');
 
     const SQL = await initSqlJs();
 

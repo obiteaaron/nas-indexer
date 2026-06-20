@@ -1,13 +1,15 @@
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 import { logger } from './logger';
 import type { Config } from './types';
 import { DEFAULT_GAMES_CONFIG } from './types/games-config';
 
-const PROJECT_ROOT: string = path.join(__dirname, '..');
+// 支持环境变量 PROJECT_ROOT（用于 Electron 打包模式）
+const PROJECT_ROOT: string = process.env.PROJECT_ROOT || path.join(__dirname, '..');
 const DEFAULT_STORAGE_PATH: string = path.join(PROJECT_ROOT, 'profiles');
-const DEFAULT_CONFIG_FILE: string = path.join(PROJECT_ROOT, 'config.default.json');
+const DEFAULT_CONFIG_FILE: string = process.env.PROJECT_ROOT
+  ? path.join(process.env.PROJECT_ROOT, 'config.default.json')  // Electron 打包模式：配置文件在安装目录
+  : path.join(__dirname, '..', 'config.default.json');           // 开发模式：配置文件在项目根目录
 
 let dbInitialized: boolean = false;
 
@@ -167,39 +169,7 @@ function loadConfig(): Config {
       }
     }
 
-    const userHome: string = process.env.USERPROFILE || process.env.HOME || os.homedir();
-    const legacyConfigPath: string = path.join(userHome, 'nasscanclassllm', 'config.json');
-    if (fs.existsSync(legacyConfigPath)) {
-      const rawConfig = JSON.parse(fs.readFileSync(legacyConfigPath, 'utf-8'));
-      logger.info('检测到旧版本配置，正在迁移到 profiles 目录...');
-
-      // 合并默认值
-      const config: Config = {
-        ...defaultConfig,
-        ...rawConfig,
-        gamesRules: {
-          ...defaultConfig.gamesRules!,
-          ...(rawConfig.gamesRules || {}),
-          heuristicRules: {
-            ...defaultConfig.gamesRules!.heuristicRules,
-            ...(rawConfig.gamesRules?.heuristicRules || {})
-          }
-        },
-        gamesScrape: {
-          ...defaultConfig.gamesScrape!,
-          ...(rawConfig.gamesScrape || {})
-        }
-      };
-
-      if (!config.storagePath) {
-        config.storagePath = '';
-      }
-      ensureStorageDir(defaultConfig);
-      fs.writeFileSync(profilesConfigPath, JSON.stringify(config, null, 2), 'utf-8');
-      logger.info('配置已迁移: %s', profilesConfigPath);
-      return config;
-    }
-
+    // 没有找到用户配置，使用默认配置
     ensureStorageDir(defaultConfig);
     fs.writeFileSync(profilesConfigPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
     logger.info('使用默认配置，已保存到: %s', profilesConfigPath);
