@@ -5,9 +5,12 @@ import { logger } from './logger';
 import type { Config } from './types';
 import { DEFAULT_GAMES_CONFIG } from './types/games-config';
 
-const PROJECT_ROOT: string = path.join(__dirname, '..');
+// 支持环境变量 PROJECT_ROOT（用于 Electron 打包模式）
+const PROJECT_ROOT: string = process.env.PROJECT_ROOT || path.join(__dirname, '..');
 const DEFAULT_STORAGE_PATH: string = path.join(PROJECT_ROOT, 'profiles');
-const DEFAULT_CONFIG_FILE: string = path.join(PROJECT_ROOT, 'config.default.json');
+const DEFAULT_CONFIG_FILE: string = process.env.PROJECT_ROOT
+  ? path.join(process.env.PROJECT_ROOT, 'config.default.json')  // Electron 打包模式：配置文件在安装目录
+  : path.join(__dirname, '..', 'config.default.json');           // 开发模式：配置文件在项目根目录
 
 let dbInitialized: boolean = false;
 

@@ -167,7 +167,8 @@ app.use('/api/games-config', gamesConfigRouter);
 app.use('/api/profile-backup', profileBackupRouter);
 
 // Static files - serve Vue frontend
-const frontendPath: string = path.join(PROJECT_ROOT, 'frontend', 'dist');
+// 支持环境变量 FRONTEND_PATH（用于 Electron 打包模式，前端在 asar 内）
+const frontendPath: string = process.env.FRONTEND_PATH || path.join(PROJECT_ROOT, 'frontend', 'dist');
 app.use(express.static(frontendPath));
 
 // Steam 缓存图片静态服务（延迟初始化）

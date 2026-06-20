@@ -4,6 +4,9 @@ import { fork, ChildProcess } from 'child_process';
 import { TrayManager } from './tray';
 import { isQuitting, setQuitting } from './types';
 
+// 检测是否为打包模式
+const isPackaged = app.isPackaged;
+
 // 单实例锁
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -35,49 +38,78 @@ ipcMain.on('show-notification', (_event, data: { title: string; body: string }) 
   TrayManager.showNotification(data.title, data.body);
 });
 
-// 使用 fork 启动 Express server
+// 启动 Express server
 async function startExpressServer(): Promise<number> {
-  const projectRoot = path.dirname(__dirname);
-  const serverPath = path.join(projectRoot, 'dist', 'server.js');
+  // 打包模式：PROJECT_ROOT 指向应用安装目录（而非 asar 内）
+  // app.getAppPath() 返回 resources/app.asar，需要向上两级到应用根目录
+  const projectRoot = isPackaged
+    ? path.dirname(path.dirname(app.getAppPath())) // NAS Indexer/ 目录
+    : path.dirname(__dirname);
 
-  console.log('启动 server:', serverPath);
+  if (isPackaged) {
+    // 打包模式：直接在主进程中导入并启动 server
+    console.log('打包模式启动 server...');
+    // 设置 PROJECT_ROOT 为应用安装目录（profiles 等数据目录在此创建）
+    process.env.PROJECT_ROOT = projectRoot;
+    // 设置 FRONTEND_PATH 为 asar 内的前端目录
+    process.env.FRONTEND_PATH = path.join(app.getAppPath(), 'frontend', 'dist');
 
-  // 使用 fork 启动 server
-  serverProcess = fork(serverPath, [], {
-    cwd: projectRoot,
-    env: { ...process.env, PROJECT_ROOT: projectRoot },
-    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-  });
+    try {
+      // 动态导入 server（asar 内的文件）
+      const serverPath = path.join(app.getAppPath(), 'dist', 'server.js');
+      console.log('Server path:', serverPath);
+      console.log('PROJECT_ROOT:', projectRoot);
+      console.log('FRONTEND_PATH:', process.env.FRONTEND_PATH);
 
-  // 监听 server 进程输出
-  serverProcess.stdout?.on('data', (data) => {
-    console.log(`[Server] ${data.toString()}`);
-  });
+      // 使用 require 直接加载并调用 startServer
+      const serverModule = require(serverPath);
+      const port = await serverModule.startServer();
+      return port;
+    } catch (err) {
+      console.error('导入 server 失败:', err);
+      throw err;
+    }
+  } else {
+    // 开发模式：使用 fork 启动 server
+    const serverPath = path.join(projectRoot, 'dist', 'server.js');
+    console.log('开发模式启动 server:', serverPath);
 
-  serverProcess.stderr?.on('data', (data) => {
-    console.error(`[Server Error] ${data.toString()}`);
-  });
-
-  // 等待 server 就绪
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      console.log('Server timeout, assuming started');
-      resolve(serverPort);
-    }, 5000);
-
-    serverProcess?.on('error', (err) => {
-      clearTimeout(timeout);
-      console.error('Server process error:', err);
-      reject(err);
+    serverProcess = fork(serverPath, [], {
+      cwd: projectRoot,
+      env: { ...process.env, PROJECT_ROOT: projectRoot },
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
 
-    serverProcess?.on('exit', (code) => {
-      clearTimeout(timeout);
-      if (code !== 0 && code !== null) {
-        reject(new Error(`Server process exited with code ${code}`));
-      }
+    // 监听 server 进程输出
+    serverProcess.stdout?.on('data', (data) => {
+      console.log(`[Server] ${data.toString()}`);
     });
-  });
+
+    serverProcess.stderr?.on('data', (data) => {
+      console.error(`[Server Error] ${data.toString()}`);
+    });
+
+    // 等待 server 就绪
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        console.log('Server timeout, assuming started');
+        resolve(serverPort);
+      }, 5000);
+
+      serverProcess?.on('error', (err) => {
+        clearTimeout(timeout);
+        console.error('Server process error:', err);
+        reject(err);
+      });
+
+      serverProcess?.on('exit', (code) => {
+        clearTimeout(timeout);
+        if (code !== 0 && code !== null) {
+          reject(new Error(`Server process exited with code ${code}`));
+        }
+      });
+    });
+  }
 }
 
 async function createMainWindow(): Promise<BrowserWindow> {
