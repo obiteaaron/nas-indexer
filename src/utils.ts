@@ -1,6 +1,5 @@
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 import { logger } from './logger';
 import type { Config } from './types';
 import { DEFAULT_GAMES_CONFIG } from './types/games-config';
@@ -170,39 +169,7 @@ function loadConfig(): Config {
       }
     }
 
-    const userHome: string = process.env.USERPROFILE || process.env.HOME || os.homedir();
-    const legacyConfigPath: string = path.join(userHome, 'nasscanclassllm', 'config.json');
-    if (fs.existsSync(legacyConfigPath)) {
-      const rawConfig = JSON.parse(fs.readFileSync(legacyConfigPath, 'utf-8'));
-      logger.info('检测到旧版本配置，正在迁移到 profiles 目录...');
-
-      // 合并默认值
-      const config: Config = {
-        ...defaultConfig,
-        ...rawConfig,
-        gamesRules: {
-          ...defaultConfig.gamesRules!,
-          ...(rawConfig.gamesRules || {}),
-          heuristicRules: {
-            ...defaultConfig.gamesRules!.heuristicRules,
-            ...(rawConfig.gamesRules?.heuristicRules || {})
-          }
-        },
-        gamesScrape: {
-          ...defaultConfig.gamesScrape!,
-          ...(rawConfig.gamesScrape || {})
-        }
-      };
-
-      if (!config.storagePath) {
-        config.storagePath = '';
-      }
-      ensureStorageDir(defaultConfig);
-      fs.writeFileSync(profilesConfigPath, JSON.stringify(config, null, 2), 'utf-8');
-      logger.info('配置已迁移: %s', profilesConfigPath);
-      return config;
-    }
-
+    // 没有找到用户配置，使用默认配置
     ensureStorageDir(defaultConfig);
     fs.writeFileSync(profilesConfigPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
     logger.info('使用默认配置，已保存到: %s', profilesConfigPath);
