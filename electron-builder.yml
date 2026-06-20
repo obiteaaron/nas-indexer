@@ -2,22 +2,14 @@ appId: nas-indexer
 productName: NAS Indexer
 copyright: MIT License
 
-# 包含的文件
+# 包含的文件（打包进 asar）
 files:
   - dist/**/*
   - dist-electron/**/*
   - frontend/dist/**/*
-  - profiles/**/*
-  - config.default.json
-  - games-config.default.json
   - node_modules/**/*
-
-# 额外资源（不打包进 asar）
-extraResources:
-  - from: electron/icons
-    to: electron/icons
-    filter:
-      - "**/*"
+  - "!dist-release/**/*"
+  - "!release/**/*"
   - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
   - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
   - "!**/node_modules/*.d.ts"
@@ -26,6 +18,13 @@ extraResources:
   - "!.editorconfig"
   - "!**/._*"
   - "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,__pycache__,thumbs.db,.gitignore,.gitattributes}"
+
+# 额外资源（不打包进 asar，放在 resources 目录）
+extraResources:
+  - from: electron/icons
+    to: electron/icons
+  - from: config.default.json
+  - from: games-config.default.json
 
 # Windows 配置
 win:
@@ -70,7 +69,7 @@ linux:
 
 # 输出目录
 directories:
-  output: release
+  output: dist-release
 
 # 压缩配置
 compression: normal
