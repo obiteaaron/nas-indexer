@@ -2,9 +2,6 @@ appId: nas-indexer
 productName: NAS Indexer
 copyright: MIT License
 
-# 入口文件
-main: dist-electron/main.js
-
 # 包含的文件
 files:
   - dist/**/*
@@ -29,16 +26,12 @@ win:
     - target: nsis
       arch:
         - x64
-  icon: electron/icons/icon.ico
 
 # NSIS 安装配置
 nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  installerIcon: electron/icons/icon.ico
-  uninstallerIcon: electron/icons/icon.ico
-  installerHeaderIcon: electron/icons/icon.ico
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: NAS Indexer
@@ -50,7 +43,6 @@ mac:
       arch:
         - x64
         - arm64
-  icon: electron/icons/icon.icns
   category: public.app-category.utilities
   hardenedRuntime: false
   gatekeeperAssess: false
@@ -64,7 +56,6 @@ linux:
     - target: deb
       arch:
         - x64
-  icon: electron/icons/icon.png
   category: Utility
   maintainer: nomadic
   synopsis: NAS 文件索引与管理工具
@@ -73,7 +64,6 @@ linux:
 # 输出目录
 directories:
   output: release
-  buildResources: electron/icons
 
 # 压缩配置
 compression: normal
