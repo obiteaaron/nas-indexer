@@ -11,6 +11,13 @@ files:
   - config.default.json
   - games-config.default.json
   - node_modules/**/*
+
+# 额外资源（不打包进 asar）
+extraResources:
+  - from: electron/icons
+    to: electron/icons
+    filter:
+      - "**/*"
   - "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}"
   - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
   - "!**/node_modules/*.d.ts"

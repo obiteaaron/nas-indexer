@@ -16,21 +16,30 @@ export class TrayManager {
   }
 
   static init(): void {
-    this.iconPath = path.join(__dirname, 'icons', 'icon.png');
+    // 图标路径：打包后图标在 resources/electron/icons/ 下（extraResources）
+    // 未打包时在 __dirname/icons/ 下
+    const isPackaged = app.isPackaged;
+    this.iconPath = isPackaged
+      ? path.join(process.resourcesPath, 'electron', 'icons', 'icon.png')
+      : path.join(__dirname, 'icons', 'icon.png');
 
     // 创建托盘图标
     let icon: NativeImage;
 
     if (process.platform === 'win32') {
       // Windows 使用 .ico 文件（如果存在）
-      const icoPath = path.join(__dirname, 'icons', 'icon.ico');
+      const icoPath = isPackaged
+        ? path.join(process.resourcesPath, 'electron', 'icons', 'icon.ico')
+        : path.join(__dirname, 'icons', 'icon.ico');
       icon = nativeImage.createFromPath(icoPath);
       if (icon.isEmpty()) {
         icon = nativeImage.createFromPath(this.iconPath);
       }
     } else if (process.platform === 'darwin') {
       // macOS 使用 .icns 文件（如果存在），或调整 PNG 大小
-      const icnsPath = path.join(__dirname, 'icons', 'icon.icns');
+      const icnsPath = isPackaged
+        ? path.join(process.resourcesPath, 'electron', 'icons', 'icon.icns')
+        : path.join(__dirname, 'icons', 'icon.icns');
       icon = nativeImage.createFromPath(icnsPath);
       if (icon.isEmpty()) {
         icon = nativeImage.createFromPath(this.iconPath).resize({ width: 16, height: 16 });
@@ -110,9 +119,12 @@ export class TrayManager {
 
   private static openConfigDirectory(): void {
     // 打开配置目录（profiles）
-    // dist-electron/ -> 项目根目录 -> profiles
-    const projectRoot = path.dirname(__dirname);
-    const profilesPath = path.join(projectRoot, 'profiles');
+    // 打包模式下 profiles 在安装目录下（与 resources 同级）
+    // 未打包时在项目根目录
+    const isPackaged = app.isPackaged;
+    const profilesPath = isPackaged
+      ? path.join(path.dirname(process.resourcesPath), 'profiles')
+      : path.join(path.dirname(__dirname), 'profiles');
 
     shell.openPath(profilesPath);
   }
