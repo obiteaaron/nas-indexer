@@ -14,6 +14,13 @@ import { PROJECT_ROOT, DEFAULT_STORAGE_PATH, initDatabase, loadConfig, ensureSto
 import { DEFAULT_GAMES_CONFIG } from './types/games-config';
 import { ensureGamesDirs } from './games/storage';
 import type { Config, FileExtensionFilter, ScanProgressEvent } from './types';
+import {
+  authMiddleware,
+  loadSecurityConfig,
+  initSecurityConfig,
+  saveSecurityConfig,
+  getBindAddress
+} from './auth';
 
 // 路由模块
 import configRouter from './routes/config';
@@ -36,7 +43,11 @@ const PORT: number = parseInt(process.env.PORT || '3000', 10);
 app.use(cors());
 app.use(express.json());
 
-let scanJob: cron.ScheduledTask | null = null;
+// 认证中间件 - 拦截所有 /api/* 请求
+app.use('/api', authMiddleware);
+
+// API Routes
+app.use('/api/config', configRouter);
 
 async function runScan(config: Config, onProgress: ((event: ScanProgressEvent) => void) | null = null): Promise<unknown> {
   try {
@@ -211,22 +222,43 @@ let server: ReturnType<typeof app.listen> | null = null;
 export async function startServer(customPort?: number): Promise<number> {
   const port = customPort || PORT;
 
+  // 1. 加载并初始化安全配置
+  const securityConfig = loadSecurityConfig();
+  const initializedSecurity = initSecurityConfig(securityConfig);
+  saveSecurityConfig(initializedSecurity);
+
+  // 2. 获取绑定地址（环境变量优先）
+  const bindAddress = getBindAddress(initializedSecurity);
+
   return new Promise((resolve, reject) => {
-    server = app.listen(port, async () => {
+    server = app.listen(port, bindAddress, async () => {
       try {
         await initDatabase();
 
         // 初始化代理（用于 Steam API 刮削）
         initProxy();
 
-        logger.info('\n🚀 NAS Indexer v1.6.0 服务已启动');
-        logger.info('📍 访问地址: http://localhost:%d', port);
-        logger.info('📁 默认存储目录: %s\n', DEFAULT_STORAGE_PATH);
-
         const config: Config = loadConfig();
         const storagePath: string = getStoragePath(config);
         ensureGamesDirs(storagePath);
+
+        // 3. 打印启动日志（含安全信息）
+        logger.info('\n🚀 NAS Indexer v1.6.0 服务已启动');
+        logger.info('📍 访问地址: http://%s:%d', bindAddress, port);
+        logger.info('📁 默认存储目录: %s', DEFAULT_STORAGE_PATH);
         logger.info('📂 当前存储目录: %s', storagePath);
+
+        // 安全信息
+        if (initializedSecurity.enabled) {
+          logger.info('🔐 认证已启用');
+          logger.info('   API Token: %s', initializedSecurity.token);
+          logger.info('   请在浏览器中访问: http://%s:%d/?token=%s',
+            bindAddress, port, initializedSecurity.token);
+          logger.info('🌐 IP 白名单: %s', initializedSecurity.ipWhitelist.join(', '));
+        } else {
+          logger.warn('⚠️ 认证已禁用（不推荐）');
+        }
+        logger.info('');
 
         scheduleScan(config);
 
