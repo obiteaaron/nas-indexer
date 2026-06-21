@@ -2,6 +2,20 @@
 
 ## [v1.6.0] - 2026-06-22
 
+### 技术改进
+- **刮削器插件注册中心** - 新增 ScraperRegistry 单例类
+  - 管理所有插件的注册、获取、状态查询
+  - 提供 register、get、getEnabledPlugins、getPluginStatus 方法
+  - 提供配置管理（updateConfig、getConfig、loadEnvAuthConfig）
+  - 支持从环境变量加载 IGDB 和 Giant Bomb 认证配置
+  - 新增 `src/games/scraper-plugins/registry.ts` 文件
+- **刮削器插件基类** - 新增 BaseScraperPlugin 抽象类
+  - 提供代理支持（使用全局配置 proxyUrl）
+  - 提供图片下载方法（downloadImages、downloadImage）
+  - 提供默认匹信度计算方法（matchConfidence）
+  - 新增 `src/games/scraper-plugins/base.ts` 文件
+  - 新增 `src/types/scraper.ts` 类型定义
+
 ### Bug 修复
 - **插件基类代理修复** - 修复代理实现全局污染问题
   - 移除 setGlobalDispatcher 调用，改为 fetch 的 dispatcher 选项
