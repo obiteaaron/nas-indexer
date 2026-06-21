@@ -48,7 +48,7 @@
             <div class="form-group">
               <label>定时扫描 (Cron 表达式)</label>
               <input class="input" v-model="config.scanTime" placeholder="0 2 * * *">
-              <span class="hint">默认每天凌晨 2 点扫描</span>
+              <span class="hint">默认每天凌晨 2 点扫描。设置为空可关闭定时扫描</span>
             </div>
 
             <div class="form-group">

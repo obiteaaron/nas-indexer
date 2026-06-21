@@ -138,7 +138,22 @@ function scheduleScan(config: Config): void {
     scanJob = null;
   }
 
-  if (config.scanPaths && config.scanPaths.length > 0) {
+  // 检查 scanPaths 和 scanTime 是否有效
+  if (!config.scanPaths || config.scanPaths.length === 0) {
+    logger.info('定时扫描已禁用 (scanPaths 为空)');
+    setScanJob(null);
+    return;
+  }
+
+  // scanTime 为空或空白字符串表示关闭定时扫描
+  if (!config.scanTime || config.scanTime.trim() === '') {
+    logger.info('定时扫描已禁用 (scanTime 为空)');
+    setScanJob(null);
+    return;
+  }
+
+  // 尝试创建定时任务，无效表达式会被捕获
+  try {
     scanJob = cron.schedule(config.scanTime, async () => {
       logger.info('[%s] 定时扫描开始', new Date().toLocaleString());
       await runScan(config);
@@ -146,9 +161,11 @@ function scheduleScan(config: Config): void {
       timezone: 'Asia/Shanghai'
     });
     logger.info('定时扫描已设置: %s', config.scanTime);
+    setScanJob(scanJob);
+  } catch (err) {
+    logger.warn('Cron 表达式无效，定时扫描已禁用: %s', config.scanTime);
+    setScanJob(null);
   }
-
-  setScanJob(scanJob);
 }
 
 // API Routes
