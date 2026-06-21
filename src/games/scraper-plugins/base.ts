@@ -4,7 +4,8 @@
  */
 
 import fs from 'fs';
-import { ProxyAgent, setGlobalDispatcher } from 'undici';
+import path from 'path';
+import { ProxyAgent } from 'undici';
 import { logger } from '../../logger';
 import { loadConfig, getStoragePath } from '../../utils';
 import { ensurePosterDir, getPosterPath } from '../storage';
@@ -29,30 +30,19 @@ export abstract class BaseScraperPlugin implements ScraperPlugin {
   abstract search(query: string): Promise<ScrapeCandidate[]>;
   abstract getDetails(id: string): Promise<ScraperMetadata | null>;
 
-  // 代理 Agent
-  protected proxyAgent: ProxyAgent | undefined;
-
   /**
-   * 初始化代理（根据全局配置）
-   */
-  protected initProxy(): void {
-    const config = loadConfig();
-    const proxyUrl = config.proxyUrl;
-
-    if (proxyUrl && proxyUrl.trim()) {
-      this.proxyAgent = new ProxyAgent(proxyUrl.trim());
-      setGlobalDispatcher(this.proxyAgent);
-      logger.info('[%s] 已启用代理: %s', this.displayName, proxyUrl.trim());
-    } else {
-      this.proxyAgent = undefined;
-    }
-  }
-
-  /**
-   * 带代理的 fetch
+   * 带代理的 fetch（不污染全局）
    */
   protected async fetch(url: string): Promise<Response> {
-    this.initProxy();
+    const config = loadConfig();
+    const proxyUrl = config.proxyUrl?.trim();
+
+    if (proxyUrl) {
+      const agent = new ProxyAgent(proxyUrl);
+      logger.debug('[%s] 使用代理: %s', this.displayName, proxyUrl);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return fetch(url, { dispatcher: agent as any });
+    }
     return fetch(url);
   }
 
@@ -85,6 +75,21 @@ export abstract class BaseScraperPlugin implements ScraperPlugin {
       const destPath = getPosterPath(storagePath, gameId, 'background');
       await this.downloadImage(urls.background, destPath);
       paths.background = destPath;
+    }
+
+    // 下载截图（最多5张）
+    if (urls.screenshots && urls.screenshots.length > 0) {
+      paths.screenshots = [];
+      const screenshotsDir = path.join(storagePath, 'games', 'posters', String(gameId), 'screenshots');
+      if (!fs.existsSync(screenshotsDir)) {
+        fs.mkdirSync(screenshotsDir, { recursive: true });
+      }
+      const maxScreenshots = Math.min(urls.screenshots.length, 5);
+      for (let i = 0; i < maxScreenshots; i++) {
+        const destPath = path.join(screenshotsDir, `${i + 1}.jpg`);
+        await this.downloadImage(urls.screenshots[i], destPath);
+        paths.screenshots.push(destPath);
+      }
     }
 
     return paths;

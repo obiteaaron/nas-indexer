@@ -2,6 +2,14 @@
 
 ## [v1.6.0] - 2026-06-22
 
+### Bug 修复
+- **插件基类代理修复** - 修复代理实现全局污染问题
+  - 移除 setGlobalDispatcher 调用，改为 fetch 的 dispatcher 选项
+  - 代理不再影响全局所有 fetch 请求
+- **插件基类截图处理** - downloadImages 方法添加 screenshots 处理
+  - 支持下载截图（最多5张）
+  - 截图存储至 `games/posters/{gameId}/screenshots/` 目录
+
 ### 技术改进
 - **刮削器插件基类** - 新增 BaseScraperPlugin 抽象类
   - 提供代理支持（使用全局配置 proxyUrl）
