@@ -40,16 +40,19 @@ ipcMain.on('show-notification', (_event, data: { title: string; body: string }) 
 
 // 启动 Express server
 async function startExpressServer(): Promise<number> {
-  // 打包模式：PROJECT_ROOT 指向应用安装目录（而非 asar 内）
-  // app.getAppPath() 返回 resources/app.asar，需要向上两级到应用根目录
+  // 打包模式：PROJECT_ROOT 指向用户数据目录（不受安装/卸载影响）
+  // app.getPath('userData') 返回系统用户数据目录：
+  // - Windows: C:\Users\{用户}\AppData\Roaming\NAS Indexer
+  // - macOS: ~/Library/Application Support/NAS Indexer
+  // - Linux: ~/.config/nas-indexer
   const projectRoot = isPackaged
-    ? path.dirname(path.dirname(app.getAppPath())) // NAS Indexer/ 目录
+    ? app.getPath('userData')
     : path.dirname(__dirname);
 
   if (isPackaged) {
     // 打包模式：直接在主进程中导入并启动 server
     console.log('打包模式启动 server...');
-    // 设置 PROJECT_ROOT 为应用安装目录（profiles 等数据目录在此创建）
+    // 设置 PROJECT_ROOT 为用户数据目录（profiles 等数据目录在此创建）
     process.env.PROJECT_ROOT = projectRoot;
     // 设置 FRONTEND_PATH 为 asar 内的前端目录
     process.env.FRONTEND_PATH = path.join(app.getAppPath(), 'frontend', 'dist');

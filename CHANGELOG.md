@@ -8,6 +8,12 @@
   - 按钮添加 loading 状态和 disabled 状态，防止重复点击
   - 关键操作（扫描、删除、重命名、导出等）显示处理状态
   - 全局 loading overlay 提供视觉反馈
+- **Electron 数据持久化修复** - 解决重装后 profiles 数据丢失问题
+  - 打包模式改为使用系统用户数据目录（userData）存储数据
+  - Windows: `AppData\Roaming\NAS Indexer`
+  - macOS: `~/Library/Application Support/NAS Indexer`
+  - Linux: `~/.config/nas-indexer`
+  - 开发模式、Docker、便携版保持原有存储方式
 
 ## [v1.6.0] - 2026-06-20
 
