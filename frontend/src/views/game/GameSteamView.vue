@@ -32,9 +32,7 @@
     <!-- 操作按钮 -->
     <div class="action-bar">
       <button class="btn btn-primary btn-small" @click="openAddModal">添加记录</button>
-      <input type="file" ref="fileInput" accept=".jsonl,.json" @change="handleFileSelect" style="display: none" />
-      <button class="btn btn-secondary btn-small" @click="triggerFileInput">导入文件</button>
-      <button class="btn btn-secondary btn-small" @click="showImportModal = true">粘贴导入</button>
+      <button class="btn btn-secondary btn-small" @click="showImportModal = true">导入</button>
       <button class="btn btn-secondary btn-small" @click="handleExport" :disabled="steamDbTotal === 0">导出</button>
       <button class="btn btn-secondary btn-small" @click="refreshAll" :disabled="refreshing">刷新所有缓存</button>
       <button class="btn btn-secondary btn-small" @click="refreshMissing" :disabled="refreshing">刷新缺失元数据</button>
@@ -149,8 +147,18 @@
           <button class="modal-close" @click="showImportModal = false">✕</button>
         </div>
         <div class="modal-body">
+          <!-- 文件选择 -->
           <div class="form-row">
-            <label class="form-label">数据内容</label>
+            <label class="form-label">选择文件</label>
+            <div class="file-input-row">
+              <input type="file" ref="fileInput" accept=".jsonl,.json" @change="handleFileSelect" class="file-input" />
+              <span class="file-name" v-if="importFileName">{{ importFileName }}</span>
+              <span class="hint" v-else>支持 .jsonl 或 .json 文件</span>
+            </div>
+          </div>
+          <!-- 粘贴内容 -->
+          <div class="form-row">
+            <label class="form-label">或粘贴内容</label>
             <textarea class="textarea" v-model="importJsonStr" placeholder="粘贴数据内容，支持 JSON Lines 或 JSON 数组格式"></textarea>
             <span class="hint">JSON Lines: 每行一个 JSON 对象；JSON 数组: [{...}, {...}]</span>
           </div>
@@ -206,8 +214,10 @@ import GameSteamCacheDetailModal from '../../components/game/GameSteamCacheDetai
 
 const { showNotification, showToast, toastMessage } = useGameToast();
 
-// 文件输入引用
+// 文件输入引用和状态
 const fileInput = ref<HTMLInputElement | null>(null);
+const importFileName = ref('');
+const importFileContent = ref('');
 
 // Steam 缓存统计
 const stats = ref<SteamCacheStats | null>(null);
@@ -454,32 +464,33 @@ async function handleExport(): Promise<void> {
   }
 }
 
-// 导入（支持 JSON Lines 和 JSON 数组）
+// 导入（支持文件或粘贴内容）
 async function handleImport(): Promise<void> {
-  if (!importJsonStr.value.trim()) {
-    showNotification('请输入数据内容');
+  const content = importFileContent.value || importJsonStr.value.trim();
+  if (!content) {
+    showNotification('请选择文件或粘贴数据内容');
     return;
   }
   importing.value = true;
   try {
-    // 直接传入字符串，后端会自动识别格式
-    const res = await importSteamDb(importJsonStr.value.trim(), importMode.value);
+    const res = await importSteamDb(content, importMode.value);
     if (res.success && res.data) {
       showNotification(`导入完成：新增 ${res.data.added}，更新 ${res.data.updated}，跳过 ${res.data.skipped}`);
       loadSteamDbList();
       loadStats();
       showImportModal.value = false;
+      // 清空状态
       importJsonStr.value = '';
+      importFileName.value = '';
+      importFileContent.value = '';
+      if (fileInput.value) fileInput.value.value = '';
+    } else {
+      showNotification(res.error || '导入失败');
     }
   } catch (err) {
     showNotification('导入失败，请检查数据格式');
   }
   importing.value = false;
-}
-
-// 触发文件选择
-function triggerFileInput(): void {
-  fileInput.value?.click();
 }
 
 // 处理文件选择
@@ -488,22 +499,17 @@ async function handleFileSelect(event: Event): Promise<void> {
   const file = target.files?.[0] as globalThis.File | undefined;
   if (!file) return;
 
-  importing.value = true;
   try {
-    const res = await importSteamDbFile(file, 'merge');
-    if (res.success && res.data) {
-      showNotification(`导入完成：新增 ${res.data.added}，更新 ${res.data.updated}，跳过 ${res.data.skipped}`);
-      loadSteamDbList();
-      loadStats();
-    } else {
-      showNotification(res.error || '导入失败');
-    }
+    const content = await file.text();
+    importFileName.value = file.name;
+    importFileContent.value = content;
+    // 清空粘贴内容，避免混淆
+    importJsonStr.value = '';
   } catch (err) {
     showNotification('文件读取失败');
+    importFileName.value = '';
+    importFileContent.value = '';
   }
-  importing.value = false;
-  // 清空文件输入，允许重复选择同一文件
-  target.value = '';
 }
 
 // 监听分页变化
@@ -718,6 +724,18 @@ onMounted(() => {
   color: var(--text);
   font-size: 14px;
   resize: vertical;
+}
+.file-input-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.file-input {
+  flex: 1;
+}
+.file-name {
+  color: var(--primary);
+  font-size: 14px;
 }
 .select {
   width: 100%;
