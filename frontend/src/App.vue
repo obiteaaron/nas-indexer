@@ -1,5 +1,15 @@
 <template>
   <div class="app">
+    <!-- 全局 Loading Overlay -->
+    <Transition name="fade">
+      <div v-if="isGlobalLoading" class="global-loading-overlay">
+        <div class="global-loading-spinner">
+          <div class="spinner"></div>
+          <span class="loading-text">{{ globalLoadingMessage }}</span>
+        </div>
+      </div>
+    </Transition>
+
     <header class="header">
       <div class="header-inner">
         <div class="header-left">
@@ -44,6 +54,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { getStatus, getConfig, getTaskStreamUrl } from './api'
+import { globalRequestState } from './composables/useRequestState'
 import TaskBar from './components/TaskBar.vue'
 import type { Config, StatusResponse, Task } from './types'
 
@@ -52,6 +63,10 @@ const status = ref<StatusResponse | null>(null)
 const tasks = ref<Task[]>([])
 const isDark = ref(false)
 let eventSource: EventSource | null = null
+
+// 全局 loading 状态
+const isGlobalLoading = globalRequestState.isAnyPending
+const globalLoadingMessage = globalRequestState.currentMessage
 
 async function loadStatus(): Promise<void> {
   try {
@@ -199,5 +214,61 @@ onUnmounted(() => {
 
 .github-icon {
   display: block;
+}
+
+/* 全局 Loading Overlay */
+.global-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.global-loading-spinner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

@@ -85,7 +85,9 @@
         <p class="scan-confirm-tip">如果只是单个目录有更新，建议前往<span class="scan-confirm-link" @click="$router.push('/settings'); showScanConfirm = false">设置页面</span>对该目录单独扫描。</p>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="showScanConfirm = false">取消</button>
-          <button class="btn btn-primary" @click="confirmScan">确认扫描</button>
+          <button class="btn btn-primary" @click="confirmScan" :disabled="scanLoading.loading.value">
+            {{ scanLoading.loading.value ? '启动中...' : '确认扫描' }}
+          </button>
         </div>
       </div>
     </div>
@@ -96,6 +98,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import FilePreview from '../components/FilePreview.vue'
+import { useButtonLoading } from '../composables/useRequestState'
 import { getStatistics, scanFiles, getPreferences, getRecommendations, generateRecommendations, getFile } from '../api'
 import type { StatisticsResponse, Preferences, Recommendation, FileWithTags } from '../types'
 
@@ -105,6 +108,10 @@ const showScanConfirm = ref(false)
 const preferences = ref<(Preferences & { enabled: boolean }) | null>(null)
 const recommendations = ref<Recommendation[]>([])
 const previewFile = ref<FileWithTags | null>(null)
+
+// 按钮级 loading 状态
+const scanLoading = useButtonLoading()
+const viewFileLoading = useButtonLoading()
 
 onMounted(async () => {
   loadStats()
@@ -168,27 +175,31 @@ function getCategoryIcon(category?: string): string {
 }
 
 async function viewFile(rec: Recommendation): Promise<void> {
-  try {
-    const res = await getFile(rec.file_id)
-    if (res.success && res.data) {
-      previewFile.value = res.data
+  await viewFileLoading.withButtonLoading(async () => {
+    try {
+      const res = await getFile(rec.file_id)
+      if (res.success && res.data) {
+        previewFile.value = res.data
+      }
+    } catch (err) {
+      console.error('获取文件详情失败:', err)
     }
-  } catch (err) {
-    console.error('获取文件详情失败:', err)
-  }
+  })
 }
 
 async function confirmScan(): Promise<void> {
   showScanConfirm.value = false
-  try {
-    const res = await scanFiles()
-    if (!res.success) {
-      alert('启动扫描失败：' + res.error)
+  await scanLoading.withButtonLoading(async () => {
+    try {
+      const res = await scanFiles()
+      if (!res.success) {
+        alert('启动扫描失败：' + res.error)
+      }
+    } catch (err) {
+      const error = err as Error
+      alert('启动扫描失败：' + error.message)
     }
-  } catch (err) {
-    const error = err as Error
-    alert('启动扫描失败：' + error.message)
-  }
+  })
 }
 </script>
 

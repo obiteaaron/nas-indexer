@@ -36,11 +36,12 @@
           v-if="selectedFiles.length > 0"
           class="btn btn-primary btn-small"
           @click="showBatchTagger"
+          :disabled="batchTagLoading.loading.value"
         >
-          批量打标 ({{ selectedFiles.length }})
+          {{ batchTagLoading.loading.value ? '打标中...' : '批量打标 (' + selectedFiles.length + ')' }}
         </button>
-        <button class="btn btn-secondary btn-small" @click="exportToExcel">
-          导出 Excel
+        <button class="btn btn-secondary btn-small" @click="exportToExcel" :disabled="exportLoading.loading.value">
+          {{ exportLoading.loading.value ? '导出中...' : '导出 Excel' }}
         </button>
       </div>
 
@@ -111,10 +112,12 @@
                 <div class="actions">
                   <button class="btn btn-secondary btn-small" @click="openLocation(file)">定位</button>
                   <button class="btn btn-secondary btn-small" @click="showRename(file)">重命名</button>
-                  <button class="btn btn-secondary btn-small" @click="toggleFavorite(file)">
-                    {{ file.is_favorite ? '取消收藏' : '收藏' }}
+                  <button class="btn btn-secondary btn-small" @click="toggleFavorite(file)" :disabled="favoriteLoading.loading.value">
+                    {{ favoriteLoading.loading.value ? '处理中...' : (file.is_favorite ? '取消收藏' : '收藏') }}
                   </button>
-                  <button class="btn btn-danger btn-small" @click="confirmDelete(file)">删除</button>
+                  <button class="btn btn-danger btn-small" @click="confirmDelete(file)" :disabled="deleteLoading.loading.value">
+                    {{ deleteLoading.loading.value ? '删除中...' : '删除' }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -165,7 +168,9 @@
         <input class="input" v-model="newName" placeholder="新文件名">
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="renameFile = null">取消</button>
-          <button class="btn btn-primary" @click="doRename">确认</button>
+          <button class="btn btn-primary" @click="doRename" :disabled="renameLoading.loading.value">
+            {{ renameLoading.loading.value ? '重命名中...' : '确认' }}
+          </button>
         </div>
       </div>
     </div>
@@ -179,6 +184,7 @@ import TagBadge from '../components/TagBadge.vue'
 import TagSelector from '../components/TagSelector.vue'
 import FilePreview from '../components/FilePreview.vue'
 import Pagination from '../components/Pagination.vue'
+import { useButtonLoading } from '../composables/useRequestState'
 import {
   getFiles, getCategories, openFile, renameFile as apiRename, deleteFile,
   addFavorite, removeFavorite,
@@ -222,6 +228,13 @@ const thumbnailPreviewEnabled = ref(true)
 const thumbnailSizeLimit = ref(5)
 const videoPreviewEnabled = ref(true)
 const hoverPreview = ref<HoverPreview>({ visible: false, url: '', x: 0, y: 0 })
+
+// 按钮级 loading 状态
+const renameLoading = useButtonLoading()
+const favoriteLoading = useButtonLoading()
+const deleteLoading = useButtonLoading()
+const batchTagLoading = useButtonLoading()
+const exportLoading = useButtonLoading()
 
 const IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
 const VIDEO_EXTS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.m4v']
@@ -366,14 +379,16 @@ function showBatchTagger(): void {
 
 async function handleBatchTagConfirm(tagIds: number[]): Promise<void> {
   if (tagIds.length === 0) return
-  try {
-    await batchFileTags(selectedFiles.value, tagIds, 'add')
-    await loadFileTagsBatch(selectedFiles.value)
-    selectedFiles.value = []
-  } catch (err) {
-    const e = err as Error
-    alert('批量打标失败: ' + e.message)
-  }
+  await batchTagLoading.withButtonLoading(async () => {
+    try {
+      await batchFileTags(selectedFiles.value, tagIds, 'add')
+      await loadFileTagsBatch(selectedFiles.value)
+      selectedFiles.value = []
+    } catch (err) {
+      const e = err as Error
+      alert('批量打标失败: ' + e.message)
+    }
+  })
 }
 
 async function showTagFilter(): Promise<void> {
@@ -429,47 +444,53 @@ function showRename(file: FileWithTags): void {
 async function doRename(): Promise<void> {
   if (!newName.value) return
 
-  try {
-    const res = await apiRename(renameFile.value!.id, newName.value)
-    if (res.success) {
-      renameFile.value = null
-      loadFiles()
-    } else {
-      alert('重命名失败：' + res.error)
+  await renameLoading.withButtonLoading(async () => {
+    try {
+      const res = await apiRename(renameFile.value!.id, newName.value)
+      if (res.success) {
+        renameFile.value = null
+        loadFiles()
+      } else {
+        alert('重命名失败：' + res.error)
+      }
+    } catch (err) {
+      const e = err as Error
+      alert('重命名失败：' + e.message)
     }
-  } catch (err) {
-    const e = err as Error
-    alert('重命名失败：' + e.message)
-  }
+  })
 }
 
 async function toggleFavorite(file: FileWithTags): Promise<void> {
-  try {
-    if (file.is_favorite) {
-      await removeFavorite(file.id)
-    } else {
-      await addFavorite(file.id)
+  await favoriteLoading.withButtonLoading(async () => {
+    try {
+      if (file.is_favorite) {
+        await removeFavorite(file.id)
+      } else {
+        await addFavorite(file.id)
+      }
+      loadFiles()
+    } catch (err) {
+      const e = err as Error
+      alert('操作失败：' + e.message)
     }
-    loadFiles()
-  } catch (err) {
-    const e = err as Error
-    alert('操作失败：' + e.message)
-  }
+  })
 }
 
 async function confirmDelete(file: FileWithTags): Promise<void> {
   if (confirm('确定删除文件 "' + file.name + '"？')) {
-    try {
-      const res = await deleteFile(file.id)
-      if (res.success) {
-        loadFiles()
-      } else {
-        alert('删除失败：' + res.error)
+    await deleteLoading.withButtonLoading(async () => {
+      try {
+        const res = await deleteFile(file.id)
+        if (res.success) {
+          loadFiles()
+        } else {
+          alert('删除失败：' + res.error)
+        }
+      } catch (err) {
+        const e = err as Error
+        alert('删除失败：' + e.message)
       }
-    } catch (err) {
-      const e = err as Error
-      alert('删除失败：' + e.message)
-    }
+    })
   }
 }
 
@@ -664,68 +685,70 @@ function moveHoverPreview(event: MouseEvent): void {
 }
 
 async function exportToExcel(): Promise<void> {
-  try {
-    const allFiles: FileWithTags[] = []
-    let currentPage = 1
-    const exportPageSize = 500
-    let hasMore = true
+  await exportLoading.withButtonLoading(async () => {
+    try {
+      const allFiles: FileWithTags[] = []
+      let currentPage = 1
+      const exportPageSize = 500
+      let hasMore = true
 
-    while (hasMore) {
-      const params = {
-        category: category.value,
-        search: search.value,
-        orderBy: orderBy.value,
-        orderDir: orderDir.value,
-        page: currentPage,
-        pageSize: exportPageSize
+      while (hasMore) {
+        const params = {
+          category: category.value,
+          search: search.value,
+          orderBy: orderBy.value,
+          orderDir: orderDir.value,
+          page: currentPage,
+          pageSize: exportPageSize
+        }
+
+        let res
+        if (filterTagIds.value.length > 0) {
+          res = await getFilesByTags({
+            tagIds: filterTagIds.value.join(','),
+            matchAll: true,
+            ...params
+          })
+        } else {
+          res = await getFiles(params)
+        }
+
+        if (res.success && res.data) {
+          allFiles.push(...res.data.files)
+          hasMore = currentPage < res.data.totalPages
+          currentPage++
+        } else {
+          hasMore = false
+        }
       }
 
-      let res
-      if (filterTagIds.value.length > 0) {
-        res = await getFilesByTags({
-          tagIds: filterTagIds.value.join(','),
-          matchAll: true,
-          ...params
-        })
-      } else {
-        res = await getFiles(params)
-      }
+      const exportData = allFiles.map(f => ({
+        '文件名': f.name,
+        '路径': f.path,
+        '大小': f.sizeFormatted,
+        '分类': f.category,
+        '修改时间': f.modified_at ? new Date(f.modified_at).toLocaleString('zh-CN') : ''
+      }))
 
-      if (res.success && res.data) {
-        allFiles.push(...res.data.files)
-        hasMore = currentPage < res.data.totalPages
-        currentPage++
-      } else {
-        hasMore = false
-      }
+      const ws = XLSX.utils.json_to_sheet(exportData)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, '文件列表')
+
+      ws['!cols'] = [
+        { wch: 40 },
+        { wch: 60 },
+        { wch: 12 },
+        { wch: 10 },
+        { wch: 20 }
+      ]
+
+      const date = new Date().toISOString().slice(0, 10)
+      XLSX.writeFile(wb, `文件列表_${date}.xlsx`)
+    } catch (err) {
+      const e = err as Error
+      alert('导出失败: ' + e.message)
     }
-
-    const exportData = allFiles.map(f => ({
-      '文件名': f.name,
-      '路径': f.path,
-      '大小': f.sizeFormatted,
-      '分类': f.category,
-      '修改时间': f.modified_at ? new Date(f.modified_at).toLocaleString('zh-CN') : ''
-    }))
-
-    const ws = XLSX.utils.json_to_sheet(exportData)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '文件列表')
-
-    ws['!cols'] = [
-      { wch: 40 },
-      { wch: 60 },
-      { wch: 12 },
-      { wch: 10 },
-      { wch: 20 }
-    ]
-
-    const date = new Date().toISOString().slice(0, 10)
-    XLSX.writeFile(wb, `文件列表_${date}.xlsx`)
-  } catch (err) {
-    const e = err as Error
-    alert('导出失败: ' + e.message)
-  }
+  })
 }
 
 function formatDate(date: string | null): string {

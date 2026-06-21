@@ -33,13 +33,15 @@
                 <div class="path-item" v-for="(p, i) in config.scanPaths" :key="i">
                   <span class="path-status-dot" :class="getPathStatusClass(p)" :title="getPathStatusTitle(p)"></span>
                   <input class="input" v-model="config.scanPaths[i]">
-                  <button class="btn btn-primary btn-small" @click="scanPath(i)" :disabled="!config.scanPaths[i]">
-                    扫描
+                  <button class="btn btn-primary btn-small" @click="scanPath(i)" :disabled="!config.scanPaths[i] || scanPathLoading[i]">
+                    {{ scanPathLoading[i] ? '扫描中...' : '扫描' }}
                   </button>
                   <button class="btn btn-danger btn-small" @click="removePath(i)">删除</button>
                 </div>
                 <button class="btn btn-secondary btn-small" @click="addPath">添加路径</button>
-                <button class="btn btn-warning btn-small" @click="handleCleanupStaleFiles" style="margin-left: 8px;">清理失效记录</button>
+                <button class="btn btn-warning btn-small" @click="handleCleanupStaleFiles" :disabled="cleanupLoading.loading.value" style="margin-left: 8px;">
+                  {{ cleanupLoading.loading.value ? '清理中...' : '清理失效记录' }}
+                </button>
               </div>
             </div>
 
@@ -107,7 +109,9 @@
             </div>
 
             <div class="form-actions">
-              <button class="btn btn-primary" @click="applyCategoryRules">应用分类规则</button>
+              <button class="btn btn-primary" @click="applyCategoryRules" :disabled="applyCategoryLoading.loading.value">
+                {{ applyCategoryLoading.loading.value ? '应用中...' : '应用分类规则' }}
+              </button>
             </div>
           </div>
 
@@ -128,7 +132,9 @@
             </div>
 
             <div class="form-actions">
-              <button class="btn btn-primary" @click="applyPathRules">应用目录规则</button>
+              <button class="btn btn-primary" @click="applyPathRules" :disabled="applyPathLoading.loading.value">
+                {{ applyPathLoading.loading.value ? '应用中...' : '应用目录规则' }}
+              </button>
             </div>
           </div>
         </div>
@@ -155,7 +161,9 @@
             </div>
 
             <div class="form-actions">
-              <button class="btn btn-danger btn-small" @click="clearPreferences">清除偏好数据</button>
+              <button class="btn btn-danger btn-small" @click="clearPreferences" :disabled="clearPrefsLoading.loading.value">
+                {{ clearPrefsLoading.loading.value ? '清除中...' : '清除偏好数据' }}
+              </button>
               <span class="clear-tip">清除所有行为记录和推荐结果，不影响文件和标签</span>
             </div>
           </div>
@@ -254,6 +262,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useButtonLoading } from '../composables/useRequestState'
 import { getConfig, saveConfig, getStatus, scanSinglePath, clearPreferencesData, checkAllPaths, cleanupStaleFiles } from '../api'
 import type { Config, StatusResponse, PathStatus, CategoryRule, CategoryPathRule } from '../types'
 
@@ -275,6 +284,13 @@ const status = ref<StatusResponse | null>(null)
 const saving = ref(false)
 const checkingPaths = ref(false)
 const pathStatuses = ref<PathStatus[]>([])
+
+// 按钮级 loading 状态
+const scanPathLoading = ref<Record<number, boolean>>({})
+const cleanupLoading = useButtonLoading()
+const applyCategoryLoading = useButtonLoading()
+const applyPathLoading = useButtonLoading()
+const clearPrefsLoading = useButtonLoading()
 
 // Toast 提示
 const showToast = ref(false)
@@ -378,31 +394,37 @@ function removePath(index: number): void {
 }
 
 async function handleCleanupStaleFiles(): Promise<void> {
-  try {
-    const res = await cleanupStaleFiles()
-    if (res.success) {
-      showNotification(`清理完成，已删除 ${res.data?.deletedCount ?? 0} 条失效记录`)
-    } else {
-      showNotification('清理失败：' + res.error)
+  await cleanupLoading.withButtonLoading(async () => {
+    try {
+      const res = await cleanupStaleFiles()
+      if (res.success) {
+        showNotification(`清理完成，已删除 ${res.data?.deletedCount ?? 0} 条失效记录`)
+      } else {
+        showNotification('清理失败：' + res.error)
+      }
+    } catch (err) {
+      showNotification('清理失败：' + (err as Error).message)
     }
-  } catch (err) {
-    showNotification('清理失败：' + (err as Error).message)
-  }
+  })
 }
 
 async function scanPath(index: number): Promise<void> {
   const path = config.value.scanPaths[index]
   if (!path) return
 
+  scanPathLoading.value[index] = true
   try {
     const res = await scanSinglePath(path)
     if (!res.success) {
       showNotification('启动扫描失败：' + res.error)
+    } else {
+      showNotification('扫描已启动')
     }
   } catch (err) {
     const error = err as Error
     showNotification('启动扫描失败：' + error.message)
   }
+  scanPathLoading.value[index] = false
 }
 
 async function save(): Promise<void> {
@@ -485,28 +507,34 @@ function removePathRule(index: number): void {
 }
 
 async function applyCategoryRules(): Promise<void> {
-  config.value.categoryRules = { ...localCategoryRules }
-  await save()
+  await applyCategoryLoading.withButtonLoading(async () => {
+    config.value.categoryRules = { ...localCategoryRules }
+    await save()
+  })
 }
 
 async function applyPathRules(): Promise<void> {
-  config.value.categoryPathRules = [...localCategoryPathRules.value]
-  await save()
+  await applyPathLoading.withButtonLoading(async () => {
+    config.value.categoryPathRules = [...localCategoryPathRules.value]
+    await save()
+  })
 }
 
 async function clearPreferences(): Promise<void> {
   if (!confirm('确定要清除所有偏好数据吗？此操作不可恢复。')) return
-  try {
-    const res = await clearPreferencesData()
-    if (res.success) {
-      showNotification('偏好数据已清除')
-    } else {
-      showNotification('清除失败：' + res.error)
+  await clearPrefsLoading.withButtonLoading(async () => {
+    try {
+      const res = await clearPreferencesData()
+      if (res.success) {
+        showNotification('偏好数据已清除')
+      } else {
+        showNotification('清除失败：' + res.error)
+      }
+    } catch (err) {
+      const error = err as Error
+      showNotification('清除失败：' + error.message)
     }
-  } catch (err) {
-    const error = err as Error
-    showNotification('清除失败：' + error.message)
-  }
+  })
 }
 
 async function checkPathsStatus(): Promise<void> {
