@@ -1,8 +1,25 @@
 # 更新日志
 
-## [v1.6.0] - 2026-06-22
+## [v1.7.0] - 2026-06-22
 
-### 技术改进
+### 新增功能
+- **刮削器插件系统** - 支持多数据源刮削，插件化架构易于扩展
+  - 插件注册机制：统一接口，支持优先级排序和状态管理
+  - 插件类型：Steam、TGDB、NFO 解析器，可按需启用/禁用
+  - 插件配置：每个插件独立的配置选项
+- **Steam 插件重构** - Steam 刮削逻辑重构为插件架构
+  - SteamPlugin 类继承 BaseScraperPlugin
+  - 实现 search/getDetails 方法，支持本地缓存优先
+  - 新增 `src/games/scraper-plugins/steam-plugin.ts` 文件
+- **TheGamesDB 插件** - 免费 API，无需认证，自动降级刮削
+  - 实现 search/getDetails 方法调用 TGDB API
+  - 支持图片 URL 构建（base_url + filename）
+  - 新增 `src/games/scraper-plugins/tgdb-plugin.ts` 文件
+- **NFO 文件解析插件** - 支持本地键值对和 XML 格式，自动提取元数据
+  - 支持键值对格式和 XML 格式（xbmc/Kodi 标准）解析
+  - 从游戏目录向上查找，最多 3 层
+  - 支持图片查找和复制（poster.jpg, cover.jpg, banner.jpg 等）
+  - 新增 `src/games/scraper-plugins/nfo-plugin.ts` 文件
 - **刮削器管理 API** - 新增刮削器管理路由接口
   - GET `/api/games/scrapers/list` - 获取刮削器列表及状态
   - GET `/api/games/scrapers/config` - 获取刮削器配置
@@ -10,84 +27,40 @@
   - POST `/api/games/scrapers/game/:id/scrape-with` - 使用指定刮削器重新刮削
   - GET `/api/games/scrapers/game/:id/log` - 获取游戏刮削日志
   - 新增 `src/routes/scrapers.ts` 路由文件
-  - server.ts 注册 `/api/games/scrapers` 路由
-- **NFO 插件** - 新增本地 NFO 文件解析插件
-  - NFOPlugin 类继承 BaseScraperPlugin
-  - 本地文件解析，无需网络请求
-  - 支持键值对格式和 XML 格式（xbmc/Kodi 标准）解析
-  - 实现 setGamePath 方法设置当前游戏路径
-  - 实现文件查找策略：从游戏目录向上查找，最多 3 层
-  - 支持图片查找和复制（poster.jpg, cover.jpg, banner.jpg 等）
-  - search 方法返回虚拟候选（NFO 不做搜索）
-  - 新增 `src/games/scraper-plugins/nfo-plugin.ts` 文件
-- **TheGamesDB 插件** - 新增 TGDB 刮削插件实现
-  - TheGamesDBPlugin 类继承 BaseScraperPlugin
-  - 实现 search 方法调用 TheGamesDB SearchGames API
-  - 实现 getDetails 方法调用 GetGames 和 GetGamesImages API
-  - 支持图片 URL 构建（base_url + filename）
-  - 实现横版海报、竖版海报、背景图、截图提取
-  - 实现匹信度计算方法（matchConfidence）
-  - 新增 `src/games/scraper-plugins/tgdb-plugin.ts` 文件
-- **Steam 插件重构** - Steam 刮削逻辑重构为插件架构
-  - SteamPlugin 类继承 BaseScraperPlugin
-  - 实现 search 方法调用 Steam Store Search API
-  - 实现 getDetails 方法调用 Steam AppDetails API
-  - 支持本地缓存优先（steam_db 表）
-  - 实现 matchConfidence 置信度计算
-  - 新增 `src/games/scraper-plugins/steam-plugin.ts` 文件
-- **刮削管理器** - 新增 ScraperManager 单例类
-  - 管理插件调用顺序、降级逻辑
-  - 提供 scrape 方法：按优先级自动降级刮削
-  - 提供 scrapeWithCandidate 方法：使用指定插件刮削
-  - 提供 searchCandidates 方法：搜索候选结果
-  - 新增 `src/games/scraper-plugins/manager.ts` 文件
-- **插件索引和注册** - 新增 scraper-plugins/index.ts
-  - registerBuiltinPlugins 函数自动注册内置插件
-  - 导出 scraperRegistry、scraperManager、SteamPlugin
-- **scraper.ts 重构** - 重构为调用插件系统
-  - scrapeGame 调用 scraperManager.scrape
-  - 新增 scrapeGameWithAppid 方法
-  - 保留 initProxy、searchSteamCandidates、refreshSteamCache
-- **配置文件类型扩展** - GamesConfig 接口新增 scrapers 字段
-  - 支持 ScrapersConfig 类型配置（优先级顺序、插件配置）
-  - DEFAULT_GAMES_CONFIG 集成 DEFAULT_SCRAPERS_CONFIG 默认值
-  - 新增 `src/types/games-config.ts` 对 `scraper.ts` 的导入引用
 - **刮削管理器** - 新增 ScraperManager 单例类
   - 管理插件调用顺序、降级逻辑、日志记录
-  - 提供 scrape 方法：按优先级自动降级刮削
-  - 提供 scrapeWith 方法：使用指定插件刮削
-  - 提供 selectBestMatch 方法：选择最佳匹配结果
-  - 提供 saveMetadata 方法：保存元数据到数据库
+  - 提供 scrape/scrapeWith/selectBestMatch/saveMetadata 方法
   - 提供刮削日志管理（getScrapeLog、clearScrapeLog）
   - 新增 `src/games/scraper-manager.ts` 文件
 - **刮削器插件注册中心** - 新增 ScraperRegistry 单例类
   - 管理所有插件的注册、获取、状态查询
-  - 提供 register、get、getEnabledPlugins、getPluginStatus 方法
-  - 提供配置管理（updateConfig、getConfig、loadEnvAuthConfig）
-  - 支持从环境变量加载 IGDB 和 Giant Bomb 认证配置
+  - 提供配置管理（updateConfig、getConfig）
   - 新增 `src/games/scraper-plugins/registry.ts` 文件
 - **刮削器插件基类** - 新增 BaseScraperPlugin 抽象类
   - 提供代理支持（使用全局配置 proxyUrl）
   - 提供图片下载方法（downloadImages、downloadImage）
-  - 提供默认匹信度计算方法（matchConfidence）
   - 新增 `src/games/scraper-plugins/base.ts` 文件
   - 新增 `src/types/scraper.ts` 类型定义
+- **配置文件类型扩展** - GamesConfig 接口新增 scrapers 字段
+  - 支持 ScrapersConfig 类型配置（优先级顺序、插件配置）
+  - DEFAULT_GAMES_CONFIG 集成 DEFAULT_SCRAPERS_CONFIG 默认值
+- **前端 API 扩展** - frontend/src/api/index.ts 新增刮削器管理 API 函数
+  - getScrapersList、getScrapersConfig、updateScrapersConfig
+  - scrapeWithPlugin、getGameScrapeLog
 
 ### Bug 修复
 - **插件基类代理修复** - 修复代理实现全局污染问题
   - 移除 setGlobalDispatcher 调用，改为 fetch 的 dispatcher 选项
-  - 代理不再影响全局所有 fetch 请求
 - **插件基类截图处理** - downloadImages 方法添加 screenshots 处理
   - 支持下载截图（最多5张）
   - 截图存储至 `games/posters/{gameId}/screenshots/` 目录
 
 ### 技术改进
-- **刮削器插件基类** - 新增 BaseScraperPlugin 抽象类
-  - 提供代理支持（使用全局配置 proxyUrl）
-  - 提供图片下载方法（downloadImages、downloadImage）
-  - 提供默认匹信度计算方法（matchConfidence）
-  - 新增 `src/games/scraper-plugins/base.ts` 文件
-  - 新增 `src/types/scraper.ts` 类型定义
+- **scraper.ts 重构** - 重构为调用插件系统
+  - scrapeGame 调用 scraperManager.scrape
+  - 新增 scrapeGameWithAppid 方法
+- **插件索引和注册** - 新增 scraper-plugins/index.ts
+  - registerBuiltinPlugins 函数自动注册内置插件
 
 ## [v1.6.0] - 2026-06-21
 
