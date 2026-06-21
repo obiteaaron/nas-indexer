@@ -769,3 +769,60 @@ export function getProfileBackupDownloadUrl(filename: string): string {
 export function deleteProfileBackup(filename: string): Promise<ApiResponse<void>> {
   return request<void>('/profile-backup/delete/' + filename, { method: 'POST' });
 }
+
+// === 刮削器管理 API ===
+
+export interface ScraperStatus {
+  name: string;
+  displayName: string;
+  enabled: boolean;
+  requiresAuth: boolean;
+  hasAuthConfig: boolean;
+}
+
+export interface ScrapersConfig {
+  priority: string[];
+  plugins: Record<string, {
+    enabled: boolean;
+    clientId?: string;
+    clientSecret?: string;
+    apiKey?: string;
+  }>;
+}
+
+export function getScrapersList(): Promise<ApiResponse<{ scrapers: ScraperStatus[] }>> {
+  return request<{ scrapers: ScraperStatus[] }>('/games/scrapers/list');
+}
+
+export function getScrapersConfig(): Promise<ApiResponse<ScrapersConfig>> {
+  return request<ScrapersConfig>('/games/scrapers/config');
+}
+
+export function updateScrapersConfig(config: Partial<ScrapersConfig>): Promise<ApiResponse<ScrapersConfig>> {
+  clearCache('/games/scrapers')
+  return request<ScrapersConfig>('/games/scrapers/config', {
+    method: 'PATCH',
+    body: JSON.stringify(config)
+  });
+}
+
+export function scrapeGameWith(gameId: number, plugin: string, downloadPosters: boolean = true): Promise<ApiResponse<Game>> {
+  clearCache('/games')
+  return request<Game>(`/games/scrapers/game/${gameId}/scrape-with`, {
+    method: 'POST',
+    body: JSON.stringify({ plugin, downloadPosters })
+  });
+}
+
+export function getGameScrapeLog(gameId: number): Promise<ApiResponse<{
+  logs: Array<{
+    id: number;
+    game_id: number;
+    plugin: string;
+    status: string;
+    message: string;
+    created_at: string;
+  }>;
+}>> {
+  return request(`/games/scrapers/game/${gameId}/log`);
+}
