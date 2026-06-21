@@ -93,6 +93,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 |------|------|------|
 | v1.4.1 | Steam 刮削优化（主要是按名称刮削，可以先获取到ID再刮削，或者整理热门游戏的id库，有id了才好刮削） + 批量刮削 | ✅ |
 | v1.4.2 | 多刮削源支持（SteamGridDB、IGDB） | 进行中 |
+| v1.6.0 | Steam 插件重构（SteamPlugin、ScraperManager、插件注册） | ✅ |
 | v1.5.8 | 游戏分组快捷操作（卡片分组按钮、详情分组管理、批量操作） | ✅ |
 | v1.5.9 | 游戏名称同步机制修复（见 docs/name-sync-analysis.md） | 待开始 |
 
@@ -168,7 +169,9 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 游戏模块 | `src/games/*.ts` | 游戏识别、刮削、数据库等 |
 | 刮削器插件基类 | `src/games/scraper-plugins/base.ts` | 插件化刮削架构基类 |
 | 刮削器注册中心 | `src/games/scraper-plugins/registry.ts` | 插件注册、配置管理、状态查询 |
-| 刮削管理器 | `src/games/scraper-manager.ts` | 插件调用、降级逻辑、日志管理 |
+| Steam 插件 | `src/games/scraper-plugins/steam-plugin.ts` | Steam Store API 调用、缓存 |
+| 刮削管理器 | `src/games/scraper-plugins/manager.ts` | 插件调用、降级逻辑 |
+| 插件索引 | `src/games/scraper-plugins/index.ts` | 内置插件注册和导出 |
 | 刮削器类型定义 | `src/types/scraper.ts` | 刮削器接口和类型定义 |
 | 游戏配置类型 | `src/types/games-config.ts` | 游戏模块独立配置，含 scrapers 字段 |
 | 游戏类型 | `src/types/game.ts` | 游戏相关类型定义 |

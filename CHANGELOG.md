@@ -3,6 +3,26 @@
 ## [v1.6.0] - 2026-06-22
 
 ### 技术改进
+- **Steam 插件重构** - Steam 刮削逻辑重构为插件架构
+  - SteamPlugin 类继承 BaseScraperPlugin
+  - 实现 search 方法调用 Steam Store Search API
+  - 实现 getDetails 方法调用 Steam AppDetails API
+  - 支持本地缓存优先（steam_db 表）
+  - 实现 matchConfidence 置信度计算
+  - 新增 `src/games/scraper-plugins/steam-plugin.ts` 文件
+- **刮削管理器** - 新增 ScraperManager 单例类
+  - 管理插件调用顺序、降级逻辑
+  - 提供 scrape 方法：按优先级自动降级刮削
+  - 提供 scrapeWithCandidate 方法：使用指定插件刮削
+  - 提供 searchCandidates 方法：搜索候选结果
+  - 新增 `src/games/scraper-plugins/manager.ts` 文件
+- **插件索引和注册** - 新增 scraper-plugins/index.ts
+  - registerBuiltinPlugins 函数自动注册内置插件
+  - 导出 scraperRegistry、scraperManager、SteamPlugin
+- **scraper.ts 重构** - 重构为调用插件系统
+  - scrapeGame 调用 scraperManager.scrape
+  - 新增 scrapeGameWithAppid 方法
+  - 保留 initProxy、searchSteamCandidates、refreshSteamCache
 - **配置文件类型扩展** - GamesConfig 接口新增 scrapers 字段
   - 支持 ScrapersConfig 类型配置（优先级顺序、插件配置）
   - DEFAULT_GAMES_CONFIG 集成 DEFAULT_SCRAPERS_CONFIG 默认值
