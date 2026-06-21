@@ -26,6 +26,7 @@ import type {
   SteamDbImportResult,
   ProfileBackupInfo
 } from '../types'
+import { getApiToken, clearApiToken, buildUrlWithToken } from './auth'
 
 const API_BASE = '/api'
 
@@ -50,10 +51,30 @@ function clearCache(pattern?: string): void {
 }
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  const token = getApiToken()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>)
+  }
+
+  // 注入 Token
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const res = await fetch(API_BASE + url, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...options
   })
+
+  // 处理 401 认证失败
+  if (res.status === 401) {
+    clearApiToken()
+    // 抛出错误，让上层处理
+    throw new Error('AUTH_FAILED')
+  }
+
   return res.json() as Promise<ApiResponse<T>>
 }
 
@@ -176,7 +197,8 @@ export function getPreview(id: number): Promise<ApiResponse<PreviewResponse>> {
 }
 
 export function getStreamUrl(id: number): string {
-  return API_BASE + '/preview/stream/' + id
+  const baseUrl = API_BASE + '/preview/stream/' + id
+  return buildUrlWithToken(baseUrl)
 }
 
 export function getStatistics(): Promise<ApiResponse<StatisticsResponse>> {
@@ -317,7 +339,8 @@ export function getTasks(): Promise<ApiResponse<Task[]>> {
 }
 
 export function getTaskStreamUrl(): string {
-  return API_BASE + '/scan/tasks/stream'
+  const baseUrl = API_BASE + '/scan/tasks/stream'
+  return buildUrlWithToken(baseUrl)
 }
 
 // 游戏 API
