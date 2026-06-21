@@ -119,11 +119,11 @@ export class TrayManager {
 
   private static openConfigDirectory(): void {
     // 打开配置目录（profiles）
-    // 打包模式下 profiles 在安装目录下（与 resources 同级）
+    // 打包模式下 profiles 在用户数据目录（userData）
     // 未打包时在项目根目录
     const isPackaged = app.isPackaged;
     const profilesPath = isPackaged
-      ? path.join(path.dirname(process.resourcesPath), 'profiles')
+      ? path.join(app.getPath('userData'), 'profiles')
       : path.join(path.dirname(__dirname), 'profiles');
 
     shell.openPath(profilesPath);

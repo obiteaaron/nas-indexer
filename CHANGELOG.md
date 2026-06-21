@@ -14,6 +14,7 @@
   - macOS: `~/Library/Application Support/NAS Indexer`
   - Linux: `~/.config/nas-indexer`
   - 开发模式、Docker、便携版保持原有存储方式
+  - 修复"打开配置目录"菜单指向正确的 userData 目录
 
 ## [v1.6.0] - 2026-06-20
 
