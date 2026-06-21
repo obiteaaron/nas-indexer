@@ -34,6 +34,7 @@
       <button class="btn btn-primary btn-small" @click="openAddModal">添加记录</button>
       <button class="btn btn-secondary btn-small" @click="showImportModal = true">导入 JSON</button>
       <button class="btn btn-secondary btn-small" @click="handleExport" :disabled="steamDbTotal === 0">导出 JSON</button>
+      <button class="btn btn-secondary btn-small" @click="handleExportStd" :disabled="steamDbTotal === 0">导出标准库</button>
       <button class="btn btn-secondary btn-small" @click="refreshAll" :disabled="refreshing">刷新所有缓存</button>
       <button class="btn btn-secondary btn-small" @click="refreshMissing" :disabled="refreshing">刷新缺失元数据</button>
     </div>
@@ -195,6 +196,7 @@ import {
   createSteamDbEntry,
   updateSteamDbEntry,
   exportSteamDb,
+  exportSteamDbStd,
   importSteamDb,
   type SteamCacheStats,
   type SteamCacheEntry
@@ -446,6 +448,23 @@ async function handleExport(): Promise<void> {
     URL.revokeObjectURL(url);
     showNotification('导出完成');
   } else {
+    showNotification('导出失败');
+  }
+}
+
+// 导出标准数据库（JSON Lines 格式，用于分享和版本控制）
+async function handleExportStd(): Promise<void> {
+  try {
+    const jsonlContent = await exportSteamDbStd();
+    const blob = new Blob([jsonlContent], { type: 'application/jsonl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `steam-db-${new Date().toISOString().slice(0, 10)}.jsonl`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotification('标准数据库导出完成');
+  } catch (err) {
     showNotification('导出失败');
   }
 }

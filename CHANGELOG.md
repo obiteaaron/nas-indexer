@@ -2,6 +2,14 @@
 
 ## [v1.6.0] - 2026-06-21
 
+### 新增功能
+- **Steam 标准数据库导出** - 支持 JSON Lines 格式导出，便于分享和版本控制
+  - 新增 `data/steam-db-readme.md` 格式规范文档
+  - 新增 `/api/steam-cache/export-std` API 导出标准格式
+  - 前端添加「导出标准库」按钮，一键下载 `.jsonl` 文件
+  - 导出格式包含 steam_appid、name、name_en、aliases 等字段
+  - 所有导出数据统一标记 source 为 `community`
+
 ### Bug 修复
 - **前端 UI 阻塞问题修复** - 解决异步操作时按钮无响应的问题
   - 新增全局请求状态管理 composable (`useRequestState.ts`)

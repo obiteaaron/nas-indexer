@@ -613,6 +613,18 @@ export function exportSteamDb(): Promise<ApiResponse<SteamDbEntry[]>> {
   return request<SteamDbEntry[]>('/steam-cache/export')
 }
 
+/**
+ * 导出标准数据库（JSON Lines 格式，用于分享和版本控制）
+ * 返回可下载的文件内容
+ */
+export async function exportSteamDbStd(): Promise<string> {
+  const response = await fetch('/api/steam-cache/export-std')
+  if (!response.ok) {
+    throw new Error('导出失败')
+  }
+  return response.text()
+}
+
 export function importSteamDb(entries: SteamDbEntry[], mode: 'merge' | 'overwrite' = 'merge'): Promise<ApiResponse<SteamDbImportResult>> {
   clearCache('/steam-cache')
   return request<SteamDbImportResult>('/steam-cache/import', { method: 'POST', body: JSON.stringify({ entries, mode }) })

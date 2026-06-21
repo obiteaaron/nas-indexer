@@ -121,6 +121,49 @@ router.get('/export', async (_req: Request, res: Response): Promise<void> => {
 });
 
 /**
+ * 导出标准数据库（JSON Lines 格式，便于版本控制和分享）
+ */
+router.get('/export-std', async (_req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const entries = gameDatabase.exportSteamDb();
+
+    // 转换为 JSON Lines 格式（每行一个 JSON 对象）
+    const jsonlContent = entries.map(entry => {
+      // 构建标准格式对象
+      const stdEntry: Record<string, unknown> = {
+        steam_appid: entry.steam_appid,
+        name: entry.name,
+        source: 'community'  // 导出时统一标记为 community
+      };
+
+      // 添加可选字段
+      if (entry.name_en) stdEntry.name_en = entry.name_en;
+      if (entry.aliases && entry.aliases.length > 0) stdEntry.aliases = entry.aliases;
+      if (entry.release_date) stdEntry.release_date = entry.release_date;
+      if (entry.genres) stdEntry.genres = entry.genres;
+      if (entry.rating) stdEntry.rating = entry.rating;
+      if (entry.developer) stdEntry.developer = entry.developer;
+      if (entry.publisher) stdEntry.publisher = entry.publisher;
+      if (entry.languages) stdEntry.languages = entry.languages;
+      if (entry.short_description) stdEntry.short_description = entry.short_description;
+      if (entry.notes) stdEntry.notes = entry.notes;
+
+      return JSON.stringify(stdEntry);
+    }).join('\n');
+
+    // 设置响应头，返回可下载的文件
+    const filename = `steam-db-${new Date().toISOString().slice(0, 10)}.jsonl`;
+    res.setHeader('Content-Type', 'application/jsonl');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(jsonlContent);
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 按名称查找 Steam AppID（必须在 /:appid 之前）
  */
 router.get('/lookup', async (req: Request, res: Response): Promise<void> => {

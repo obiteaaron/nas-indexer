@@ -107,6 +107,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | **P0** | TypeScript 迁移 | ✅ | v1.3.2 已完成 |
 | **P1** | Docker 部署 | ✅ | 提供 Dockerfile 和 docker-compose.yml |
 | **P1** | Electron 桌面应用 | ✅ | 支持 Windows/macOS/Linux 全平台 |
+| **P1** | Steam 标准数据库导出 | ✅ | JSON Lines 格式导出，便于分享和版本控制 |
 | **P1** | 用户认证 | 待开始 | JWT 认证、多用户支持（如需要） |
 | **P2** | 游戏状态筛选 | 待设计 | 支持「已配置」「已完善」筛选（需设计海报检查方案） |
 
