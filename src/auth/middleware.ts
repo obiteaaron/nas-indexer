@@ -68,11 +68,12 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   // 第一层：IP 白名单检查
   const clientIP = getClientIP(req);
   if (!isIPAllowed(clientIP, config.ipWhitelist)) {
-    return res.status(403).json({
+    res.status(403).json({
       success: false,
       error: 'IP not allowed',
       code: 'IP_FORBIDDEN'
     });
+    return;
   }
 
   // 第二层：Token 验证
@@ -81,11 +82,12 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   const expectedToken = process.env.NAS_INDEXER_TOKEN || config.token;
 
   if (!token || token !== expectedToken) {
-    return res.status(401).json({
+    res.status(401).json({
       success: false,
       error: 'Invalid or missing token',
       code: 'AUTH_FAILED'
     });
+    return;
   }
 
   next();

@@ -47,8 +47,7 @@ app.use(express.json());
 // 认证中间件 - 拦截所有 /api/* 请求
 app.use('/api', authMiddleware);
 
-// API Routes
-app.use('/api/config', configRouter);
+let scanJob: cron.ScheduledTask | null = null;
 
 async function runScan(config: Config, onProgress: ((event: ScanProgressEvent) => void) | null = null): Promise<unknown> {
   try {

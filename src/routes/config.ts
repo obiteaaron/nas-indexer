@@ -8,19 +8,21 @@ const router: Router = express.Router();
 /**
  * 安全处理配置中的 Token（隐藏完整值）
  */
-function sanitizeConfigToken(config: Config): Partial<Config> {
+function sanitizeConfigToken(config: Config): Config {
+  if (!config.security) {
+    return config;
+  }
   return {
     ...config,
-    security: config.security ? {
+    security: {
       enabled: config.security.enabled,
       bindAddress: config.security.bindAddress,
       ipWhitelist: config.security.ipWhitelist,
       // Token 仅显示前 8 位
       token: config.security.token
         ? config.security.token.slice(0, 8) + '...'
-        : null,
-      tokenSet: !!config.security.token  // 标记是否已设置
-    } : undefined
+        : undefined
+    }
   };
 }
 

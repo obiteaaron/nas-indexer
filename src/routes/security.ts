@@ -13,7 +13,7 @@ const router: Router = express.Router();
  * 重新生成 API Token
  * POST /api/security/token/regenerate
  */
-router.post('/token/regenerate', (req: Request, res: Response): void => {
+router.post('/token/regenerate', (_req: Request, res: Response): void => {
   try {
     const config: Config = loadConfig();
     const newToken = generateToken();
