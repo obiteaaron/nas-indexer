@@ -3,13 +3,15 @@
  * 调用 Steam Store API 进行游戏搜索和详情获取
  */
 
+import fs from 'fs';
+import path from 'path';
 import { logger } from '../../logger';
 import { gameDatabase } from '../database';
 import { cleanGameName } from '../name-cleaner';
 import { resolveGameNames } from '../name-resolver';
 import { getStoragePath, loadConfig } from '../../utils';
 import { SteamCacheService, getSteamCacheDir } from '../steam-cache-service';
-import { ensureGamesDirs } from '../storage';
+import { ensureGamesDirs, ensurePosterDir, getPosterPath } from '../storage';
 import { BaseScraperPlugin } from './base';
 import type {
   ScrapeCandidate,
@@ -303,10 +305,6 @@ export class SteamPlugin extends BaseScraperPlugin {
    * 将 Steam 缓存图片复制到游戏海报目录
    */
   private copySteamCacheToPosters(storagePath: string, appid: string, gameId: number): void {
-    const fs = require('fs');
-    const path = require('path');
-    const { ensurePosterDir, getPosterPath } = require('../storage');
-
     const cacheDir = getSteamCacheDir(storagePath, appid);
     if (!fs.existsSync(cacheDir)) {
       logger.warn('[Steam] 缓存目录不存在，无法复制海报: appid %s', appid);

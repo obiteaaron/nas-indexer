@@ -371,6 +371,86 @@ class ScraperManager {
   }
 
   /**
+   * 使用指定插件和候选 ID 刮削
+   */
+  async scrapeWithCandidate(
+    gameId: number,
+    pluginName: string,
+    candidateId: string,
+    downloadPosters: boolean = true
+  ): Promise<Game | null> {
+    const game = gameDatabase.getGameById(gameId);
+    if (!game) {
+      logger.warn('[ScraperManager] 游戏不存在: id %d', gameId);
+      return null;
+    }
+
+    const plugin = scraperRegistry.get(pluginName);
+    if (!plugin) {
+      logger.warn('[ScraperManager] 插件不存在: %s', pluginName);
+      return null;
+    }
+
+    const metadata = await plugin.getDetails(candidateId);
+    if (!metadata) {
+      logger.warn('[ScraperManager] 无法获取详情: plugin=%s, id=%s', pluginName, candidateId);
+      return null;
+    }
+
+    // 保存元数据
+    await this.saveMetadata(game, metadata, downloadPosters);
+
+    // 保存日志
+    const scrapeLog: ScrapeLog = {
+      gameId,
+      gameName: game.title,
+      attempts: [{
+        scraper: pluginName,
+        status: 'success',
+        reason: '手动选择',
+        time: new Date().toISOString()
+      }],
+      finalSource: pluginName,
+      scrapedAt: new Date().toISOString()
+    };
+    this.scrapeLogs.set(gameId, scrapeLog);
+
+    logger.info('[ScraperManager] 手动选择刮削成功: gameId=%d, plugin=%s', gameId, pluginName);
+
+    return gameDatabase.getGameById(gameId);
+  }
+
+  /**
+   * 批量刮削未刮削的游戏
+   */
+  async scrapeUnscrapedGames(
+    downloadPosters: boolean = true,
+    onProgress?: (current: number, total: number, gameTitle: string) => void
+  ): Promise<number[]> {
+    const unscraped = gameDatabase.getGames({ scraped: 'false', limit: 100 });
+    const scrapedIds: number[] = [];
+    const total = unscraped.length;
+
+    for (let i = 0; i < unscraped.length; i++) {
+      const game = unscraped[i];
+      if (onProgress) {
+        onProgress(i + 1, total, game.title);
+      }
+
+      const result = await this.scrape(game.id!, downloadPosters);
+      if (result.success) {
+        scrapedIds.push(game.id!);
+      }
+
+      // 避免请求过快
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    logger.info('[ScraperManager] 批量刮削完成: %d 个游戏', scrapedIds.length);
+    return scrapedIds;
+  }
+
+  /**
    * 获取刮削日志
    */
   getScrapeLog(gameId: number): ScrapeLog | undefined {

@@ -279,7 +279,6 @@ export class NFOPlugin extends BaseScraperPlugin {
             data.title = value;
             break;
           case 'developer':
-          case 'developer':
           case 'creator':
             data.developer = value;
             break;

@@ -2,6 +2,13 @@
 
 ## [v1.7.0] - 2026-06-22
 
+### 技术改进
+- **代码整理** - 清理刮削模块重复代码和规范问题
+  - 移除重复的 ScraperManager 类（合并 scraper-plugins/manager.ts 到 scraper-manager.ts）
+  - 修复 nfo-plugin.ts 重复的 case 分支
+  - 修复 steam-plugin.ts require() 改为 ES imports
+  - scraper-manager.ts 新增 scrapeWithCandidate、scrapeUnscrapedGames 方法
+
 ### 新增功能
 - **刮削器插件系统** - 支持多数据源刮削，插件化架构易于扩展
   - 插件注册机制：统一接口，支持优先级排序和状态管理

@@ -24,7 +24,7 @@ registerBuiltinPlugins();
 
 // 导出
 export { scraperRegistry } from './registry';
-export { scraperManager } from './manager';
+export { scraperManager } from '../scraper-manager';
 export { BaseScraperPlugin } from './base';
 export { SteamPlugin } from './steam-plugin';
 export { TheGamesDBPlugin } from './tgdb-plugin';

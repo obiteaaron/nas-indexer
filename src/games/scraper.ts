@@ -168,7 +168,11 @@ export function copySteamCacheToPosters(storagePath: string, appid: string, game
  * 刮削单个游戏（使用插件系统）
  */
 export async function scrapeGame(gameId: number, downloadPosters: boolean = true): Promise<Game | null> {
-  return scraperManager.scrape(gameId, downloadPosters);
+  const result = await scraperManager.scrape(gameId, downloadPosters);
+  if (result.success) {
+    return gameDatabase.getGameById(gameId);
+  }
+  return null;
 }
 
 /**
