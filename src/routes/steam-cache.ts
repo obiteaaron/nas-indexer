@@ -107,23 +107,10 @@ router.get('/list', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
- * 导出 Steam DB（必须在 /:appid 之前）
+ * 导出 Steam DB（JSON Lines 格式，便于版本控制和分享）
+ * 必须在 /:appid 之前
  */
 router.get('/export', async (_req: Request, res: Response): Promise<void> => {
-  await init();
-  try {
-    const entries = gameDatabase.exportSteamDb();
-    res.json({ success: true, data: entries });
-  } catch (err) {
-    const error = err as Error;
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * 导出标准数据库（JSON Lines 格式，便于版本控制和分享）
- */
-router.get('/export-std', async (_req: Request, res: Response): Promise<void> => {
   await init();
   try {
     const entries = gameDatabase.exportSteamDb();
@@ -375,19 +362,37 @@ router.post('/create', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
- * 导入 Steam DB（必须在 /:appid 之前）
+ * 导入 Steam DB（支持 JSON 数组或 JSON Lines 格式）
+ * 必须在 /:appid 之前
  */
 router.post('/import', async (req: Request, res: Response): Promise<void> => {
   await init();
   try {
-    const { entries, mode = 'merge' } = req.body;
+    const { entries, content, mode = 'merge' } = req.body;
 
-    if (!entries || !Array.isArray(entries)) {
-      res.status(400).json({ success: false, error: '请提供 entries 数组' });
+    let parsedEntries: SteamDbEntry[];
+
+    // 支持两种输入方式：
+    // 1. entries: 直接传入 JSON 数组
+    // 2. content: JSON Lines 格式字符串（每行一个 JSON 对象）
+    if (entries && Array.isArray(entries)) {
+      parsedEntries = entries as SteamDbEntry[];
+    } else if (content && typeof content === 'string') {
+      // 解析 JSON Lines 格式
+      const lines = content.trim().split('\n').filter(line => line.trim());
+      parsedEntries = lines.map(line => {
+        try {
+          return JSON.parse(line) as SteamDbEntry;
+        } catch {
+          throw new Error(`JSON Lines 解析失败: ${line.slice(0, 50)}...`);
+        }
+      });
+    } else {
+      res.status(400).json({ success: false, error: '请提供 entries 数组或 content 字符串' });
       return;
     }
 
-    const result = gameDatabase.importSteamDb(entries as SteamDbEntry[], mode);
+    const result = gameDatabase.importSteamDb(parsedEntries, mode);
     res.json({ success: true, data: result });
   } catch (err) {
     const error = err as Error;

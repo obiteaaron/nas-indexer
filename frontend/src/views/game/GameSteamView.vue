@@ -32,9 +32,8 @@
     <!-- 操作按钮 -->
     <div class="action-bar">
       <button class="btn btn-primary btn-small" @click="openAddModal">添加记录</button>
-      <button class="btn btn-secondary btn-small" @click="showImportModal = true">导入 JSON</button>
-      <button class="btn btn-secondary btn-small" @click="handleExport" :disabled="steamDbTotal === 0">导出 JSON</button>
-      <button class="btn btn-secondary btn-small" @click="handleExportStd" :disabled="steamDbTotal === 0">导出标准库</button>
+      <button class="btn btn-secondary btn-small" @click="showImportModal = true">导入</button>
+      <button class="btn btn-secondary btn-small" @click="handleExport" :disabled="steamDbTotal === 0">导出</button>
       <button class="btn btn-secondary btn-small" @click="refreshAll" :disabled="refreshing">刷新所有缓存</button>
       <button class="btn btn-secondary btn-small" @click="refreshMissing" :disabled="refreshing">刷新缺失元数据</button>
     </div>
@@ -149,11 +148,9 @@
         </div>
         <div class="modal-body">
           <div class="form-row">
-            <label class="form-label">JSON 内容</label>
-            <textarea class="textarea" v-model="importJsonStr" placeholder="粘贴 JSON 数组，完整字段：
-[{steam_appid, name, name_en, aliases, notes, source,
-  release_date, genres, rating, languages, tags, scraped_at,
-  developer, publisher, short_description}]"></textarea>
+            <label class="form-label">数据内容</label>
+            <textarea class="textarea" v-model="importJsonStr" placeholder="粘贴数据内容，支持 JSON Lines 或 JSON 数组格式"></textarea>
+            <span class="hint">JSON Lines: 每行一个 JSON 对象；JSON 数组: [{...}, {...}]</span>
           </div>
           <div class="form-row">
             <label class="form-label">导入模式</label>
@@ -196,7 +193,6 @@ import {
   createSteamDbEntry,
   updateSteamDbEntry,
   exportSteamDb,
-  exportSteamDbStd,
   importSteamDb,
   type SteamCacheStats,
   type SteamCacheEntry
@@ -435,27 +431,10 @@ async function refreshMissing(): Promise<void> {
   }
 }
 
-// 导出 JSON（下载文件）
+// 导出（JSON Lines 格式）
 async function handleExport(): Promise<void> {
-  const res = await exportSteamDb();
-  if (res.success && res.data) {
-    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'steam-db-export.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    showNotification('导出完成');
-  } else {
-    showNotification('导出失败');
-  }
-}
-
-// 导出标准数据库（JSON Lines 格式，用于分享和版本控制）
-async function handleExportStd(): Promise<void> {
   try {
-    const jsonlContent = await exportSteamDbStd();
+    const jsonlContent = await exportSteamDb();
     const blob = new Blob([jsonlContent], { type: 'application/jsonl' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -463,27 +442,22 @@ async function handleExportStd(): Promise<void> {
     a.download = `steam-db-${new Date().toISOString().slice(0, 10)}.jsonl`;
     a.click();
     URL.revokeObjectURL(url);
-    showNotification('标准数据库导出完成');
+    showNotification('导出完成');
   } catch (err) {
     showNotification('导出失败');
   }
 }
 
-// 导入 JSON
+// 导入（支持 JSON Lines 和 JSON 数组）
 async function handleImport(): Promise<void> {
   if (!importJsonStr.value.trim()) {
-    showNotification('请输入 JSON 内容');
+    showNotification('请输入数据内容');
     return;
   }
   importing.value = true;
   try {
-    const entries = JSON.parse(importJsonStr.value);
-    if (!Array.isArray(entries)) {
-      showNotification('JSON 格式错误，应为数组');
-      importing.value = false;
-      return;
-    }
-    const res = await importSteamDb(entries, importMode.value);
+    // 直接传入字符串，后端会自动识别格式
+    const res = await importSteamDb(importJsonStr.value.trim(), importMode.value);
     if (res.success && res.data) {
       showNotification(`导入完成：新增 ${res.data.added}，更新 ${res.data.updated}，跳过 ${res.data.skipped}`);
       loadSteamDbList();
@@ -492,7 +466,7 @@ async function handleImport(): Promise<void> {
       importJsonStr.value = '';
     }
   } catch (err) {
-    showNotification('JSON 解析失败');
+    showNotification('导入失败，请检查数据格式');
   }
   importing.value = false;
 }

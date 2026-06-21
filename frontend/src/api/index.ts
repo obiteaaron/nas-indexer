@@ -609,25 +609,28 @@ export function updateSteamDbEntry(appid: string, data: Partial<SteamDbEntry>): 
   return request<SteamDbEntry>('/steam-cache/update/' + appid, { method: 'POST', body: JSON.stringify(data) })
 }
 
-export function exportSteamDb(): Promise<ApiResponse<SteamDbEntry[]>> {
-  return request<SteamDbEntry[]>('/steam-cache/export')
-}
-
 /**
- * 导出标准数据库（JSON Lines 格式，用于分享和版本控制）
+ * 导出 Steam DB（JSON Lines 格式，用于分享和版本控制）
  * 返回可下载的文件内容
  */
-export async function exportSteamDbStd(): Promise<string> {
-  const response = await fetch('/api/steam-cache/export-std')
+export async function exportSteamDb(): Promise<string> {
+  const response = await fetch('/api/steam-cache/export')
   if (!response.ok) {
     throw new Error('导出失败')
   }
   return response.text()
 }
 
-export function importSteamDb(entries: SteamDbEntry[], mode: 'merge' | 'overwrite' = 'merge'): Promise<ApiResponse<SteamDbImportResult>> {
+/**
+ * 导入 Steam DB（支持 JSON 数组或 JSON Lines 格式）
+ */
+export function importSteamDb(data: SteamDbEntry[] | string, mode: 'merge' | 'overwrite' = 'merge'): Promise<ApiResponse<SteamDbImportResult>> {
   clearCache('/steam-cache')
-  return request<SteamDbImportResult>('/steam-cache/import', { method: 'POST', body: JSON.stringify({ entries, mode }) })
+  // 判断传入的是数组还是字符串
+  const body = Array.isArray(data)
+    ? { entries: data, mode }
+    : { content: data, mode }
+  return request<SteamDbImportResult>('/steam-cache/import', { method: 'POST', body: JSON.stringify(body) })
 }
 
 export function lookupSteamDbByName(name: string): Promise<ApiResponse<{ steam_appid: string; name: string } | null>> {
