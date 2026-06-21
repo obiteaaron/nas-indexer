@@ -3,6 +3,8 @@
  */
 
 import type { GameRules, GameScrapeConfig } from './game';
+import type { ScrapersConfig } from './scraper';
+import { DEFAULT_SCRAPERS_CONFIG } from './scraper';
 
 export interface GamesConfig {
   // 扫描配置
@@ -20,6 +22,9 @@ export interface GamesConfig {
 
   // Steam 配置
   proxyUrl: string;
+
+  // 刮削器配置
+  scrapers?: ScrapersConfig;
 }
 
 export const DEFAULT_GAMES_CONFIG: GamesConfig = {
@@ -48,5 +53,6 @@ export const DEFAULT_GAMES_CONFIG: GamesConfig = {
     autoGroupOnScan: true
   },
   maxPosterBackups: 5,
-  proxyUrl: ''
+  proxyUrl: '',
+  scrapers: DEFAULT_SCRAPERS_CONFIG
 };

@@ -3,6 +3,10 @@
 ## [v1.6.0] - 2026-06-22
 
 ### 技术改进
+- **配置文件类型扩展** - GamesConfig 接口新增 scrapers 字段
+  - 支持 ScrapersConfig 类型配置（优先级顺序、插件配置）
+  - DEFAULT_GAMES_CONFIG 集成 DEFAULT_SCRAPERS_CONFIG 默认值
+  - 新增 `src/types/games-config.ts` 对 `scraper.ts` 的导入引用
 - **刮削管理器** - 新增 ScraperManager 单例类
   - 管理插件调用顺序、降级逻辑、日志记录
   - 提供 scrape 方法：按优先级自动降级刮削
