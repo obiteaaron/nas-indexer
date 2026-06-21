@@ -168,6 +168,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 游戏模块 | `src/games/*.ts` | 游戏识别、刮削、数据库等 |
 | 刮削器插件基类 | `src/games/scraper-plugins/base.ts` | 插件化刮削架构基类 |
 | 刮削器注册中心 | `src/games/scraper-plugins/registry.ts` | 插件注册、配置管理、状态查询 |
+| 刮削管理器 | `src/games/scraper-manager.ts` | 插件调用、降级逻辑、日志管理 |
 | 刮削器类型定义 | `src/types/scraper.ts` | 刮削器接口和类型定义 |
 | 游戏路由 | `src/routes/games.ts` | 游戏 API 接口 |
 | 游戏类型 | `src/types/game.ts` | 游戏相关类型定义 |

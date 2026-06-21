@@ -3,6 +3,14 @@
 ## [v1.6.0] - 2026-06-22
 
 ### 技术改进
+- **刮削管理器** - 新增 ScraperManager 单例类
+  - 管理插件调用顺序、降级逻辑、日志记录
+  - 提供 scrape 方法：按优先级自动降级刮削
+  - 提供 scrapeWith 方法：使用指定插件刮削
+  - 提供 selectBestMatch 方法：选择最佳匹配结果
+  - 提供 saveMetadata 方法：保存元数据到数据库
+  - 提供刮削日志管理（getScrapeLog、clearScrapeLog）
+  - 新增 `src/games/scraper-manager.ts` 文件
 - **刮削器插件注册中心** - 新增 ScraperRegistry 单例类
   - 管理所有插件的注册、获取、状态查询
   - 提供 register、get、getEnabledPlugins、getPluginStatus 方法
