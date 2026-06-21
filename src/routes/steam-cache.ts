@@ -401,6 +401,54 @@ router.post('/import', async (req: Request, res: Response): Promise<void> => {
 });
 
 /**
+ * 文件上传导入 Steam DB（支持 .jsonl 和 .json 文件）
+ * 必须在 /:appid 之前
+ */
+router.post('/import-file', async (req: Request, res: Response): Promise<void> => {
+  await init();
+  try {
+    const { content, mode = 'merge' } = req.body;
+
+    if (!content || typeof content !== 'string') {
+      res.status(400).json({ success: false, error: '请提供文件内容' });
+      return;
+    }
+
+    // 自动识别格式：JSON Lines 或 JSON 数组
+    let parsedEntries: SteamDbEntry[];
+    const trimmedContent = content.trim();
+
+    if (trimmedContent.startsWith('[')) {
+      // JSON 数组格式
+      try {
+        parsedEntries = JSON.parse(trimmedContent) as SteamDbEntry[];
+      } catch {
+        res.status(400).json({ success: false, error: 'JSON 数组解析失败' });
+        return;
+      }
+    } else {
+      // JSON Lines 格式（每行一个 JSON 对象）
+      const lines = trimmedContent.split('\n').filter(line => line.trim());
+      parsedEntries = [];
+      for (const line of lines) {
+        try {
+          parsedEntries.push(JSON.parse(line) as SteamDbEntry);
+        } catch {
+          res.status(400).json({ success: false, error: `JSON Lines 解析失败: ${line.slice(0, 50)}...` });
+          return;
+        }
+      }
+    }
+
+    const result = gameDatabase.importSteamDb(parsedEntries, mode);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    const error = err as Error;
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * 获取单个缓存详情
  */
 router.get('/:appid', async (req: Request, res: Response): Promise<void> => {

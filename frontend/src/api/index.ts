@@ -633,6 +633,20 @@ export function importSteamDb(data: SteamDbEntry[] | string, mode: 'merge' | 'ov
   return request<SteamDbImportResult>('/steam-cache/import', { method: 'POST', body: JSON.stringify(body) })
 }
 
+/**
+ * 文件上传导入 Steam DB
+ */
+export async function importSteamDbFile(file: globalThis.File, mode: 'merge' | 'overwrite' = 'merge'): Promise<ApiResponse<SteamDbImportResult>> {
+  clearCache('/steam-cache')
+  const content = await file.text()
+  const response = await fetch('/api/steam-cache/import-file', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, mode })
+  })
+  return response.json() as Promise<ApiResponse<SteamDbImportResult>>
+}
+
 export function lookupSteamDbByName(name: string): Promise<ApiResponse<{ steam_appid: string; name: string } | null>> {
   return request<{ steam_appid: string; name: string } | null>('/steam-cache/lookup?name=' + encodeURIComponent(name))
 }

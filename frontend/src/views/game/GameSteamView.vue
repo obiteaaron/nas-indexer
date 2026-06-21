@@ -32,7 +32,9 @@
     <!-- 操作按钮 -->
     <div class="action-bar">
       <button class="btn btn-primary btn-small" @click="openAddModal">添加记录</button>
-      <button class="btn btn-secondary btn-small" @click="showImportModal = true">导入</button>
+      <input type="file" ref="fileInput" accept=".jsonl,.json" @change="handleFileSelect" style="display: none" />
+      <button class="btn btn-secondary btn-small" @click="triggerFileInput">导入文件</button>
+      <button class="btn btn-secondary btn-small" @click="showImportModal = true">粘贴导入</button>
       <button class="btn btn-secondary btn-small" @click="handleExport" :disabled="steamDbTotal === 0">导出</button>
       <button class="btn btn-secondary btn-small" @click="refreshAll" :disabled="refreshing">刷新所有缓存</button>
       <button class="btn btn-secondary btn-small" @click="refreshMissing" :disabled="refreshing">刷新缺失元数据</button>
@@ -194,6 +196,7 @@ import {
   updateSteamDbEntry,
   exportSteamDb,
   importSteamDb,
+  importSteamDbFile,
   type SteamCacheStats,
   type SteamCacheEntry
 } from '../../api';
@@ -202,6 +205,9 @@ import { useGameToast } from '../../composables/game/useGameToast';
 import GameSteamCacheDetailModal from '../../components/game/GameSteamCacheDetailModal.vue';
 
 const { showNotification, showToast, toastMessage } = useGameToast();
+
+// 文件输入引用
+const fileInput = ref<HTMLInputElement | null>(null);
 
 // Steam 缓存统计
 const stats = ref<SteamCacheStats | null>(null);
@@ -469,6 +475,35 @@ async function handleImport(): Promise<void> {
     showNotification('导入失败，请检查数据格式');
   }
   importing.value = false;
+}
+
+// 触发文件选择
+function triggerFileInput(): void {
+  fileInput.value?.click();
+}
+
+// 处理文件选择
+async function handleFileSelect(event: Event): Promise<void> {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0] as globalThis.File | undefined;
+  if (!file) return;
+
+  importing.value = true;
+  try {
+    const res = await importSteamDbFile(file, 'merge');
+    if (res.success && res.data) {
+      showNotification(`导入完成：新增 ${res.data.added}，更新 ${res.data.updated}，跳过 ${res.data.skipped}`);
+      loadSteamDbList();
+      loadStats();
+    } else {
+      showNotification(res.error || '导入失败');
+    }
+  } catch (err) {
+    showNotification('文件读取失败');
+  }
+  importing.value = false;
+  // 清空文件输入，允许重复选择同一文件
+  target.value = '';
 }
 
 // 监听分页变化
