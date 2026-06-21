@@ -1,5 +1,15 @@
 # 更新日志
 
+## [v1.6.0] - 2026-06-22
+
+### 技术改进
+- **刮削器插件基类** - 新增 BaseScraperPlugin 抽象类
+  - 提供代理支持（使用全局配置 proxyUrl）
+  - 提供图片下载方法（downloadImages、downloadImage）
+  - 提供默认匹信度计算方法（matchConfidence）
+  - 新增 `src/games/scraper-plugins/base.ts` 文件
+  - 新增 `src/types/scraper.ts` 类型定义
+
 ## [v1.6.0] - 2026-06-21
 
 ### 新增功能

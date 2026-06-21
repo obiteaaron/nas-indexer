@@ -1,6 +1,6 @@
 # NAS Indexer Roadmap
 
-> 最后更新：2026-06-21
+> 最后更新：2026-06-22
 > 当前版本：v1.6.0
 
 ---
@@ -92,7 +92,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 版本 | 功能 | 状态 |
 |------|------|------|
 | v1.4.1 | Steam 刮削优化（主要是按名称刮削，可以先获取到ID再刮削，或者整理热门游戏的id库，有id了才好刮削） + 批量刮削 | ✅ |
-| v1.4.2 | 多刮削源支持（SteamGridDB、IGDB） | 待开始 |
+| v1.4.2 | 多刮削源支持（SteamGridDB、IGDB） | 进行中 |
 | v1.5.8 | 游戏分组快捷操作（卡片分组按钮、详情分组管理、批量操作） | ✅ |
 | v1.5.9 | 游戏名称同步机制修复（见 docs/name-sync-analysis.md） | 待开始 |
 
@@ -166,6 +166,8 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | API 路由 | `src/routes/*.ts` | 9 个路由模块（含 games） |
 | 测试文件 | `tests/*.test.ts` | Jest 单元测试 |
 | 游戏模块 | `src/games/*.ts` | 游戏识别、刮削、数据库等 |
+| 刮削器插件基类 | `src/games/scraper-plugins/base.ts` | 插件化刮削架构基类 |
+| 刮削器类型定义 | `src/types/scraper.ts` | 刮削器接口和类型定义 |
 | 游戏路由 | `src/routes/games.ts` | 游戏 API 接口 |
 | 游戏类型 | `src/types/game.ts` | 游戏相关类型定义 |
 | 前端入口 | `frontend/src/main.ts` | Vue 3 应用入口 |
