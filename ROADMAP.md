@@ -95,6 +95,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | v1.4.2 | 多刮削源支持（SteamGridDB、IGDB） | 进行中 |
 | v1.6.0 | Steam 插件重构（SteamPlugin、ScraperManager、插件注册） | ✅ |
 | v1.6.0 | TheGamesDB 插件实现（TGDBPlugin、搜索和详情 API、图片提取） | ✅ |
+| v1.6.0 | NFO 插件实现（NFOPlugin、本地文件解析、键值对/XML 格式支持） | ✅ |
 | v1.5.8 | 游戏分组快捷操作（卡片分组按钮、详情分组管理、批量操作） | ✅ |
 | v1.5.9 | 游戏名称同步机制修复（见 docs/name-sync-analysis.md） | 待开始 |
 

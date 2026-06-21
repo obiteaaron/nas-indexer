@@ -3,6 +3,15 @@
 ## [v1.6.0] - 2026-06-22
 
 ### 技术改进
+- **NFO 插件** - 新增本地 NFO 文件解析插件
+  - NFOPlugin 类继承 BaseScraperPlugin
+  - 本地文件解析，无需网络请求
+  - 支持键值对格式和 XML 格式（xbmc/Kodi 标准）解析
+  - 实现 setGamePath 方法设置当前游戏路径
+  - 实现文件查找策略：从游戏目录向上查找，最多 3 层
+  - 支持图片查找和复制（poster.jpg, cover.jpg, banner.jpg 等）
+  - search 方法返回虚拟候选（NFO 不做搜索）
+  - 新增 `src/games/scraper-plugins/nfo-plugin.ts` 文件
 - **TheGamesDB 插件** - 新增 TGDB 刮削插件实现
   - TheGamesDBPlugin 类继承 BaseScraperPlugin
   - 实现 search 方法调用 TheGamesDB SearchGames API
