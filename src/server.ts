@@ -36,6 +36,7 @@ import { router as statsRouter, setScanJob } from './routes/stats';
 import steamCacheRouter from './routes/steam-cache';
 import gamesConfigRouter from './routes/games-config';
 import profileBackupRouter from './routes/profile-backup';
+import securityRouter from './routes/security';
 
 const app = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
@@ -193,6 +194,7 @@ app.use('/api/stats', statsRouter);
 app.use('/api/steam-cache', steamCacheRouter);
 app.use('/api/games-config', gamesConfigRouter);
 app.use('/api/profile-backup', profileBackupRouter);
+app.use('/api/security', securityRouter);
 
 // Static files - serve Vue frontend
 // 支持环境变量 FRONTEND_PATH（用于 Electron 打包模式，前端在 asar 内）
