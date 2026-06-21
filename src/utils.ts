@@ -7,9 +7,12 @@ import { DEFAULT_GAMES_CONFIG } from './types/games-config';
 // 支持环境变量 PROJECT_ROOT（用于 Electron 打包模式）
 const PROJECT_ROOT: string = process.env.PROJECT_ROOT || path.join(__dirname, '..');
 const DEFAULT_STORAGE_PATH: string = path.join(PROJECT_ROOT, 'profiles');
-const DEFAULT_CONFIG_FILE: string = process.env.PROJECT_ROOT
-  ? path.join(process.env.PROJECT_ROOT, 'config.default.json')  // Electron 打包模式：配置文件在安装目录
-  : path.join(__dirname, '..', 'config.default.json');           // 开发模式：配置文件在项目根目录
+// 默认配置文件路径：
+// - Electron 打包模式：RESOURCES_PATH 目录（extraResources）
+// - 开发模式：项目根目录
+const DEFAULT_CONFIG_FILE: string = process.env.RESOURCES_PATH
+  ? path.join(process.env.RESOURCES_PATH, 'config.default.json')
+  : path.join(__dirname, '..', 'config.default.json');
 
 let dbInitialized: boolean = false;
 

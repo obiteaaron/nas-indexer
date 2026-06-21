@@ -56,6 +56,8 @@ async function startExpressServer(): Promise<number> {
     process.env.PROJECT_ROOT = projectRoot;
     // 设置 FRONTEND_PATH 为 asar 内的前端目录
     process.env.FRONTEND_PATH = path.join(app.getAppPath(), 'frontend', 'dist');
+    // 设置 RESOURCES_PATH 为 resources 目录（默认配置文件在此）
+    process.env.RESOURCES_PATH = process.resourcesPath;
 
     try {
       // 动态导入 server（asar 内的文件）
