@@ -173,6 +173,7 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 刮削器注册中心 | `src/games/scraper-plugins/registry.ts` | 插件注册、配置管理、状态查询 |
 | Steam 插件 | `src/games/scraper-plugins/steam-plugin.ts` | Steam Store API 调用、缓存 |
 | 刮削管理器 | `src/games/scraper-plugins/manager.ts` | 插件调用、降级逻辑 |
+| 刮削器管理路由 | `src/routes/scrapers.ts` | 刮削器 API 端点 |
 | 插件索引 | `src/games/scraper-plugins/index.ts` | 内置插件注册和导出 |
 | 刮削器类型定义 | `src/types/scraper.ts` | 刮削器接口和类型定义 |
 | 游戏配置类型 | `src/types/games-config.ts` | 游戏模块独立配置，含 scrapers 字段 |

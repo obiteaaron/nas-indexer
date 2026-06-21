@@ -3,6 +3,14 @@
 ## [v1.6.0] - 2026-06-22
 
 ### 技术改进
+- **刮削器管理 API** - 新增刮削器管理路由接口
+  - GET `/api/games/scrapers/list` - 获取刮削器列表及状态
+  - GET `/api/games/scrapers/config` - 获取刮削器配置
+  - PATCH `/api/games/scrapers/config` - 更新刮削器配置
+  - POST `/api/games/scrapers/game/:id/scrape-with` - 使用指定刮削器重新刮削
+  - GET `/api/games/scrapers/game/:id/log` - 获取游戏刮削日志
+  - 新增 `src/routes/scrapers.ts` 路由文件
+  - server.ts 注册 `/api/games/scrapers` 路由
 - **NFO 插件** - 新增本地 NFO 文件解析插件
   - NFOPlugin 类继承 BaseScraperPlugin
   - 本地文件解析，无需网络请求
