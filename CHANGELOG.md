@@ -3,6 +3,14 @@
 ## [v1.6.0] - 2026-06-22
 
 ### 技术改进
+- **TheGamesDB 插件** - 新增 TGDB 刮削插件实现
+  - TheGamesDBPlugin 类继承 BaseScraperPlugin
+  - 实现 search 方法调用 TheGamesDB SearchGames API
+  - 实现 getDetails 方法调用 GetGames 和 GetGamesImages API
+  - 支持图片 URL 构建（base_url + filename）
+  - 实现横版海报、竖版海报、背景图、截图提取
+  - 实现匹信度计算方法（matchConfidence）
+  - 新增 `src/games/scraper-plugins/tgdb-plugin.ts` 文件
 - **Steam 插件重构** - Steam 刮削逻辑重构为插件架构
   - SteamPlugin 类继承 BaseScraperPlugin
   - 实现 search 方法调用 Steam Store Search API
