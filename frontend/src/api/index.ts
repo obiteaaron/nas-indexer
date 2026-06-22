@@ -26,6 +26,7 @@ import type {
   SteamDbImportResult,
   ProfileBackupInfo
 } from '../types'
+import { getApiToken, clearApiToken, buildUrlWithToken } from './auth'
 
 const API_BASE = '/api'
 
@@ -50,10 +51,30 @@ function clearCache(pattern?: string): void {
 }
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  const token = getApiToken()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>)
+  }
+
+  // 注入 Token
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
   const res = await fetch(API_BASE + url, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...options
   })
+
+  // 处理 401 认证失败
+  if (res.status === 401) {
+    clearApiToken()
+    // 抛出错误，让上层处理
+    throw new Error('AUTH_FAILED')
+  }
+
   return res.json() as Promise<ApiResponse<T>>
 }
 
@@ -176,7 +197,8 @@ export function getPreview(id: number): Promise<ApiResponse<PreviewResponse>> {
 }
 
 export function getStreamUrl(id: number): string {
-  return API_BASE + '/preview/stream/' + id
+  const baseUrl = API_BASE + '/preview/stream/' + id
+  return buildUrlWithToken(baseUrl)
 }
 
 export function getStatistics(): Promise<ApiResponse<StatisticsResponse>> {
@@ -317,7 +339,8 @@ export function getTasks(): Promise<ApiResponse<Task[]>> {
 }
 
 export function getTaskStreamUrl(): string {
-  return API_BASE + '/scan/tasks/stream'
+  const baseUrl = API_BASE + '/scan/tasks/stream'
+  return buildUrlWithToken(baseUrl)
 }
 
 // 游戏 API
@@ -768,4 +791,61 @@ export function getProfileBackupDownloadUrl(filename: string): string {
 
 export function deleteProfileBackup(filename: string): Promise<ApiResponse<void>> {
   return request<void>('/profile-backup/delete/' + filename, { method: 'POST' });
+}
+
+// === 刮削器管理 API ===
+
+export interface ScraperStatus {
+  name: string;
+  displayName: string;
+  enabled: boolean;
+  requiresAuth: boolean;
+  hasAuthConfig: boolean;
+}
+
+export interface ScrapersConfig {
+  priority: string[];
+  plugins: Record<string, {
+    enabled: boolean;
+    clientId?: string;
+    clientSecret?: string;
+    apiKey?: string;
+  }>;
+}
+
+export function getScrapersList(): Promise<ApiResponse<{ scrapers: ScraperStatus[] }>> {
+  return request<{ scrapers: ScraperStatus[] }>('/games/scrapers/list');
+}
+
+export function getScrapersConfig(): Promise<ApiResponse<ScrapersConfig>> {
+  return request<ScrapersConfig>('/games/scrapers/config');
+}
+
+export function updateScrapersConfig(config: Partial<ScrapersConfig>): Promise<ApiResponse<ScrapersConfig>> {
+  clearCache('/games/scrapers')
+  return request<ScrapersConfig>('/games/scrapers/config', {
+    method: 'PATCH',
+    body: JSON.stringify(config)
+  });
+}
+
+export function scrapeGameWith(gameId: number, plugin: string, downloadPosters: boolean = true): Promise<ApiResponse<Game>> {
+  clearCache('/games')
+  return request<Game>(`/games/scrapers/game/${gameId}/scrape-with`, {
+    method: 'POST',
+    body: JSON.stringify({ plugin, downloadPosters })
+  });
+}
+
+export function getGameScrapeLog(gameId: number): Promise<ApiResponse<{
+  logs: Array<{
+    id: number;
+    game_id: number;
+    plugin: string;
+    status: string;
+    message: string;
+    created_at: string;
+  }>;
+}>> {
+  return request(`/games/scrapers/game/${gameId}/log`);
 }

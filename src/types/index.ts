@@ -9,3 +9,4 @@ export * from './api';
 export * from './tracking';
 export * from './game';
 export * from './scraper';
+export * from './security';
