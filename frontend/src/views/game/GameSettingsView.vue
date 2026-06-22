@@ -306,6 +306,10 @@ onMounted(() => loadConfig());
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+  align-items: center;
+}
+.path-item input {
+  flex: 1;
 }
 .input {
   padding: 8px 12px;
