@@ -23,7 +23,10 @@
           <input v-model="config.gameScanPaths[i]" type="text" class="input" />
           <button class="btn btn-small btn-danger" @click="removeScanPath(i)">删除</button>
         </div>
-        <button class="btn btn-small btn-secondary" @click="addScanPath">添加路径</button>
+        <div class="path-item">
+          <input v-model="newScanPath" type="text" class="input" placeholder="输入新路径" />
+          <button class="btn btn-small btn-secondary" @click="addScanPath">添加路径</button>
+        </div>
       </div>
     </div>
 
