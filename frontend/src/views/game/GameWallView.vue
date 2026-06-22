@@ -191,7 +191,7 @@
                 <span class="poster-icon">🎮</span>
               </div>
               <img
-                :src="`/api/games/${selectedGame.id}/poster/horizontal`"
+                :src="getGamePosterUrl(selectedGame.id, 'horizontal')"
                 :alt="selectedGame.title"
                 @load="($event.target as HTMLImageElement).previousElementSibling?.classList.add('hidden')"
                 @error="($event.target as HTMLImageElement).style.display = 'none'"
@@ -212,7 +212,7 @@
                   class="backup-item"
                   @click="restoreBackup(backup)"
                 >
-                  <img :src="`/api/games/${selectedGame.id}/poster/backups/${backup.filename}`" :alt="backup.createdAt" />
+                  <img :src="getGamePosterBackupUrl(selectedGame.id, backup.filename)" :alt="backup.createdAt" />
                   <div class="backup-info">
                     <span class="backup-time">{{ backup.createdAt }}</span>
                     <button class="btn-icon delete-btn" @click.stop="deleteBackup(backup)" title="删除备份">
@@ -678,7 +678,9 @@ import {
   deleteGamePosterBackup,
   getGameGroupsForGame,
   setGameGroups,
-  autoGroupGames
+  autoGroupGames,
+  getGamePosterUrl,
+  getGamePosterBackupUrl
 } from '../../api'
 import GameCard from '../../components/game/GameCard.vue'
 import GameGroupSidebar from '../../components/game/GameGroupSidebar.vue'

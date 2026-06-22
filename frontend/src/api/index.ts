@@ -379,7 +379,13 @@ export function scrapeGamesBatch(downloadPosters: boolean = true): Promise<ApiRe
 }
 
 export function getGamePosterUrl(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' = 'horizontal'): string {
-  return API_BASE + '/games/' + id + '/poster/' + type
+  const baseUrl = API_BASE + '/games/' + id + '/poster/' + type
+  return buildUrlWithToken(baseUrl)
+}
+
+export function getGamePosterBackupUrl(id: number, filename: string): string {
+  const baseUrl = API_BASE + '/games/' + id + '/poster/backups/' + filename
+  return buildUrlWithToken(baseUrl)
 }
 
 export function uploadGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom' = 'custom', file: globalThis.File): Promise<ApiResponse<{ posterPath: string }>> {
