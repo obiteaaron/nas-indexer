@@ -10,6 +10,7 @@ import { logger } from '../logger';
 import { gameDatabase } from './database';
 import { resolveGameNames } from './name-resolver';
 import { getStoragePath, loadConfig } from '../utils';
+import { loadGamesConfig } from '../games-config';
 import { ensurePosterDir, getPosterPath } from './storage';
 import { SteamCacheService, getSteamCacheDir } from './steam-cache-service';
 import { scraperManager } from './scraper-plugins';
@@ -32,11 +33,11 @@ const STEAM_DETAILS_URL = 'https://store.steampowered.com/api/appdetails';
 let proxyAgent: ProxyAgent | undefined;
 
 /**
- * 初始化代理（根据配置）
+ * 初始化代理（根据游戏配置）
  */
 export function initProxy(): void {
-  const config = loadConfig();
-  const proxyUrl = config.proxyUrl;
+  const gamesConfig = loadGamesConfig();
+  const proxyUrl = gamesConfig.proxyUrl;
 
   if (proxyUrl && proxyUrl.trim()) {
     proxyAgent = new ProxyAgent(proxyUrl.trim());
@@ -53,8 +54,8 @@ export function initProxy(): void {
  */
 export function getProxyStatus(): { enabled: boolean; url?: string } {
   if (proxyAgent) {
-    const config = loadConfig();
-    return { enabled: true, url: config.proxyUrl };
+    const gamesConfig = loadGamesConfig();
+    return { enabled: true, url: gamesConfig.proxyUrl };
   }
   return { enabled: false };
 }

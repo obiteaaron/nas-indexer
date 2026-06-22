@@ -1102,7 +1102,8 @@ async function identifyGames(): Promise<void> {
 
 function openSteamSearch(): void {
   if (selectedGame.value) {
-    steamSearchQuery.value = selectedGame.value.original_name || selectedGame.value.title
+    // 搜索优先级：title > title_en > original_name
+    steamSearchQuery.value = selectedGame.value.title || selectedGame.value.title_en || selectedGame.value.original_name || ''
     steamSearchResults.value = []
     selectedSteamItem.value = null
     steamSearched.value = false

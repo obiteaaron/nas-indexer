@@ -42,8 +42,8 @@ class ScraperManager {
       };
     }
 
-    // 使用 title 作为查询词，优先使用原名
-    const query = game.original_name || game.title;
+    // 使用 title 作为查询词，优先级：title > title_en > original_name
+    const query = game.title || game.title_en || game.original_name || '';
     logger.info('[ScraperManager] 开始刮削: %s (gameId=%d)', query, gameId);
 
     // 获取启用的插件列表（按优先级排序）
@@ -195,7 +195,7 @@ class ScraperManager {
       };
     }
 
-    const query = game.original_name || game.title;
+    const query = game.title || game.title_en || game.original_name || '';
     const log: ScrapeLogEntry[] = [];
     const attemptTime = new Date().toISOString();
 
