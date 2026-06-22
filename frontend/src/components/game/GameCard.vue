@@ -65,6 +65,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Game } from '../../types'
+import { getGamePosterUrl } from '../../api'
 
 interface Props {
   game: Game
@@ -86,10 +87,9 @@ defineEmits<{
 }>()
 
 // 海报始终从本地 API 加载（集中存储在 profiles/games/posters/{gameId}/）
-// 如果有 Steam 海报 URL 作为备选
+// URL 中携带认证 Token
 const posterUrl = computed(() => {
-  // 优先使用本地集中存储的海报
-  return `/api/games/${props.game.id}/poster/${props.posterType}`
+  return getGamePosterUrl(props.game.id, props.posterType)
 })
 
 const genres = computed(() => {
