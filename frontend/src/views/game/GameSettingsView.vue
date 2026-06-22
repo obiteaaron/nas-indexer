@@ -186,7 +186,6 @@ const defaultConfig: GamesConfig = {
 
 const config = ref<GamesConfig>(defaultConfig);
 const saving = ref(false);
-const newScanPath = ref('');
 const showDoc = ref(false);
 
 // 黑名单路径字符串（computed）
@@ -219,10 +218,7 @@ async function saveSettings(): Promise<void> {
 
 // 添加扫描路径
 function addScanPath(): void {
-  if (newScanPath.value.trim()) {
-    config.value.gameScanPaths.push(newScanPath.value.trim());
-    newScanPath.value = '';
-  }
+  config.value.gameScanPaths.push('');
 }
 
 // 移除扫描路径
@@ -310,6 +306,10 @@ onMounted(() => loadConfig());
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+  align-items: center;
+}
+.path-item input {
+  flex: 1;
 }
 .input {
   padding: 8px 12px;

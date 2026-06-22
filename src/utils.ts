@@ -3,6 +3,7 @@ import fs from 'fs';
 import { logger } from './logger';
 import type { Config } from './types';
 import { DEFAULT_GAMES_CONFIG } from './types/games-config';
+import { DEFAULT_SECURITY_CONFIG } from './types/security';
 
 // 支持环境变量 PROJECT_ROOT（用于 Electron 打包模式）
 const PROJECT_ROOT: string = process.env.PROJECT_ROOT || path.join(__dirname, '..');
@@ -77,7 +78,9 @@ function getDefaultConfig(): Config {
     gameScanPathsEnabled: DEFAULT_GAMES_CONFIG.gameScanPathsEnabled,
     gameScanPaths: DEFAULT_GAMES_CONFIG.gameScanPaths,
     gamesRules: DEFAULT_GAMES_CONFIG.gamesRules,
-    gamesScrape: DEFAULT_GAMES_CONFIG.gamesScrape
+    gamesScrape: DEFAULT_GAMES_CONFIG.gamesScrape,
+    // 安全配置默认值
+    security: DEFAULT_SECURITY_CONFIG
   };
 
   try {

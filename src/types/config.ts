@@ -2,6 +2,8 @@
  * 配置相关类型定义
  */
 
+import type { SecurityConfig } from './security';
+
 export interface FileExtensionFilter {
   whitelist?: string[];
   blacklist?: string[];
@@ -40,6 +42,9 @@ export interface Config {
   thumbnailPreviewEnabled?: boolean;  // 是否启用图片缩略图预览
   thumbnailSizeLimit?: number;        // 图片预览大小限制（MB），0 表示不限制
   videoPreviewEnabled?: boolean;      // 是否启用视频元数据显示（时长、分辨率）
+
+  /** 安全配置 */
+  security?: SecurityConfig;
 
   // 以下字段已废弃，保留类型定义以支持迁移读取
   gameScanPathsEnabled?: boolean;
