@@ -379,7 +379,7 @@ export function scrapeGamesBatch(downloadPosters: boolean = true): Promise<ApiRe
 }
 
 export function getGamePosterUrl(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' = 'horizontal'): string {
-  return API_BASE + '/games/' + id + '/poster/' + type
+  return buildUrlWithToken(API_BASE + '/games/' + id + '/poster/' + type)
 }
 
 export function uploadGamePoster(id: number, type: 'horizontal' | 'vertical' | 'banner' | 'background' | 'custom' = 'custom', file: globalThis.File): Promise<ApiResponse<{ posterPath: string }>> {
@@ -387,7 +387,12 @@ export function uploadGamePoster(id: number, type: 'horizontal' | 'vertical' | '
   const formData = new FormData()
   formData.append('poster', file)
   formData.append('type', type)
-  return fetch(API_BASE + '/games/' + id + '/poster/upload', { method: 'POST', body: formData })
+  const token = getApiToken()
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+  return fetch(API_BASE + '/games/' + id + '/poster/upload', { method: 'POST', body: formData, headers })
     .then(res => res.json() as Promise<ApiResponse<{ posterPath: string }>>)
 }
 
