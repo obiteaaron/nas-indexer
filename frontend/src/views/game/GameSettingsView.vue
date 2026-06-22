@@ -23,10 +23,7 @@
           <input v-model="config.gameScanPaths[i]" type="text" class="input" />
           <button class="btn btn-small btn-danger" @click="removeScanPath(i)">删除</button>
         </div>
-        <div class="path-item">
-          <input v-model="newScanPath" type="text" class="input" placeholder="输入新路径" />
-          <button class="btn btn-small btn-secondary" @click="addScanPath">添加路径</button>
-        </div>
+        <button class="btn btn-small btn-secondary" @click="addScanPath">添加路径</button>
       </div>
     </div>
 
@@ -189,7 +186,6 @@ const defaultConfig: GamesConfig = {
 
 const config = ref<GamesConfig>(defaultConfig);
 const saving = ref(false);
-const newScanPath = ref('');
 const showDoc = ref(false);
 
 // 黑名单路径字符串（computed）
@@ -222,10 +218,7 @@ async function saveSettings(): Promise<void> {
 
 // 添加扫描路径
 function addScanPath(): void {
-  if (newScanPath.value.trim()) {
-    config.value.gameScanPaths.push(newScanPath.value.trim());
-    newScanPath.value = '';
-  }
+  config.value.gameScanPaths.push('');
 }
 
 // 移除扫描路径
