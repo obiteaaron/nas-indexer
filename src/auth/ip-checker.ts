@@ -44,13 +44,9 @@ export function isIPAllowed(clientIP: string, whitelist: string[]): boolean {
       if (normalizedEntry.includes('/')) {
         // CIDR 格式：192.168.1.0/24
         try {
-          const cidr = ipaddr.parseCIDR(normalizedEntry);
-          // 检查 IP 类型是否匹配
-          if (addr.kind() === cidr[0].kind()) {
-            // 使用正确的 match 调用方式
-            if ((addr as any).match(cidr as any)) {
-              return true;
-            }
+          const range = ipaddr.parseCIDR(normalizedEntry);
+          if (addr.match(range)) {
+            return true;
           }
         } catch {
           // CIDR 解析失败，跳过此条目
