@@ -112,6 +112,57 @@
       <p class="hint">刮削将从 Steam Store 获取游戏元数据和海报，自动分组会将同一目录下的游戏归入分组</p>
     </div>
 
+    <!-- 数据源配置 -->
+    <div class="settings-section">
+      <h3>数据源配置</h3>
+      <p class="hint">按优先级排序，刮削时依次尝试直到成功。Steam 和 TheGamesDB 免费无需配置。</p>
+
+      <div class="scraper-list">
+        <div class="scraper-row scraper-header">
+          <span class="scraper-col scraper-order">排序</span>
+          <span class="scraper-col scraper-name">数据源</span>
+          <span class="scraper-col scraper-status">状态</span>
+          <span class="scraper-col scraper-enabled">启用</span>
+          <span class="scraper-col scraper-config">配置</span>
+        </div>
+        <div class="scraper-row" v-for="(scraper, idx) in scrapersList" :key="scraper.name">
+          <div class="scraper-col scraper-order">
+            <button class="btn btn-small order-btn" @click="moveScraperUp(idx)" :disabled="idx === 0">↑</button>
+            <button class="btn btn-small order-btn" @click="moveScraperDown(idx)" :disabled="idx === scrapersList.length - 1">↓</button>
+          </div>
+          <div class="scraper-col scraper-name">
+            <strong>{{ scraper.displayName }}</strong>
+            <span v-if="scraper.requiresAuth && !scraper.hasAuthConfig" class="auth-warning">需要 API Key</span>
+          </div>
+          <div class="scraper-col scraper-status">
+            <span v-if="scraper.requiresAuth" :class="scraper.hasAuthConfig ? 'status-ok' : 'status-missing'">
+              {{ scraper.hasAuthConfig ? '已配置' : '未配置' }}
+            </span>
+            <span v-else class="status-ok">免费</span>
+          </div>
+          <div class="scraper-col scraper-enabled">
+            <input type="checkbox" v-model="scraper.enabled" />
+          </div>
+          <div class="scraper-col scraper-config">
+            <!-- IGDB 配置 -->
+            <template v-if="scraper.name === 'igdb'">
+              <input v-model="scraper.clientId" type="text" class="input small" placeholder="Client ID" />
+              <input v-model="scraper.clientSecret" type="password" class="input small" placeholder="Client Secret" />
+            </template>
+            <!-- Giant Bomb 配置 -->
+            <template v-if="scraper.name === 'giantbomb'">
+              <input v-model="scraper.apiKey" type="text" class="input small" placeholder="API Key" />
+            </template>
+            <span v-if="!scraper.requiresAuth" class="hint">无需配置</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="hint" style="margin-top: 12px;">
+        IGDB 和 Giant Bomb 插件尚未实现，已隐藏。实现后会自动显示配置入口。
+      </p>
+    </div>
+
     <!-- 代理配置 -->
     <div class="settings-section">
       <h3>HTTP 代理</h3>
@@ -153,10 +204,27 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { getGamesConfig, saveGamesConfig, type GamesConfig } from '../../api';
+import { getGamesConfig, saveGamesConfig, type GamesConfig, getScrapersList, getScrapersConfig, updateScrapersConfig, type ScraperStatus, type ScrapersConfig } from '../../api';
 import { useGameToast } from '../../composables/game/useGameToast';
 
 const { showNotification, showToast, toastMessage } = useGameToast();
+
+// 数据源配置
+interface ScraperConfigItem {
+  name: string;
+  displayName: string;
+  enabled: boolean;
+  requiresAuth: boolean;
+  hasAuthConfig: boolean;
+  clientId?: string;
+  clientSecret?: string;
+  apiKey?: string;
+}
+
+const scrapersList = ref<ScraperConfigItem[]>([]);
+
+// 未实现的插件（隐藏但保留配置）
+const UNIMPLEMENTED_PLUGINS = ['igdb', 'giantbomb'];
 
 const defaultConfig: GamesConfig = {
   gameScanPathsEnabled: false,
@@ -202,12 +270,71 @@ async function loadConfig(): Promise<void> {
   if (res.success && res.data) {
     config.value = res.data;
   }
+  // 加载数据源配置
+  await loadScrapersConfig();
+}
+
+// 加载数据源配置
+async function loadScrapersConfig(): Promise<void> {
+  try {
+    const [listRes, configRes] = await Promise.all([
+      getScrapersList(),
+      getScrapersConfig()
+    ]);
+
+    if (listRes.success && listRes.data && configRes.success && configRes.data) {
+      const scrapers = listRes.data;  // 后端直接返回数组
+      const config = configRes.data;
+
+      // 按优先级排序
+      const priorityOrder = config.priority || [];
+      const sortedScrapers = [...scrapers].sort((a, b) => {
+        const aIdx = priorityOrder.indexOf(a.name);
+        const bIdx = priorityOrder.indexOf(b.name);
+        return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+      });
+
+      // 过滤掉未实现的插件（隐藏但保留配置）
+      const filteredScrapers = sortedScrapers.filter(s => !UNIMPLEMENTED_PLUGINS.includes(s.name));
+
+      scrapersList.value = filteredScrapers.map(s => ({
+        name: s.name,
+        displayName: s.displayName,
+        enabled: config.plugins[s.name]?.enabled ?? s.enabled,
+        requiresAuth: s.requiresAuth,
+        hasAuthConfig: s.hasAuthConfig,
+        clientId: config.plugins[s.name]?.clientId,
+        clientSecret: config.plugins[s.name]?.clientSecret,
+        apiKey: config.plugins[s.name]?.apiKey
+      }));
+    }
+  } catch (err) {
+    console.error('加载数据源配置失败:', err);
+  }
 }
 
 // 保存配置
 async function saveSettings(): Promise<void> {
   saving.value = true;
   const res = await saveGamesConfig(config.value);
+
+  // 同时保存数据源配置
+  if (scrapersList.value.length > 0) {
+    const scrapersConfig: ScrapersConfig = {
+      priority: scrapersList.value.map(s => s.name),
+      plugins: {}
+    };
+    scrapersList.value.forEach(s => {
+      scrapersConfig.plugins[s.name] = {
+        enabled: s.enabled,
+        clientId: s.clientId,
+        clientSecret: s.clientSecret,
+        apiKey: s.apiKey
+      };
+    });
+    await updateScrapersConfig(scrapersConfig);
+  }
+
   saving.value = false;
   if (res.success) {
     showNotification('游戏设置已保存');
@@ -255,6 +382,22 @@ function moveRuleDown(index: number): void {
 // 移除识别规则
 function removeRecognitionRule(index: number): void {
   config.value.gamesRules.recognitionRules.splice(index, 1);
+}
+
+// 数据源排序：上移
+function moveScraperUp(index: number): void {
+  if (index > 0) {
+    const list = scrapersList.value;
+    [list[index - 1], list[index]] = [list[index], list[index - 1]];
+  }
+}
+
+// 数据源排序：下移
+function moveScraperDown(index: number): void {
+  const list = scrapersList.value;
+  if (index < list.length - 1) {
+    [list[index], list[index + 1]] = [list[index + 1], list[index]];
+  }
 }
 
 onMounted(() => loadConfig());
@@ -399,6 +542,62 @@ onMounted(() => loadConfig());
 .order-btn {
   padding: 2px 6px;
   font-size: 12px;
+}
+
+/* 数据源配置 */
+.scraper-list {
+  margin-top: 12px;
+}
+.scraper-header {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.scraper-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.scraper-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.scraper-order {
+  width: 52px;
+}
+.scraper-name {
+  flex: 1;
+  min-width: 120px;
+}
+.scraper-status {
+  width: 80px;
+}
+.scraper-enabled {
+  width: 50px;
+}
+.scraper-config {
+  flex: 2;
+  min-width: 200px;
+}
+.scraper-config .input.small {
+  width: 140px;
+}
+.auth-warning {
+  font-size: 11px;
+  color: #f59e0b;
+  margin-left: 8px;
+}
+.status-ok {
+  color: #10b981;
+  font-size: 13px;
+}
+.status-missing {
+  color: #ef4444;
+  font-size: 13px;
 }
 .action-bar {
   margin-top: 24px;

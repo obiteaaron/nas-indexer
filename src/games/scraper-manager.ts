@@ -6,6 +6,7 @@
 import { logger } from '../logger';
 import { gameDatabase } from './database';
 import { scraperRegistry } from './scraper-plugins/registry';
+import { resolveGameNames } from './name-resolver';
 import type {
   Game,
   ScraperPlugin,
@@ -25,7 +26,7 @@ class ScraperManager {
 
   /**
    * 按优先级自动降级刮削
-   * 遍历启用的插件，直到成功或全部失败
+   * 如果游戏已绑定 steam_appid，直接使用；否则搜索名称
    */
   async scrape(gameId: number, downloadPosters: boolean = true): Promise<ScrapeResult> {
     const game = gameDatabase.getGameById(gameId);
@@ -42,9 +43,83 @@ class ScraperManager {
       };
     }
 
-    // 使用 title 作为查询词，优先级：title > title_en > original_name
+    // 初始化日志
+    const log: ScrapeLogEntry[] = [];
+    const scrapeLog: ScrapeLog = {
+      gameId,
+      gameName: game.title,
+      attempts: log
+    };
+
+    // 如果已绑定 steam_appid，直接使用
+    if (game.steam_appid) {
+      logger.info('[ScraperManager] 使用已绑定 AppID: %s (gameId=%d)', game.steam_appid, gameId);
+
+      const plugin = scraperRegistry.get('steam');
+      if (!plugin) {
+        logger.warn('[ScraperManager] Steam 插件不可用');
+        return {
+          success: false,
+          log: [{
+            scraper: 'steam',
+            status: 'failed',
+            reason: 'Steam 插件不可用',
+            time: new Date().toISOString()
+          }]
+        };
+      }
+
+      const attemptTime = new Date().toISOString();
+      try {
+        // 清除该 appid 的缓存，确保获取最新数据
+        const metadata = await plugin.getDetails(game.steam_appid, true);
+        if (!metadata) {
+          log.push({
+            scraper: 'steam',
+            status: 'failed',
+            reason: '获取详情失败',
+            time: attemptTime
+          });
+          return { success: false, log };
+        }
+
+        await this.saveMetadata(game, metadata, downloadPosters);
+
+        log.push({
+          scraper: 'steam',
+          status: 'success',
+          reason: `AppID: ${game.steam_appid}`,
+          time: attemptTime
+        });
+
+        scrapeLog.finalSource = 'steam';
+        scrapeLog.scrapedAt = new Date().toISOString();
+        this.scrapeLogs.set(gameId, scrapeLog);
+
+        logger.info('[ScraperManager] 刮削成功: AppID=%s -> %s', game.steam_appid, plugin.displayName);
+
+        return {
+          success: true,
+          metadata,
+          source: 'steam',
+          log
+        };
+      } catch (err) {
+        const error = err as Error;
+        log.push({
+          scraper: 'steam',
+          status: 'failed',
+          reason: error.message,
+          time: attemptTime
+        });
+        logger.error('[ScraperManager] 刮削异常: %s', error.message);
+        return { success: false, log };
+      }
+    }
+
+    // 未绑定 steam_appid，按插件优先级搜索
     const query = game.title || game.title_en || game.original_name || '';
-    logger.info('[ScraperManager] 开始刮削: %s (gameId=%d)', query, gameId);
+    logger.info('[ScraperManager] 开始搜索刮削: %s (gameId=%d)', query, gameId);
 
     // 获取启用的插件列表（按优先级排序）
     const plugins = scraperRegistry.getEnabledPlugins();
@@ -60,14 +135,6 @@ class ScraperManager {
         }]
       };
     }
-
-    // 初始化日志
-    const log: ScrapeLogEntry[] = [];
-    const scrapeLog: ScrapeLog = {
-      gameId,
-      gameName: game.title,
-      attempts: log
-    };
 
     // 遍历插件尝试刮削
     for (const plugin of plugins) {
@@ -329,6 +396,7 @@ class ScraperManager {
 
   /**
    * 保存元数据到数据库
+   * 使用 resolveGameNames 智能处理中英文名称
    */
   async saveMetadata(game: Game, metadata: ScraperMetadata, downloadPosters: boolean): Promise<void> {
     // 如果需要下载图片，先下载
@@ -344,12 +412,19 @@ class ScraperManager {
       }
     }
 
-    // 构建更新数据
+    // 智能处理中英文名称
     const shouldUpdateTitle = !game.is_manually_edited;
+    const resolved = resolveGameNames(
+      metadata.title || '',
+      game.original_name || '',
+      []
+    );
+
+    // 构建更新数据
     const updateData: Partial<Game> = {
       // 基本信息（仅当未手动编辑时更新）
-      title: shouldUpdateTitle ? metadata.title : undefined,
-      title_en: metadata.titleEn || undefined,
+      title: shouldUpdateTitle ? resolved.name : undefined,
+      title_en: resolved.nameEn || undefined,
       // 元数据
       developer: metadata.developer || undefined,
       publisher: metadata.publisher || undefined,
@@ -367,7 +442,8 @@ class ScraperManager {
     // 更新数据库
     gameDatabase.updateGame(game.id, updateData);
 
-    logger.info('[ScraperManager] 元数据保存完成: gameId=%d, source=%s', game.id, metadata.source);
+    logger.info('[ScraperManager] 元数据保存完成: gameId=%d, source=%s, name="%s", nameEn="%s"',
+      game.id, metadata.source, resolved.name, resolved.nameEn || '');
   }
 
   /**

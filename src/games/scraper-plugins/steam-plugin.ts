@@ -116,19 +116,23 @@ export class SteamPlugin extends BaseScraperPlugin {
 
   /**
    * 获取游戏详情
-   * 支持本地缓存优先
+   * 支持本地缓存优先，forceRefresh 时跳过缓存
    */
-  async getDetails(appid: string): Promise<ScraperMetadata | null> {
-    // 1. 先查本地缓存
-    const cached = gameDatabase.getSteamDbByAppid(appid);
-    if (cached && cached.raw_data) {
-      logger.info('[Steam] 使用本地缓存: appid %s', appid);
-      try {
-        const rawData = JSON.parse(cached.raw_data);
-        return this.extractMetadataFromCache(rawData, cached);
-      } catch (err) {
-        logger.warn('[Steam] 缓存解析失败，重新刮削: appid %s', appid);
+  async getDetails(appid: string, forceRefresh: boolean = false): Promise<ScraperMetadata | null> {
+    // 1. 先查本地缓存（除非强制刷新）
+    if (!forceRefresh) {
+      const cached = gameDatabase.getSteamDbByAppid(appid);
+      if (cached && cached.raw_data) {
+        logger.info('[Steam] 使用本地缓存: appid %s', appid);
+        try {
+          const rawData = JSON.parse(cached.raw_data);
+          return this.extractMetadataFromCache(rawData, cached);
+        } catch (err) {
+          logger.warn('[Steam] 缓存解析失败，重新刮削: appid %s', appid);
+        }
       }
+    } else {
+      logger.info('[Steam] 强制刷新，跳过缓存: appid %s', appid);
     }
 
     // 2. 从远程 API 获取

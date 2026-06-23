@@ -819,8 +819,8 @@ export interface ScrapersConfig {
   }>;
 }
 
-export function getScrapersList(): Promise<ApiResponse<{ scrapers: ScraperStatus[] }>> {
-  return request<{ scrapers: ScraperStatus[] }>('/games/scrapers/list');
+export function getScrapersList(): Promise<ApiResponse<ScraperStatus[]>> {
+  return request<ScraperStatus[]>('/games/scrapers/list');
 }
 
 export function getScrapersConfig(): Promise<ApiResponse<ScrapersConfig>> {

@@ -407,17 +407,29 @@ router.post('/extract-names/batch', async (_req: Request, res: Response): Promis
 
           const extracted = extractNamesFromPath(game.source_path!, scanRoot);
 
-          // 只有成功提取到英文名才更新
-          if (extracted.titleEn && extracted.titleEn !== game.title) {
-            gameDatabase.updateGame(game.id, {
-              title: extracted.title,
-              title_en: extracted.titleEn
-            });
-            updated.push({ id: game.id, title: extracted.title, titleEn: extracted.titleEn });
-            logger.info('[批量名称提取] 更新游戏: %s → title="%s", titleEn="%s"',
-              game.original_name || game.title, extracted.title, extracted.titleEn);
+          // 智能更新：保护已有的中文名
+          const updateData: Partial<Game> = {};
+          const hasChinese = (text: string) => /[一-]/.test(text);
+
+          // 更新英文名
+          if (extracted.titleEn && extracted.titleEn !== game.title_en) {
+            updateData.title_en = extracted.titleEn;
+          }
+
+          // 更新中文名：只有当提取到中文名时才更新
+          if (extracted.title && hasChinese(extracted.title) && extracted.title !== game.title) {
+            updateData.title = extracted.title;
+          }
+
+          // 只有有更新才执行
+          if (Object.keys(updateData).length > 0) {
+            gameDatabase.updateGame(game.id, updateData);
+            updated.push({ id: game.id, title: extracted.title, titleEn: extracted.titleEn || '' });
+            logger.info('[批量名称提取] 更新游戏: %s → title="%s", titleEn="%s", 更新字段=%s',
+              game.original_name || game.title, extracted.title, extracted.titleEn || '',
+              Object.keys(updateData).join(','));
           } else {
-            skipped.push({ id: game.id, reason: '无法从路径提取英文名' });
+            skipped.push({ id: game.id, reason: '无有效更新' });
           }
 
           // 更新进度
@@ -481,22 +493,40 @@ router.post('/:id/extract-names', async (req: Request, res: Response): Promise<v
       return;
     }
 
-    // 更新游戏
-    gameDatabase.updateGame(game.id, {
-      title: extracted.title,
-      title_en: extracted.titleEn
-    });
+    // 智能更新：保护已有的中文名
+    const updateData: Partial<Game> = {};
+
+    // 更新英文名（如果有新的英文名）
+    if (extracted.titleEn && extracted.titleEn !== game.title_en) {
+      updateData.title_en = extracted.titleEn;
+    }
+
+    // 更新中文名：只有当提取到中文名时才更新，不要用英文名覆盖中文名
+    const hasChinese = (text: string) => /[一-鿿]/.test(text);
+    if (extracted.title && hasChinese(extracted.title)) {
+      // 提取到了中文名，可以更新
+      if (extracted.title !== game.title) {
+        updateData.title = extracted.title;
+      }
+    }
+    // 如果提取的 title 是英文（没有中文名），不要覆盖已有的中文名
+
+    // 只有有更新才执行
+    if (Object.keys(updateData).length > 0) {
+      gameDatabase.updateGame(game.id, updateData);
+    }
 
     const updatedGame = gameDatabase.getGameById(game.id);
-    logger.info('[名称提取] 更新游戏: %s → title="%s", titleEn="%s"',
-      game.original_name || game.title, extracted.title, extracted.titleEn);
+    logger.info('[名称提取] 更新游戏: id=%d, 原始="%s", 提取 title="%s", titleEn="%s", 更新字段=%s',
+      game.id, game.original_name || game.title, extracted.title, extracted.titleEn,
+      Object.keys(updateData).join(',') || '无');
 
     res.json({
       success: true,
       data: {
         game: updatedGame,
         extracted,
-        updated: true
+        updated: Object.keys(updateData).length > 0
       }
     });
   } catch (err) {

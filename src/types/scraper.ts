@@ -65,7 +65,7 @@ export interface ScraperPlugin {
 
   // 核心方法
   search(query: string): Promise<ScrapeCandidate[]>;
-  getDetails(id: string): Promise<ScraperMetadata | null>;
+  getDetails(id: string, forceRefresh?: boolean): Promise<ScraperMetadata | null>;
   downloadImages?(urls: ScraperImageUrls, gameId: number): Promise<ScraperImagePaths>;
 
   // 可选方法
