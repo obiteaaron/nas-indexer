@@ -1,5 +1,29 @@
 # 更新日志
 
+## [v1.6.1] - 2026-06-23
+
+### 新增功能
+- **Steam 双语 API 调用** - 并行获取中英文游戏名称，确保名称完整
+  - 搜索 API 根据查询语言自动选择 `l` 参数（中文/英文）
+  - 详情 API 并行调用 `l=english` 和 `l=schinese`
+  - 同时保存中英文到 `steam_db` 缓存和 `games` 表
+- **智能名称解析增强** - `resolveGameNames` 新增 `steamNameEn` 参数
+  - 支持直接传入英文名，避免名称丢失
+  - 中文名和英文名分别保存，不互相覆盖
+
+### Bug 修复
+- **提取名称覆盖中文名** - 修复批量/单个提取名称时覆盖已有中文名的问题
+  - 只有当提取到中文名时才更新 `title`
+  - 英文目录名不会覆盖已有的中文名
+- **刮削使用错误 AppID** - 修复刮削时优先使用已绑定的 `steam_appid`
+  - 如果游戏已绑定 Steam AppID，直接使用而非搜索
+  - 支持 `forceRefresh` 跳过缓存获取最新数据
+- **数据源配置 UI 修复** - 修复前端 API 返回类型不匹配导致列表为空的问题
+  - 修正 `getScrapersList` 返回类型为 `ScraperStatus[]`
+  - 修复前端取值逻辑 `listRes.data` 替代 `listRes.data.scrapers`
+- **代理配置读取修复** - 修复代理配置从 `games-config.json` 读取
+  - `initProxy` 改为使用 `loadGamesConfig()` 而非 `loadConfig()`
+
 ## [v1.7.0] - 2026-06-22
 
 ### 技术改进

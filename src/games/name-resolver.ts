@@ -196,15 +196,18 @@ export function extractNamesFromPath(gamePath: string, scanRoot?: string): PathE
  * 2. Steam 名是英文 → nameEn = Steam名
  *    - 目录名是中文 → name = 目录名
  *    - 目录名作为别名（如果不是主名称）
+ * 3. 如果提供了 steamNameEn，直接使用作为 nameEn
  *
  * @param steamName Steam API 返回的游戏名
  * @param dirName 游戏目录名（original_name）
  * @param existingAliases 已有别名列表（用于合并）
+ * @param steamNameEn Steam API 返回的英文名（可选，如果有则直接使用）
  */
 export function resolveGameNames(
   steamName: string,
   dirName?: string,
-  existingAliases: string[] = []
+  existingAliases: string[] = [],
+  steamNameEn?: string
 ): NameResolveResult {
   const steamNameHasChinese = hasChinese(steamName);
   const dirNameHasChinese = dirName ? hasChinese(dirName) : false;
@@ -218,13 +221,17 @@ export function resolveGameNames(
   if (steamNameHasChinese) {
     // Steam 名是中文 → name = Steam 名
     result.name = steamName;
+    // 如果有英文名，直接使用
+    if (steamNameEn) {
+      result.nameEn = steamNameEn;
+    }
     // 目录名如果不是 Steam 名，作为别名
     if (dirName && dirName !== steamName && !result.aliases.includes(dirName)) {
       result.aliases.push(dirName);
     }
   } else {
     // Steam 名是英文 → nameEn = Steam 名
-    result.nameEn = steamName;
+    result.nameEn = steamNameEn || steamName;
     // 目录名如果是中文，则作为中文名
     if (dirNameHasChinese && dirName) {
       result.name = dirName;

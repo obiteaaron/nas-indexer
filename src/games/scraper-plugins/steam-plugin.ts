@@ -8,7 +8,7 @@ import path from 'path';
 import { logger } from '../../logger';
 import { gameDatabase } from '../database';
 import { cleanGameName } from '../name-cleaner';
-import { resolveGameNames } from '../name-resolver';
+import { resolveGameNames, hasChinese } from '../name-resolver';
 import { getStoragePath, loadConfig } from '../../utils';
 import { SteamCacheService, getSteamCacheDir } from '../steam-cache-service';
 import { ensureGamesDirs, ensurePosterDir, getPosterPath } from '../storage';
@@ -82,21 +82,24 @@ export class SteamPlugin extends BaseScraperPlugin {
 
   /**
    * 搜索 Steam 游戏
+   * 根据查询语言自动选择 l 参数
    */
   async search(query: string): Promise<ScrapeCandidate[]> {
     try {
-      const searchUrl = `${STEAM_SEARCH_URL}?term=${encodeURIComponent(query)}&l=schinese&cc=CN`;
+      // 根据查询内容选择语言
+      const lang = hasChinese(query) ? 'schinese' : 'english';
+      const searchUrl = `${STEAM_SEARCH_URL}?term=${encodeURIComponent(query)}&l=${lang}&cc=CN`;
       const response = await this.fetch(searchUrl);
 
       if (!response.ok) {
-        logger.warn('[Steam] 搜索请求失败: %s (status %d)', query, response.status);
+        logger.warn('[Steam] 搜索请求失败: %s (status %d, lang=%s)', query, response.status, lang);
         return [];
       }
 
       const result = (await response.json()) as SteamSearchResult;
 
       if (!result.items || result.items.length === 0) {
-        logger.info('[Steam] 搜索无结果: %s', query);
+        logger.info('[Steam] 搜索无结果: %s (lang=%s)', query, lang);
         return [];
       }
 
@@ -141,32 +144,48 @@ export class SteamPlugin extends BaseScraperPlugin {
 
   /**
    * 从 Steam API 获取详情
+   * 调用两次 API 分别获取中英文，确保名称完整
    */
   private async fetchDetailsFromApi(appid: string): Promise<ScraperMetadata | null> {
     try {
-      const detailsUrl = `${STEAM_DETAILS_URL}?appids=${appid}&l=schinese`;
-      const response = await this.fetch(detailsUrl);
+      // 并行获取英文和中文详情
+      const [enResponse, zhResponse] = await Promise.all([
+        this.fetch(`${STEAM_DETAILS_URL}?appids=${appid}&l=english`),
+        this.fetch(`${STEAM_DETAILS_URL}?appids=${appid}&l=schinese`)
+      ]);
 
-      if (!response.ok) {
-        logger.warn('[Steam] 详情请求失败: appid %s (status %d)', appid, response.status);
+      if (!enResponse.ok && !zhResponse.ok) {
+        logger.warn('[Steam] 详情请求失败: appid %s (en=%d, zh=%d)', appid, enResponse.status, zhResponse.status);
         return null;
       }
 
-      const result = await response.json() as Record<string, SteamAppDetails>;
-      const appDetails = result[appid];
+      // 优先使用英文数据（结构更完整），中文数据用于补充名称
+      const enResult = enResponse.ok ? await enResponse.json() as Record<string, SteamAppDetails> : null;
+      const zhResult = zhResponse.ok ? await zhResponse.json() as Record<string, SteamAppDetails> : null;
 
-      if (!appDetails || !appDetails.success || !appDetails.data) {
+      const enDetails = enResult?.[appid];
+      const zhDetails = zhResult?.[appid];
+
+      // 至少需要一个有效响应
+      if ((!enDetails || !enDetails.success || !enDetails.data) &&
+          (!zhDetails || !zhDetails.success || !zhDetails.data)) {
         logger.info('[Steam] 详情无数据: appid %s', appid);
         return null;
       }
 
-      const data = appDetails.data;
+      // 使用英文数据作为主数据（如果有）
+      const data = enDetails?.success ? enDetails.data : (zhDetails?.success ? zhDetails.data : undefined);
+      if (!data) {
+        logger.info('[Steam] 详情无有效数据: appid %s', appid);
+        return null;
+      }
+      const zhName = zhDetails?.success ? zhDetails.data?.name : undefined;
 
-      // 存入缓存
-      this.saveToSteamDb(appid, data);
+      // 存入缓存（保存中英文）
+      this.saveToSteamDb(appid, data, zhName);
 
       // 返回元数据
-      return this.extractMetadataFromApi(data);
+      return this.extractMetadataFromApi(data, zhName);
     } catch (err) {
       const error = err as Error;
       logger.error('[Steam] 详情获取失败: appid %s - %s', appid, error.message);
@@ -176,11 +195,13 @@ export class SteamPlugin extends BaseScraperPlugin {
 
   /**
    * 从 API 数据提取元数据
+   * @param data Steam API 返回的数据（英文优先）
+   * @param zhName 中文名称（如果有）
    */
-  private extractMetadataFromApi(data: SteamAppData): ScraperMetadata {
+  private extractMetadataFromApi(data: SteamAppData, zhName?: string): ScraperMetadata {
     return {
-      title: data.name,
-      titleEn: data.name,
+      title: zhName || data.name,  // 优先使用中文名
+      titleEn: data.name,           // 英文名
       developer: data.developers?.[0],
       publisher: data.publishers?.[0],
       releaseDate: data.release_date?.date,
@@ -228,21 +249,24 @@ export class SteamPlugin extends BaseScraperPlugin {
 
   /**
    * 存入 Steam DB 缓存
+   * @param data Steam API 返回的数据（英文优先）
+   * @param zhName 中文名称（如果有）
    */
-  private saveToSteamDb(appid: string, data: SteamAppData): void {
+  private saveToSteamDb(appid: string, data: SteamAppData, zhName?: string): void {
     const existing = gameDatabase.getSteamDbByAppid(appid);
-    const steamName = data.name;
+    const steamName = data.name;  // 英文名
 
+    // 使用 resolveGameNames 处理名称，如果有中文名则传入
     const resolved = resolveGameNames(
-      steamName,
+      zhName || steamName,  // 优先用中文名
       '',
       existing ? existing.aliases || [] : []
     );
 
     const cacheData: Partial<SteamDbEntry> = {
       steam_appid: appid,
-      name: resolved.name,
-      name_en: resolved.nameEn,
+      name: resolved.name,       // 中文名（如果有）
+      name_en: resolved.nameEn || steamName,  // 英文名
       aliases: resolved.aliases,
       release_date: data.release_date?.date,
       genres: data.genres ? JSON.stringify(data.genres.map(g => g.description)) : undefined,

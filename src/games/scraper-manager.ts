@@ -417,7 +417,8 @@ class ScraperManager {
     const resolved = resolveGameNames(
       metadata.title || '',
       game.original_name || '',
-      []
+      [],
+      metadata.titleEn  // 传递英文名
     );
 
     // 构建更新数据
