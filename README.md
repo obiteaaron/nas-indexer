@@ -66,20 +66,37 @@ npm start
 
 访问 http://localhost:3000
 
-## 桌面应用
+### 分发模式
 
 ```bash
-# 开发模式启动 Electron
-npm run electron:dev
+npm run build:dist
+```
 
-# 打包桌面应用
-npm run pack:win    # Windows
-npm run pack:mac    # macOS
-npm run pack:linux  # Linux
+构建生产环境分发包，包含所有必要文件，可直接部署到服务器。
+
+### Electron 免安装模式
+
+```bash
+# 构建 Electron 并输出解压目录（无需安装，直接运行）
+npm run build:electron && electron-builder --dir
+```
+
+生成的目录位于 `dist-release/win-unpacked`（Windows），可直接运行 `NAS Indexer.exe`。
+
+## 桌面应用打包
+
+```bash
+npm run pack:win    # Windows 安装包
+npm run pack:mac    # macOS 安装包
+npm run pack:linux  # Linux 安装包
 npm run pack:all    # 全平台
 ```
 
 ## Docker 部署
+
+详见 [DEPLOYMENT.md](./DEPLOYMENT.md) 群晖 NAS 部署完整指南。
+
+快速部署：
 
 ```bash
 # 构建镜像

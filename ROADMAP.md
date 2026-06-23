@@ -191,3 +191,4 @@ NAS 文件索引与管理 Web 应用，基于 **Node.js + Express + SQLite + Vue
 | 游戏模块设计 | `docs/games-module-design.md` | 游戏模块技术方案 |
 | 默认配置 | `config.default.json` | 主配置默认值 |
 | 游戏默认配置 | `games-config.default.json` | 游戏模块独立默认配置 |
+| 部署指南 | `DEPLOYMENT.md` | 群晖 NAS Docker 部署完整指南 |
